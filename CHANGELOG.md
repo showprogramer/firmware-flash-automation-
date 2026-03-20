@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### docs
+- 新增 `COMMIT_TEMPLATE.md`，提供中文 commit message 标准模板、`type` 对照与项目示例。
+
 ### app
 - 调整 Excel 写入调用逻辑：从布尔返回值改为读取结构化结果。
 - 根据写入结果区分提示：`locked` 显示“占用并给出备用文件路径”，其他失败显示具体错误信息。
