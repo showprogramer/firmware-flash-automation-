@@ -5,7 +5,8 @@
 ### test
 - 新增 `pytest` 测试框架基础配置（`tests` 目录与 `tool.pytest.ini_options`）。
 - 新增 `tests/test_file_scan.py`，覆盖 `parse_rom_filename`、`guess_model_from_path`、`find_handcontrol_folders` 的核心场景（识别、过滤、排序）。
-- 阶段 1/2 验证通过：`python -m pytest -q`，当前用例全部通过。
+- 新增 `tests/test_excel_ops.py`，覆盖 `write_excel_record` 的新建写入、同型号版本覆盖更新、占用回退与异常失败分支，以及读取函数行为校验。
+- 阶段 1/2/3 验证通过：`python -m pytest -q`，当前用例全部通过。
 
 ### chore
 - `pyproject.toml` 增加 `dev` 额外依赖组：`pytest>=8.0.0`，用于本地单元测试。
@@ -22,6 +23,7 @@
 - `core/excel_ops.py`：
   - `write_excel_record` 返回结构改为 `ok / reason / tmp_path / error`。
   - 增加文件不存在场景处理；Excel 被占用时写入 `*_刷机记录_待导入.xlsx` 并返回 `reason=locked`。
+  - 新建表格首行标题文案调整为“现有手控UI明细”。
 - `core/settings.py`：
   - 新增 `config.toml` 加载能力（优先 `tomllib`，回退可选 `tomli`）。
   - 增加默认配置回退与类型兜底（路径、Excel Sheet/Header、USB 清理规则）。

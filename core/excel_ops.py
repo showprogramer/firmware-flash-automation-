@@ -47,7 +47,7 @@ def _do_write(
             wb = openpyxl.Workbook()
             ws = wb.active
             ws.title = sheet_name
-            ws.append(["现有摩众手控UI明细"])
+            ws.append(["现有手控UI明细"])
             ws.append(["序号", "型号", "logo", "业务员", "语言", "版本号", "完成日期", "附图", "备注"])
 
         ws = wb[sheet_name] if sheet_name in wb.sheetnames else wb.active
