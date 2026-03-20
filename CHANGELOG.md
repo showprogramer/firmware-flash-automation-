@@ -8,14 +8,18 @@
 - 新增 `tests/test_excel_ops.py`，覆盖 `write_excel_record` 的新建写入、同型号版本覆盖更新、占用回退与异常失败分支，以及读取函数行为校验。
 - 新增 `tests/test_usb_ops.py`，覆盖 `get_usb_drives`、`clean_usb`、`copy_to_usb`、`eject_usb`、`format_usb` 的成功与失败路径（基于 mock，无真实设备操作）。
 - 阶段 1/2/3/4 验证通过：`python -m pytest -q`，当前用例全部通过。
+- 阶段 5 完成：新增覆盖率门禁（`core` 覆盖率 >= 70%）并通过测试。
 
 ### chore
 - `pyproject.toml` 增加 `dev` 额外依赖组：`pytest>=8.0.0`，用于本地单元测试。
+- `pyproject.toml` 增加 `pytest-cov` 及默认参数：`--cov=core --cov-fail-under=70`。
+- 新增 `scripts/test.ps1` 统一测试入口（`uv sync --extra dev` + `pytest`）。
 
 ### docs
 - 新增 `COMMIT_TEMPLATE.md`，提供中文 commit message 标准模板、`type` 对照与项目示例。
 - 新增 `README.md`，补充项目简介、功能说明、运行环境、安装依赖、使用步骤、常见问题与后续规划。
 - 更新 `README.md` 安装与测试说明：明确 `uv sync --extra dev` 路径，新增“测试与阶段进度”章节，启动阶段 5 文档收口。
+- 更新 `README.md`：新增覆盖率门禁执行方式，阶段 5 状态改为已完成。
 
 ### app
 - 调整 Excel 写入调用逻辑：从布尔返回值改为读取结构化结果。

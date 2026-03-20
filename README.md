@@ -78,12 +78,18 @@ python 手控刷机工具_v1.1.py
 .venv\Scripts\python.exe -m pytest -q
 ```
 
+执行带覆盖率门禁测试（当前门禁：`core` 覆盖率 >= 70%）：
+
+```powershell
+.\scripts\test.ps1
+```
+
 当前阶段状态：
 - 阶段 1（测试骨架）: 已完成
 - 阶段 2（`file_scan`）: 已完成
 - 阶段 3（`excel_ops`）: 已完成
 - 阶段 4（`usb_ops`）: 已完成
-- 阶段 5（质量门禁与文档收口）: 进行中
+- 阶段 5（质量门禁与文档收口）: 已完成（当前门禁 70%，后续可提升到 80%）
 
 ## 常见问题
 
@@ -108,7 +114,8 @@ python 手控刷机工具_v1.1.py
 ### 4) 启动时报依赖缺失
 
 - 确认在虚拟环境中运行。
-- 重新执行 `pip install -e .` 或 `uv pip install -e .`。
+- 使用 uv 时优先执行 `uv sync --extra dev`。
+- 使用 pip 时重新安装依赖：`pip install openpyxl>=3.1.0 psutil>=5.9.0 pytest>=8.0.0 pytest-cov>=5.0.0`。
 
 ## 后续规划
 

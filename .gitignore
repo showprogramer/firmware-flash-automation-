@@ -6,6 +6,8 @@ massagechairproject.md
 __pycache__/
 *.pyc
 *.pyo
+.coverage
+htmlcov/
 
 # Temp/system files
 *.tmp
