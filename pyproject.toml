@@ -7,6 +7,11 @@ dependencies = [
     "openpyxl>=3.1.0",
     "psutil>=5.9.0",
 ]
+optional-dependencies = { dev = ["pytest>=8.0.0"] }
 
 [tool.uv]
 package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
