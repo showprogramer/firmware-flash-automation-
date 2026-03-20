@@ -1,0 +1,11 @@
+[paths]
+root_dir = "D:/按摩椅相关文件汇总/YJ-按摩椅家用，商用程序汇总（之前没整理的）"
+excel_path = "data/handcontrol_ui_template.xlsx"
+
+[excel]
+sheet = "Sheet1"
+header_row = 2
+
+[usb]
+junk_extensions = [".usu", ".tmp", ".bak"]
+junk_filenames = ["autorun.inf"]

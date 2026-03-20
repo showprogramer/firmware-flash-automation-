@@ -82,10 +82,20 @@ def _do_write(
         log_fn(f"  Excel 已写入{label}: 第{row_num}行  {model} {version}  {date_str}  [{remark}]")
         if is_tmp:
             log_fn(f"  备用文件路径: {excel_path}")
-        return True
+        return {
+            "ok": True,
+            "reason": "ok",
+            "tmp_path": "",
+            "error": "",
+        }
     except Exception as e:
         log_fn(f"  Excel 写入失败: {e}")
-        return False
+        return {
+            "ok": False,
+            "reason": "write_failed",
+            "tmp_path": "",
+            "error": str(e),
+        }
 
 
 def write_excel_record(
@@ -102,21 +112,26 @@ def write_excel_record(
 ):
     """
     Write or update a record in Excel.
+    Returns dict with keys: ok, reason, tmp_path, error.
     If file is locked by WPS/Excel, write to a temporary backup file.
     """
     excel_path = Path(excel_path)
 
     def _is_locked(p: Path) -> bool:
+        if not p.exists():
+            return False
         try:
             with open(p, "r+b"):
                 return False
+        except FileNotFoundError:
+            return False
         except (IOError, PermissionError):
             return True
 
     if _is_locked(excel_path):
         log_fn("  ⚠ Excel 文件被 WPS/Excel 占用，将保存为备用文件，请手动合并或关闭后重试")
         tmp_path = excel_path.with_name(excel_path.stem + "_刷机记录_待导入.xlsx")
-        _do_write(
+        tmp_result = _do_write(
             str(tmp_path),
             sheet_name,
             model,
@@ -129,7 +144,12 @@ def write_excel_record(
             salesman=salesman,
             is_tmp=True,
         )
-        return False
+        return {
+            "ok": False,
+            "reason": "locked",
+            "tmp_path": str(tmp_path),
+            "error": str(tmp_result.get("error", "")),
+        }
 
     return _do_write(
         str(excel_path),

@@ -320,7 +320,7 @@ class App(tk.Tk):
         excel = self.excel_path.get()
         rom_path = str(Path(info["path"]) / info["rom_file"])
         self.log(f"写入 Excel: {info['model']} {info['version']}  [{remark}]")
-        ok = write_excel_record(
+        result = write_excel_record(
             excel,
             EXCEL_SHEET,
             info["model"],
@@ -329,16 +329,19 @@ class App(tk.Tk):
             rom_path=rom_path,
             log_fn=self.log,
         )
-        if ok:
+        if result["ok"]:
             self._update_listbox_color(self.current_idx.get(), remark)
             self._refresh_preview()
-        if not ok:
-            tmp = str(Path(excel).with_name(Path(excel).stem + "_刷机记录_待导入.xlsx"))
+        if not result["ok"] and result["reason"] == "locked":
+            tmp = result["tmp_path"] or str(Path(excel).with_name(Path(excel).stem + "_刷机记录_待导入.xlsx"))
             messagebox.showwarning(
                 "Excel 被占用",
                 f"表格被 WPS/Excel 占用，无法直接写入。\n\n已将记录保存到备用文件：\n{tmp}\n\n"
                 "解决方法：\n① 关闭 WPS/Excel 后再点一次写入按钮\n② 或打开备用文件，手动复制该行到主表",
             )
+        elif not result["ok"]:
+            err = result.get("error", "") or "未知错误"
+            messagebox.showerror("Excel 写入失败", f"未能写入 Excel。\n\n错误信息：\n{err}")
 
     def _one_click(self):
         info = self._current_info()
@@ -359,7 +362,7 @@ class App(tk.Tk):
             self.log("复制失败，流程中止")
             return
         eject_usb(drive, self.log)
-        excel_ok = write_excel_record(
+        excel_result = write_excel_record(
             self.excel_path.get(),
             EXCEL_SHEET,
             info["model"],
@@ -368,18 +371,21 @@ class App(tk.Tk):
             rom_path=rom,
             log_fn=self.log,
         )
-        if excel_ok:
+        if excel_result["ok"]:
             self._update_listbox_color(self.current_idx.get(), "待确认")
             self._refresh_preview()
         self.log("一键完成！请插入手控器测试 ✓")
-        if not excel_ok:
+        if not excel_result["ok"] and excel_result["reason"] == "locked":
             excel = self.excel_path.get()
-            tmp = str(Path(excel).with_name(Path(excel).stem + "_刷机记录_待导入.xlsx"))
+            tmp = excel_result["tmp_path"] or str(Path(excel).with_name(Path(excel).stem + "_刷机记录_待导入.xlsx"))
             messagebox.showwarning(
                 "Excel 被占用",
                 f"U盘已准备好，但 Excel 写入失败（文件被占用）。\n\n记录已暂存到：\n{tmp}\n\n"
                 "关闭 WPS/Excel 后，点【写入记录】补录即可。",
             )
+        elif not excel_result["ok"]:
+            err = excel_result.get("error", "") or "未知错误"
+            messagebox.showerror("Excel 写入失败", f"U盘已准备好，但写入 Excel 失败。\n\n错误信息：\n{err}")
         self.log("=" * 50)
 
     def _save_review(self):
@@ -395,7 +401,7 @@ class App(tk.Tk):
         final_remark = status if not remark or remark == status else f"{status}  |  {remark}"
         rom_path = str(Path(info["path"]) / info["rom_file"])
         self.log(f"审核保存: {info['model']} {info['version']}  logo={logo}  语言={language}  [{status}]")
-        ok = write_excel_record(
+        result = write_excel_record(
             excel,
             EXCEL_SHEET,
             info["model"],
@@ -407,13 +413,16 @@ class App(tk.Tk):
             salesman=salesman,
             log_fn=self.log,
         )
-        if ok:
+        if result["ok"]:
             self._update_listbox_color(self.current_idx.get(), status)
             self._refresh_preview()
             self.log("  保存成功 ✓")
-        else:
-            tmp = str(Path(excel).with_name(Path(excel).stem + "_刷机记录_待导入.xlsx"))
+        elif result["reason"] == "locked":
+            tmp = result["tmp_path"] or str(Path(excel).with_name(Path(excel).stem + "_刷机记录_待导入.xlsx"))
             messagebox.showwarning("Excel 被占用", f"请关闭 WPS/Excel 后重试。\n已暂存到：\n{tmp}")
+        else:
+            err = result.get("error", "") or "未知错误"
+            messagebox.showerror("Excel 写入失败", f"保存失败。\n\n错误信息：\n{err}")
 
     def _next_folder(self):
         idx = self.current_idx.get()
