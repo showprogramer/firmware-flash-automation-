@@ -6,7 +6,8 @@
 - 新增 `pytest` 测试框架基础配置（`tests` 目录与 `tool.pytest.ini_options`）。
 - 新增 `tests/test_file_scan.py`，覆盖 `parse_rom_filename`、`guess_model_from_path`、`find_handcontrol_folders` 的核心场景（识别、过滤、排序）。
 - 新增 `tests/test_excel_ops.py`，覆盖 `write_excel_record` 的新建写入、同型号版本覆盖更新、占用回退与异常失败分支，以及读取函数行为校验。
-- 阶段 1/2/3 验证通过：`python -m pytest -q`，当前用例全部通过。
+- 新增 `tests/test_usb_ops.py`，覆盖 `get_usb_drives`、`clean_usb`、`copy_to_usb`、`eject_usb`、`format_usb` 的成功与失败路径（基于 mock，无真实设备操作）。
+- 阶段 1/2/3/4 验证通过：`python -m pytest -q`，当前用例全部通过。
 
 ### chore
 - `pyproject.toml` 增加 `dev` 额外依赖组：`pytest>=8.0.0`，用于本地单元测试。
