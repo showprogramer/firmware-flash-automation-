@@ -4,6 +4,7 @@
 
 ### docs
 - 新增 `COMMIT_TEMPLATE.md`，提供中文 commit message 标准模板、`type` 对照与项目示例。
+- 新增 `README.md`，补充项目简介、功能说明、运行环境、安装依赖、使用步骤、常见问题与后续规划。
 
 ### app
 - 调整 Excel 写入调用逻辑：从布尔返回值改为读取结构化结果。
