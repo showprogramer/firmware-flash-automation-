@@ -1,0 +1,22 @@
+# Internal docs
+massagechairproject.md
+
+# Python environment and caches
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Temp/system files
+*.tmp
+*.bak
+Thumbs.db
+.DS_Store
+
+# Excel files are ignored by default
+*.xlsx
+~$*.xlsx
+
+# Keep one sanitized template in version control
+!data/
+!data/handcontrol_ui_template.xlsx
