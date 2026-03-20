@@ -318,8 +318,14 @@ class App(tk.Tk):
         if not info:
             return
         excel = self.excel_path.get()
+        logo = self.field_logo.get().strip()
+        language = self.field_language.get().strip()
+        salesman = self.field_salesman.get().strip()
         rom_path = str(Path(info["path"]) / info["rom_file"])
-        self.log(f"写入 Excel: {info['model']} {info['version']}  [{remark}]")
+        self.log(
+            f"写入 Excel: {info['model']} {info['version']}  "
+            f"logo={logo}  语言={language}  业务员={salesman}  [{remark}]"
+        )
         result = write_excel_record(
             excel,
             EXCEL_SHEET,
@@ -327,6 +333,9 @@ class App(tk.Tk):
             info["version"],
             remark=remark,
             rom_path=rom_path,
+            logo=logo,
+            language=language,
+            salesman=salesman,
             log_fn=self.log,
         )
         if result["ok"]:
@@ -353,6 +362,9 @@ class App(tk.Tk):
             return
         self.log("=" * 50)
         self.log(f"一键执行: {info['model']} {info['version']}")
+        logo = self.field_logo.get().strip()
+        language = self.field_language.get().strip()
+        salesman = self.field_salesman.get().strip()
         n = clean_usb(drive, self.log)
         self.log(f"  清理完成，删除 {n} 个垃圾文件")
         rom = str(Path(info["path"]) / info["rom_file"])
@@ -369,6 +381,9 @@ class App(tk.Tk):
             info["version"],
             remark="待确认",
             rom_path=rom,
+            logo=logo,
+            language=language,
+            salesman=salesman,
             log_fn=self.log,
         )
         if excel_result["ok"]:

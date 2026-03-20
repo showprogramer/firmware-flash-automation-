@@ -30,7 +30,13 @@ HandControlUITool 是一个 Windows 桌面刷机辅助工具，用于手控 UI �
 ```powershell
 uv venv .venv
 .venv\Scripts\Activate.ps1
-uv pip install -e .
+uv sync --extra dev
+```
+
+启动：
+
+```powershell
+uv run python app.py
 ```
 
 ### 方式二：使用 pip
@@ -38,7 +44,7 @@ uv pip install -e .
 ```powershell
 python -m venv .venv
 .venv\Scripts\Activate.ps1
-pip install -e .
+pip install openpyxl>=3.1.0 psutil>=5.9.0 pytest>=8.0.0
 ```
 
 ## 使用步骤
@@ -63,6 +69,21 @@ python 手控刷机工具_v1.1.py
 5. 选择 U 盘盘符并执行刷机步骤，或直接使用“一键执行”。
 6. 测试后在“审核填写”页保存结果，写入 Excel。
 7. 若出现 Excel 占用提示，先关闭 WPS/Excel，再补录或合并备用文件。
+
+## 测试与阶段进度
+
+执行测试：
+
+```powershell
+.venv\Scripts\python.exe -m pytest -q
+```
+
+当前阶段状态：
+- 阶段 1（测试骨架）: 已完成
+- 阶段 2（`file_scan`）: 已完成
+- 阶段 3（`excel_ops`）: 已完成
+- 阶段 4（`usb_ops`）: 已完成
+- 阶段 5（质量门禁与文档收口）: 进行中
 
 ## 常见问题
 
