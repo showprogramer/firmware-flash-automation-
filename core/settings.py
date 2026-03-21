@@ -6,7 +6,7 @@ CONFIG_PATH = PROJECT_ROOT / "config.toml"
 # Built-in defaults (used when config file is missing/invalid)
 _DEFAULTS = {
     "paths": {
-        "root_dir": r"D:\按摩椅相关文件汇总\YJ-按摩椅家用，商用程序汇总（之前没整理的）",
+        "root_dir": "",
         "excel_path": "data/handcontrol_ui_template.xlsx",
     },
     "excel": {
@@ -102,3 +102,4 @@ JUNK_FILENAMES = _as_str_set(
     set(_DEFAULTS["usb"]["junk_filenames"]),
     lower=True,
 )
+
