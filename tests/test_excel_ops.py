@@ -27,6 +27,10 @@ def test_write_excel_record_creates_new_file(tmp_path: Path):
 
     assert result["ok"] is True
     assert result["reason"] == "ok"
+    assert result["written_row"]["model"] == "L36"
+    assert result["written_row"]["version"] == "V1.2.3"
+    assert result["written_row"]["remark"] == "待确认"
+    assert result["written_row"]["date"]
     assert excel.exists()
     assert any("Excel 已写入" in msg for msg in logs)
 
@@ -63,6 +67,10 @@ def test_write_excel_record_updates_existing_row(tmp_path: Path):
         log_fn=lambda _: None,
     )
     assert second["ok"] is True
+    assert second["written_row"]["logo"] == "品牌A"
+    assert second["written_row"]["salesman"] == "张三"
+    assert second["written_row"]["language"] == "中、英"
+    assert second["written_row"]["remark"] == "测试通过"
 
     wb = openpyxl.load_workbook(excel)
     ws = wb["Sheet1"]
@@ -102,6 +110,7 @@ def test_write_excel_record_returns_locked_and_writes_tmp(tmp_path: Path, monkey
     expected_tmp = excel.with_name("records_刷机记录_待导入.xlsx")
     assert result["ok"] is False
     assert result["reason"] == "locked"
+    assert result["written_row"] is None
     assert result["tmp_path"] == str(expected_tmp)
     assert expected_tmp.exists()
     assert any("被 WPS/Excel 占用" in msg for msg in logs)
@@ -135,6 +144,7 @@ def test_write_excel_record_returns_write_failed_on_exception(tmp_path: Path, mo
 
     assert result["ok"] is False
     assert result["reason"] == "write_failed"
+    assert result["written_row"] is None
     assert "mock load failure" in result["error"]
     assert any("Excel 写入失败" in msg for msg in logs)
 

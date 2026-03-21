@@ -40,11 +40,15 @@ class App(tk.Tk):
 
         self._task_queue: queue.Queue = queue.Queue()
         self._task_id = 0
+        self._preview_rows: list[dict] = []
+        self._preview_by_key: dict[tuple[str, str], dict] = {}
+        self._preview_item_by_key: dict[tuple[str, str], str] = {}
 
         self._build_ui()
         self._refresh_usb()
         self._report_config_status()
         self._poll_task_queue()
+        self._manual_refresh_preview()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
     def _build_ui(self):
@@ -66,7 +70,7 @@ class App(tk.Tk):
         left = ttk.LabelFrame(main_area, text="手控文件夹列表")
         left.pack(side="left", fill="both", expand=True, padx=(0, 4))
         ttk.Button(left, text="扫描目录", command=self._scan).pack(fill="x", padx=4, pady=2)
-        ttk.Button(left, text="刷新预览", command=self._refresh_preview).pack(fill="x", padx=4, pady=(0, 2))
+        ttk.Button(left, text="刷新预览", command=self._manual_refresh_preview).pack(fill="x", padx=4, pady=(0, 2))
         self.listbox = tk.Listbox(left, selectmode="browse", font=("Consolas", 9), activestyle="dotbox")
         sb = ttk.Scrollbar(left, orient="vertical", command=self.listbox.yview)
         self.listbox.configure(yscrollcommand=sb.set)
@@ -121,7 +125,7 @@ class App(tk.Tk):
 
         btn_bar = ttk.Frame(self)
         btn_bar.pack(fill="x", padx=6, pady=(0, 4))
-        ttk.Button(btn_bar, text="刷新预览", command=self._refresh_preview).pack(side="left")
+        ttk.Button(btn_bar, text="刷新预览", command=self._manual_refresh_preview).pack(side="left")
         ttk.Label(btn_bar, textvariable=self.status_text, foreground="gray").pack(side="left", padx=12)
         ttk.Button(btn_bar, text="清空日志", command=self._clear_log).pack(side="right")
 
@@ -280,6 +284,92 @@ class App(tk.Tk):
             return
         self.destroy()
 
+    def _preview_key(self, model: str, version: str) -> tuple[str, str]:
+        return (str(model or "").strip().upper(), str(version or "").strip().upper())
+
+    def _preview_tag(self, remark: str) -> str:
+        return "待确认" if remark == "待确认" else ("测试通过" if remark == "测试通过" else "")
+
+    def _preview_values(self, row: dict) -> list[str]:
+        return [
+            str(row.get("serial", "")),
+            str(row.get("model", "")),
+            str(row.get("logo", "")),
+            str(row.get("salesman", "")),
+            str(row.get("language", "")),
+            str(row.get("version", "")),
+            str(row.get("date", "")),
+            str(row.get("remark", "")),
+        ]
+
+    def _row_to_preview_dict(self, row: list) -> dict:
+        values = [str(v or "") for v in row]
+        while len(values) < 9:
+            values.append("")
+        return {
+            "serial": values[0],
+            "model": values[1],
+            "logo": values[2],
+            "salesman": values[3],
+            "language": values[4],
+            "version": values[5],
+            "date": values[6],
+            "remark": values[8],
+        }
+
+    def _rebuild_preview_tree(self):
+        for row in self.preview.get_children():
+            self.preview.delete(row)
+        self._preview_item_by_key = {}
+        for row in self._preview_rows:
+            key = self._preview_key(row["model"], row["version"])
+            item_id = self.preview.insert("", "end", values=self._preview_values(row), tags=(self._preview_tag(row["remark"]),))
+            self._preview_item_by_key[key] = item_id
+
+    def _upsert_preview_row(self, row: dict):
+        key = self._preview_key(row.get("model", ""), row.get("version", ""))
+        normalized = {
+            "serial": str(row.get("serial", "")),
+            "model": str(row.get("model", "")),
+            "logo": str(row.get("logo", "")),
+            "salesman": str(row.get("salesman", "")),
+            "language": str(row.get("language", "")),
+            "version": str(row.get("version", "")),
+            "date": str(row.get("date", "")),
+            "remark": str(row.get("remark", "")),
+        }
+        item_id = self._preview_item_by_key.get(key)
+        if item_id:
+            existing = self._preview_by_key.get(key, {})
+            if not normalized["serial"]:
+                normalized["serial"] = str(existing.get("serial", ""))
+            self.preview.item(item_id, values=self._preview_values(normalized), tags=(self._preview_tag(normalized["remark"]),))
+            self._preview_by_key[key] = normalized
+            for i, existing in enumerate(self._preview_rows):
+                if self._preview_key(existing["model"], existing["version"]) == key:
+                    self._preview_rows[i] = normalized
+                    break
+            return
+        item_id = self.preview.insert("", "end", values=self._preview_values(normalized), tags=(self._preview_tag(normalized["remark"]),))
+        self._preview_rows.append(normalized)
+        self._preview_by_key[key] = normalized
+        self._preview_item_by_key[key] = item_id
+
+    def _manual_refresh_preview(self):
+        self._reload_preview_cache_from_disk()
+
+    def _reload_preview_cache_from_disk(self):
+        def _work(_log_fn):
+            rows = read_all_excel_rows(self.excel_path.get(), EXCEL_SHEET)
+            return [self._row_to_preview_dict(r) for r in rows]
+
+        def _done(preview_rows):
+            self._preview_rows = preview_rows
+            self._preview_by_key = {self._preview_key(r["model"], r["version"]): r for r in preview_rows}
+            self._rebuild_preview_tree()
+
+        self._run_task("刷新预览", _work, _done)
+
     def _browse_root(self):
         d = filedialog.askdirectory(initialdir=self.root_dir.get())
         if d:
@@ -292,6 +382,7 @@ class App(tk.Tk):
         )
         if f:
             self.excel_path.set(f)
+            self._manual_refresh_preview()
 
     def _refresh_usb(self):
         drives = get_usb_drives()
@@ -329,28 +420,11 @@ class App(tk.Tk):
             tested = sum(1 for v in status_map.values() if v == "测试通过")
             pending = sum(1 for v in status_map.values() if v == "待确认")
             self.log(f"共找到 {len(self.folders)} 个手控文件夹（已测: {tested}，待确认: {pending}）")
-            self._refresh_preview()
 
         self._run_task("扫描目录", _work, _done)
 
     def _refresh_preview(self):
-        def _work(_log_fn):
-            return read_all_excel_rows(self.excel_path.get(), EXCEL_SHEET)
-
-        def _done(rows):
-            for row in self.preview.get_children():
-                self.preview.delete(row)
-            for r in rows:
-                if len(r) >= 9:
-                    display = [r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[8]]
-                    remark = r[8]
-                else:
-                    display = r[:8]
-                    remark = ""
-                tag = "待确认" if remark == "待确认" else ("测试通过" if remark == "测试通过" else "")
-                self.preview.insert("", "end", values=display, tags=(tag,))
-
-        self._run_task("刷新预览", _work, _done)
+        self._manual_refresh_preview()
 
     def _update_listbox_color(self, idx: int, remark: str):
         if idx < 0 or idx >= self.listbox.size():
@@ -483,7 +557,9 @@ class App(tk.Tk):
         def _done(result):
             if result["ok"]:
                 self._update_listbox_color(self.current_idx.get(), remark)
-                self._refresh_preview()
+                written = result.get("written_row") or {}
+                if written:
+                    self._upsert_preview_row(written)
                 return
             if result["reason"] == "locked":
                 tmp = result["tmp_path"] or str(Path(excel).with_name(Path(excel).stem + "_刷机记录_待导入.xlsx"))
@@ -542,7 +618,9 @@ class App(tk.Tk):
             excel_result = result["excel_result"]
             if excel_result["ok"]:
                 self._update_listbox_color(self.current_idx.get(), "待确认")
-                self._refresh_preview()
+                written = excel_result.get("written_row") or {}
+                if written:
+                    self._upsert_preview_row(written)
             self.log("一键完成！请插入手控器测试 ✓")
             if not excel_result["ok"] and excel_result["reason"] == "locked":
                 excel = self.excel_path.get()
@@ -589,7 +667,9 @@ class App(tk.Tk):
         def _done(result):
             if result["ok"]:
                 self._update_listbox_color(self.current_idx.get(), status)
-                self._refresh_preview()
+                written = result.get("written_row") or {}
+                if written:
+                    self._upsert_preview_row(written)
                 self.log("  保存成功 ✓")
                 return
             if result["reason"] == "locked":

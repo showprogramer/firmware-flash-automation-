@@ -9,6 +9,7 @@
 - 新增 `tests/test_usb_ops.py`，覆盖 `get_usb_drives`、`clean_usb`、`copy_to_usb`、`eject_usb`、`format_usb` 的成功与失败路径（基于 mock，无真实设备操作）。
 - 阶段 1/2/3/4 验证通过：`python -m pytest -q`，当前用例全部通过。
 - 阶段 5 完成：新增覆盖率门禁（`core` 覆盖率 >= 70%）并通过测试。
+- 新增 `tests/test_app_preview_cache.py`，覆盖预览缓存增量更新（insert/update）与 Excel 行映射逻辑。
 
 ### chore
 - `pyproject.toml` 增加 `dev` 额外依赖组：`pytest>=8.0.0`，用于本地单元测试。
@@ -26,10 +27,13 @@
 - 根据写入结果区分提示：`locked` 显示“占用并给出备用文件路径”，其他失败显示具体错误信息。
 - 修复 `_write_excel` 与 `_one_click`：写表时补充传入 `logo/language/salesman` 字段，保持与审核保存一致。
 - 高优修复：扫描、复制、格式化、写表、预览读取改为后台任务执行，避免 Tk 主线程阻塞导致界面“未响应”。
+- 预览性能优化：引入内存缓存（`_preview_rows/_preview_by_key/_preview_item_by_key`），写入成功后按 `(MODEL, VERSION)` 增量更新 Treeview，不再每次全量读盘重绘。
+- 预览全量读盘收敛为手动刷新（含启动初次加载、切换 Excel 路径时重载）。
 
 ### core
 - `core/excel_ops.py`：
   - `write_excel_record` 返回结构改为 `ok / reason / tmp_path / error`。
+  - `write_excel_record` 成功返回新增 `written_row`（model/logo/salesman/language/version/date/remark），供 UI 直接增量刷新。
   - 增加文件不存在场景处理；Excel 被占用时写入 `*_刷机记录_待导入.xlsx` 并返回 `reason=locked`。
   - 新建表格首行标题文案调整为“现有手控UI明细”。
 - `core/settings.py`：

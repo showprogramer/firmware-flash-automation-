@@ -87,6 +87,15 @@ def _do_write(
             "reason": "ok",
             "tmp_path": "",
             "error": "",
+            "written_row": {
+                "model": str(model or ""),
+                "logo": str(logo or ""),
+                "salesman": str(salesman or ""),
+                "language": str(language or ""),
+                "version": str(version or ""),
+                "date": str(date_str or ""),
+                "remark": str(remark or ""),
+            },
         }
     except Exception as e:
         log_fn(f"  Excel 写入失败: {e}")
@@ -95,6 +104,7 @@ def _do_write(
             "reason": "write_failed",
             "tmp_path": "",
             "error": str(e),
+            "written_row": None,
         }
 
 
@@ -112,7 +122,7 @@ def write_excel_record(
 ):
     """
     Write or update a record in Excel.
-    Returns dict with keys: ok, reason, tmp_path, error.
+    Returns dict with keys: ok, reason, tmp_path, error, written_row.
     If file is locked by WPS/Excel, write to a temporary backup file.
     """
     excel_path = Path(excel_path)
@@ -149,6 +159,7 @@ def write_excel_record(
             "reason": "locked",
             "tmp_path": str(tmp_path),
             "error": str(tmp_result.get("error", "")),
+            "written_row": None,
         }
 
     return _do_write(
