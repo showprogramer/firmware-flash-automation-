@@ -41,12 +41,14 @@
   - 增加默认配置回退与类型兜底（路径、Excel Sheet/Header、USB 清理规则）。
   - 支持相对 `excel_path` 按项目根目录解析为绝对路径。
   - 高优修复：配置加载新增状态与错误信息（`ok/missing/parser_missing/parse_error`），不再静默吞掉配置失效。
+  - 去除机器耦合默认路径：`paths.root_dir` 内置默认值改为空字符串，避免在配置缺失/失败时显示无效绝对路径。
 
 ### data
 - 更新 `data/handcontrol_ui_template.xlsx` 模板内容（二进制文件变更）。
 
 ### config
 - 新增 `config.toml`，用于集中配置扫描目录、Excel 参数和 USB 清理规则。
+- `config.toml` 示例 `paths.root_dir` 改为空字符串，避免模板携带特定机器绝对路径。
 
 ### compat
 - `pyproject.toml` 增加 `tomli` 条件依赖（`python_version < 3.11`），确保 Python 3.8-3.10 可读取 TOML 配置。
