@@ -10,6 +10,8 @@
 - 阶段 1/2/3/4 验证通过：`python -m pytest -q`，当前用例全部通过。
 - 阶段 5 完成：新增覆盖率门禁（`core` 覆盖率 >= 70%）并通过测试。
 - 新增 `tests/test_app_preview_cache.py`，覆盖预览缓存增量更新（insert/update）与 Excel 行映射逻辑。
+- 新增 `tests/test_scan_service.py`、`tests/test_excel_service.py`、`tests/test_flash_service.py`，覆盖 service 层扫描聚合、写表转换与一键流程编排。
+- 新增 `tests/test_app_service_smoke.py`，验证 `app.py` 通过 service 返回结果做 UI 渲染与提示。
 
 ### chore
 - `pyproject.toml` 增加 `dev` 额外依赖组：`pytest>=8.0.0`，用于本地单元测试。
@@ -29,6 +31,7 @@
 - 高优修复：扫描、复制、格式化、写表、预览读取改为后台任务执行，避免 Tk 主线程阻塞导致界面“未响应”。
 - 预览性能优化：引入内存缓存（`_preview_rows/_preview_by_key/_preview_item_by_key`），写入成功后按 `(MODEL, VERSION)` 增量更新 Treeview，不再每次全量读盘重绘。
 - 预览全量读盘收敛为手动刷新（含启动初次加载、切换 Excel 路径时重载）。
+- 高优重构：`_scan`、`_write_excel`、`_one_click`、`_save_review` 改为调用 service 层，UI 仅负责事件绑定、状态展示与提示。
 
 ### core
 - `core/excel_ops.py`：
@@ -42,6 +45,10 @@
   - 支持相对 `excel_path` 按项目根目录解析为绝对路径。
   - 高优修复：配置加载新增状态与错误信息（`ok/missing/parser_missing/parse_error`），不再静默吞掉配置失效。
   - 去除机器耦合默认路径：`paths.root_dir` 内置默认值改为空字符串，避免在配置缺失/失败时显示无效绝对路径。
+- 新增 `core/services/`：
+  - `scan_service.py`：封装扫描与状态聚合。
+  - `excel_service.py`：封装写表请求与返回转换（含 `preview_row`）。
+  - `flash_service.py`：封装一键流程编排（清理→复制→弹出→写表）。
 
 ### data
 - 更新 `data/handcontrol_ui_template.xlsx` 模板内容（二进制文件变更）。
