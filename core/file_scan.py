@@ -2,6 +2,8 @@ import os
 import re
 from pathlib import Path
 
+from core.types import HandcontrolFolder
+
 
 def parse_rom_filename(name: str) -> tuple[str, str]:
     """
@@ -35,11 +37,11 @@ def guess_model_from_path(dirpath: str) -> str:
     return "未知型号"
 
 
-def find_handcontrol_folders(root: str) -> list[dict]:
+def find_handcontrol_folders(root: str) -> list[HandcontrolFolder]:
     """
     Recursively scan root and find folders containing both .ROM and .PKG files.
     """
-    results = []
+    results: list[HandcontrolFolder] = []
     root_path = Path(root)
 
     for dirpath, _, filenames in os.walk(root_path):

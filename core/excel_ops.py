@@ -5,6 +5,7 @@ import openpyxl
 from openpyxl.styles import PatternFill
 
 from core.settings import EXCEL_HEADER_ROW
+from core.types import ExcelWriteResult, ExcelWrittenRow
 
 
 def load_excel(path: str):
@@ -38,7 +39,7 @@ def _do_write(
     language: str = "",
     salesman: str = "",
     is_tmp: bool = False,
-):
+) -> ExcelWriteResult:
     try:
         p = Path(excel_path)
         if p.exists():
@@ -82,20 +83,22 @@ def _do_write(
         log_fn(f"  Excel 已写入{label}: 第{row_num}行  {model} {version}  {date_str}  [{remark}]")
         if is_tmp:
             log_fn(f"  备用文件路径: {excel_path}")
+
+        written_row: ExcelWrittenRow = {
+            "model": str(model or ""),
+            "logo": str(logo or ""),
+            "salesman": str(salesman or ""),
+            "language": str(language or ""),
+            "version": str(version or ""),
+            "date": str(date_str or ""),
+            "remark": str(remark or ""),
+        }
         return {
             "ok": True,
             "reason": "ok",
             "tmp_path": "",
             "error": "",
-            "written_row": {
-                "model": str(model or ""),
-                "logo": str(logo or ""),
-                "salesman": str(salesman or ""),
-                "language": str(language or ""),
-                "version": str(version or ""),
-                "date": str(date_str or ""),
-                "remark": str(remark or ""),
-            },
+            "written_row": written_row,
         }
     except Exception as e:
         log_fn(f"  Excel 写入失败: {e}")
@@ -119,7 +122,7 @@ def write_excel_record(
     language: str = "",
     salesman: str = "",
     log_fn=print,
-):
+) -> ExcelWriteResult:
     """
     Write or update a record in Excel.
     Returns dict with keys: ok, reason, tmp_path, error, written_row.
