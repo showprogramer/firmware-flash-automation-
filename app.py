@@ -1,10 +1,20 @@
+import queue
+import threading
 import tkinter as tk
+import traceback
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from core.excel_ops import load_excel_row, load_excel_status, read_all_excel_rows, write_excel_record
 from core.file_scan import find_handcontrol_folders
-from core.settings import DEFAULT_EXCEL, DEFAULT_ROOT, EXCEL_SHEET
+from core.settings import (
+    CONFIG_LOAD_ERROR,
+    CONFIG_LOAD_SOURCE,
+    CONFIG_LOAD_STATUS,
+    DEFAULT_EXCEL,
+    DEFAULT_ROOT,
+    EXCEL_SHEET,
+)
 from core.usb_ops import clean_usb, copy_to_usb, eject_usb, format_usb, get_usb_drives
 
 
@@ -25,9 +35,17 @@ class App(tk.Tk):
         self.field_language = tk.StringVar()
         self.field_salesman = tk.StringVar()
         self.field_remark = tk.StringVar()
+        self.busy = tk.BooleanVar(value=False)
+        self.status_text = tk.StringVar(value="就绪")
+
+        self._task_queue: queue.Queue = queue.Queue()
+        self._task_id = 0
 
         self._build_ui()
         self._refresh_usb()
+        self._report_config_status()
+        self._poll_task_queue()
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
 
     def _build_ui(self):
         pad = dict(padx=6, pady=3)
@@ -104,6 +122,7 @@ class App(tk.Tk):
         btn_bar = ttk.Frame(self)
         btn_bar.pack(fill="x", padx=6, pady=(0, 4))
         ttk.Button(btn_bar, text="刷新预览", command=self._refresh_preview).pack(side="left")
+        ttk.Label(btn_bar, textvariable=self.status_text, foreground="gray").pack(side="left", padx=12)
         ttk.Button(btn_bar, text="清空日志", command=self._clear_log).pack(side="right")
 
     def _build_flash_tab(self, parent):
@@ -176,6 +195,91 @@ class App(tk.Tk):
         self.log_text.delete("1.0", "end")
         self.log_text.configure(state="disabled")
 
+    def _report_config_status(self):
+        status = CONFIG_LOAD_STATUS
+        path = CONFIG_LOAD_SOURCE
+        if status == "ok":
+            self.log(f"配置加载成功: {path}")
+            return
+        if status == "missing":
+            self.log(f"配置文件不存在，使用内置默认配置: {path}")
+            return
+        err = CONFIG_LOAD_ERROR or "未知错误"
+        message = f"配置加载失败，已回退内置默认配置。\n\n路径:\n{path}\n\n原因:\n{err}"
+        self.log(message.replace("\n", " "))
+        messagebox.showwarning("配置回退", message)
+
+    def _thread_log(self, msg: str):
+        self._task_queue.put(("log", msg))
+
+    def _set_status(self, text: str):
+        self.status_text.set(text)
+
+    def _set_busy(self, busy: bool, status: str = "就绪"):
+        self.busy.set(busy)
+        self._set_status(status)
+        self._set_all_buttons_state("disabled" if busy else "normal")
+
+    def _set_all_buttons_state(self, state: str):
+        def _walk(widget):
+            for child in widget.winfo_children():
+                if isinstance(child, ttk.Button):
+                    try:
+                        child.configure(state=state)
+                    except Exception:
+                        pass
+                _walk(child)
+
+        _walk(self)
+
+    def _run_task(self, name: str, fn, on_done):
+        if self.busy.get():
+            messagebox.showinfo("提示", "已有任务在执行中，请稍候")
+            return
+
+        self._task_id += 1
+        task_id = self._task_id
+        self._set_busy(True, f"{name}执行中...")
+
+        def worker():
+            try:
+                result = fn(self._thread_log)
+                self._task_queue.put(("done", task_id, name, result, on_done))
+            except Exception as e:
+                tb = traceback.format_exc()
+                self._task_queue.put(("fail", task_id, name, str(e), tb))
+
+        t = threading.Thread(target=worker, daemon=True)
+        t.start()
+
+    def _poll_task_queue(self):
+        try:
+            while True:
+                item = self._task_queue.get_nowait()
+                kind = item[0]
+                if kind == "log":
+                    self.log(item[1])
+                elif kind == "done":
+                    _, _, name, result, on_done = item
+                    self._set_busy(False, "就绪")
+                    if callable(on_done):
+                        on_done(result)
+                    self.log(f"{name}完成")
+                elif kind == "fail":
+                    _, _, name, err, tb = item
+                    self._set_busy(False, "就绪")
+                    self.log(f"{name}失败: {err}")
+                    self.log(tb)
+                    messagebox.showerror(f"{name}失败", f"{err}\n\n详情见日志")
+        except queue.Empty:
+            pass
+        self.after(120, self._poll_task_queue)
+
+    def _on_close(self):
+        if self.busy.get() and not messagebox.askyesno("确认退出", "后台任务仍在执行，确认退出吗？"):
+            return
+        self.destroy()
+
     def _browse_root(self):
         d = filedialog.askdirectory(initialdir=self.root_dir.get())
         if d:
@@ -199,41 +303,54 @@ class App(tk.Tk):
             self.usb_drive.set("")
 
     def _scan(self):
-        self.listbox.delete(0, "end")
-        self.folders = []
         root = self.root_dir.get()
         if not root:
             messagebox.showwarning("提示", "请先选择程序根目录")
             return
-        self.log(f"扫描中: {root}")
-        self.folders = find_handcontrol_folders(root)
-        status_map = load_excel_status(self.excel_path.get(), EXCEL_SHEET)
-        for i, item in enumerate(self.folders):
-            self.listbox.insert("end", item["label"])
-            key = (item["model"].upper(), item["version"].upper())
-            status = status_map.get(key, "")
-            if status == "待确认":
-                self.listbox.itemconfig(i, bg="#FFFF99", fg="black")
-            elif status == "测试通过":
-                self.listbox.itemconfig(i, bg="#C6EFCE", fg="black")
-        tested = sum(1 for v in status_map.values() if v == "测试通过")
-        pending = sum(1 for v in status_map.values() if v == "待确认")
-        self.log(f"共找到 {len(self.folders)} 个手控文件夹（已测: {tested}，待确认: {pending}）")
-        self._refresh_preview()
+
+        def _work(log_fn):
+            log_fn(f"扫描中: {root}")
+            folders = find_handcontrol_folders(root)
+            status_map = load_excel_status(self.excel_path.get(), EXCEL_SHEET)
+            return {"folders": folders, "status_map": status_map}
+
+        def _done(result):
+            self.listbox.delete(0, "end")
+            self.folders = result["folders"]
+            status_map = result["status_map"]
+            for i, item in enumerate(self.folders):
+                self.listbox.insert("end", item["label"])
+                key = (item["model"].upper(), item["version"].upper())
+                status = status_map.get(key, "")
+                if status == "待确认":
+                    self.listbox.itemconfig(i, bg="#FFFF99", fg="black")
+                elif status == "测试通过":
+                    self.listbox.itemconfig(i, bg="#C6EFCE", fg="black")
+            tested = sum(1 for v in status_map.values() if v == "测试通过")
+            pending = sum(1 for v in status_map.values() if v == "待确认")
+            self.log(f"共找到 {len(self.folders)} 个手控文件夹（已测: {tested}，待确认: {pending}）")
+            self._refresh_preview()
+
+        self._run_task("扫描目录", _work, _done)
 
     def _refresh_preview(self):
-        for row in self.preview.get_children():
-            self.preview.delete(row)
-        rows = read_all_excel_rows(self.excel_path.get(), EXCEL_SHEET)
-        for r in rows:
-            if len(r) >= 9:
-                display = [r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[8]]
-                remark = r[8]
-            else:
-                display = r[:8]
-                remark = ""
-            tag = "待确认" if remark == "待确认" else ("测试通过" if remark == "测试通过" else "")
-            self.preview.insert("", "end", values=display, tags=(tag,))
+        def _work(_log_fn):
+            return read_all_excel_rows(self.excel_path.get(), EXCEL_SHEET)
+
+        def _done(rows):
+            for row in self.preview.get_children():
+                self.preview.delete(row)
+            for r in rows:
+                if len(r) >= 9:
+                    display = [r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[8]]
+                    remark = r[8]
+                else:
+                    display = r[:8]
+                    remark = ""
+                tag = "待确认" if remark == "待确认" else ("测试通过" if remark == "测试通过" else "")
+                self.preview.insert("", "end", values=display, tags=(tag,))
+
+        self._run_task("刷新预览", _work, _done)
 
     def _update_listbox_color(self, idx: int, remark: str):
         if idx < 0 or idx >= self.listbox.size():
@@ -275,9 +392,15 @@ class App(tk.Tk):
         if not drive:
             messagebox.showwarning("提示", "未检测到 U 盘，请插入后点击刷新")
             return
-        self.log(f"清理 U 盘 {drive} ...")
-        n = clean_usb(drive, self.log)
-        self.log(f"  清理完成，删除 {n} 个垃圾文件")
+
+        def _work(log_fn):
+            log_fn(f"清理 U 盘 {drive} ...")
+            return clean_usb(drive, log_fn)
+
+        def _done(n):
+            self.log(f"  清理完成，删除 {n} 个垃圾文件")
+
+        self._run_task("清理U盘", _work, _done)
 
     def _format_usb(self):
         drive = self.usb_drive.get()
@@ -286,9 +409,15 @@ class App(tk.Tk):
             return
         if not messagebox.askyesno("确认", f"将格式化 {drive}，所有数据会丢失，确认吗？"):
             return
-        self.log(f"格式化 {drive} ...")
-        ok = format_usb(drive, self.log)
-        self.log("格式化成功" if ok else "格式化失败，请手动格式化")
+
+        def _work(log_fn):
+            log_fn(f"格式化 {drive} ...")
+            return format_usb(drive, log_fn)
+
+        def _done(ok):
+            self.log("格式化成功" if ok else "格式化失败，请手动格式化")
+
+        self._run_task("格式化U盘", _work, _done)
 
     def _copy_to_usb(self):
         info = self._current_info()
@@ -300,18 +429,28 @@ class App(tk.Tk):
             return
         rom = str(Path(info["path"]) / info["rom_file"])
         pkg = str(Path(info["path"]) / info["pkg_file"])
-        self.log(f"复制文件到 {drive} ...")
-        ok = copy_to_usb(rom, pkg, drive, self.log)
-        if ok:
-            self.log("复制完成")
+
+        def _work(log_fn):
+            log_fn(f"复制文件到 {drive} ...")
+            return copy_to_usb(rom, pkg, drive, log_fn)
+
+        def _done(ok):
+            if ok:
+                self.log("复制完成")
+
+        self._run_task("复制到U盘", _work, _done)
 
     def _eject_usb(self):
         drive = self.usb_drive.get()
         if not drive:
             messagebox.showwarning("提示", "未检测到 U 盘")
             return
-        self.log(f"弹出 {drive} ...")
-        eject_usb(drive, self.log)
+
+        def _work(log_fn):
+            log_fn(f"弹出 {drive} ...")
+            return eject_usb(drive, log_fn)
+
+        self._run_task("弹出U盘", _work, lambda _ok: None)
 
     def _write_excel(self, remark: str):
         info = self._current_info()
@@ -322,35 +461,42 @@ class App(tk.Tk):
         language = self.field_language.get().strip()
         salesman = self.field_salesman.get().strip()
         rom_path = str(Path(info["path"]) / info["rom_file"])
-        self.log(
-            f"写入 Excel: {info['model']} {info['version']}  "
-            f"logo={logo}  语言={language}  业务员={salesman}  [{remark}]"
-        )
-        result = write_excel_record(
-            excel,
-            EXCEL_SHEET,
-            info["model"],
-            info["version"],
-            remark=remark,
-            rom_path=rom_path,
-            logo=logo,
-            language=language,
-            salesman=salesman,
-            log_fn=self.log,
-        )
-        if result["ok"]:
-            self._update_listbox_color(self.current_idx.get(), remark)
-            self._refresh_preview()
-        if not result["ok"] and result["reason"] == "locked":
-            tmp = result["tmp_path"] or str(Path(excel).with_name(Path(excel).stem + "_刷机记录_待导入.xlsx"))
-            messagebox.showwarning(
-                "Excel 被占用",
-                f"表格被 WPS/Excel 占用，无法直接写入。\n\n已将记录保存到备用文件：\n{tmp}\n\n"
-                "解决方法：\n① 关闭 WPS/Excel 后再点一次写入按钮\n② 或打开备用文件，手动复制该行到主表",
+
+        def _work(log_fn):
+            log_fn(
+                f"写入 Excel: {info['model']} {info['version']}  "
+                f"logo={logo}  语言={language}  业务员={salesman}  [{remark}]"
             )
-        elif not result["ok"]:
-            err = result.get("error", "") or "未知错误"
-            messagebox.showerror("Excel 写入失败", f"未能写入 Excel。\n\n错误信息：\n{err}")
+            return write_excel_record(
+                excel,
+                EXCEL_SHEET,
+                info["model"],
+                info["version"],
+                remark=remark,
+                rom_path=rom_path,
+                logo=logo,
+                language=language,
+                salesman=salesman,
+                log_fn=log_fn,
+            )
+
+        def _done(result):
+            if result["ok"]:
+                self._update_listbox_color(self.current_idx.get(), remark)
+                self._refresh_preview()
+                return
+            if result["reason"] == "locked":
+                tmp = result["tmp_path"] or str(Path(excel).with_name(Path(excel).stem + "_刷机记录_待导入.xlsx"))
+                messagebox.showwarning(
+                    "Excel 被占用",
+                    f"表格被 WPS/Excel 占用，无法直接写入。\n\n已将记录保存到备用文件：\n{tmp}\n\n"
+                    "解决方法：\n① 关闭 WPS/Excel 后再点一次写入按钮\n② 或打开备用文件，手动复制该行到主表",
+                )
+            else:
+                err = result.get("error", "") or "未知错误"
+                messagebox.showerror("Excel 写入失败", f"未能写入 Excel。\n\n错误信息：\n{err}")
+
+        self._run_task("写入Excel", _work, _done)
 
     def _one_click(self):
         info = self._current_info()
@@ -360,48 +506,58 @@ class App(tk.Tk):
         if not drive:
             messagebox.showwarning("提示", "未检测到 U 盘，请插入后点击刷新")
             return
-        self.log("=" * 50)
-        self.log(f"一键执行: {info['model']} {info['version']}")
         logo = self.field_logo.get().strip()
         language = self.field_language.get().strip()
         salesman = self.field_salesman.get().strip()
-        n = clean_usb(drive, self.log)
-        self.log(f"  清理完成，删除 {n} 个垃圾文件")
         rom = str(Path(info["path"]) / info["rom_file"])
         pkg = str(Path(info["path"]) / info["pkg_file"])
-        ok = copy_to_usb(rom, pkg, drive, self.log)
-        if not ok:
-            self.log("复制失败，流程中止")
-            return
-        eject_usb(drive, self.log)
-        excel_result = write_excel_record(
-            self.excel_path.get(),
-            EXCEL_SHEET,
-            info["model"],
-            info["version"],
-            remark="待确认",
-            rom_path=rom,
-            logo=logo,
-            language=language,
-            salesman=salesman,
-            log_fn=self.log,
-        )
-        if excel_result["ok"]:
-            self._update_listbox_color(self.current_idx.get(), "待确认")
-            self._refresh_preview()
-        self.log("一键完成！请插入手控器测试 ✓")
-        if not excel_result["ok"] and excel_result["reason"] == "locked":
-            excel = self.excel_path.get()
-            tmp = excel_result["tmp_path"] or str(Path(excel).with_name(Path(excel).stem + "_刷机记录_待导入.xlsx"))
-            messagebox.showwarning(
-                "Excel 被占用",
-                f"U盘已准备好，但 Excel 写入失败（文件被占用）。\n\n记录已暂存到：\n{tmp}\n\n"
-                "关闭 WPS/Excel 后，点【写入记录】补录即可。",
+
+        def _work(log_fn):
+            log_fn("=" * 50)
+            log_fn(f"一键执行: {info['model']} {info['version']}")
+            n = clean_usb(drive, log_fn)
+            log_fn(f"  清理完成，删除 {n} 个垃圾文件")
+            ok = copy_to_usb(rom, pkg, drive, log_fn)
+            if not ok:
+                log_fn("复制失败，流程中止")
+                return {"copy_ok": False, "excel_result": None}
+            eject_usb(drive, log_fn)
+            excel_result = write_excel_record(
+                self.excel_path.get(),
+                EXCEL_SHEET,
+                info["model"],
+                info["version"],
+                remark="待确认",
+                rom_path=rom,
+                logo=logo,
+                language=language,
+                salesman=salesman,
+                log_fn=log_fn,
             )
-        elif not excel_result["ok"]:
-            err = excel_result.get("error", "") or "未知错误"
-            messagebox.showerror("Excel 写入失败", f"U盘已准备好，但写入 Excel 失败。\n\n错误信息：\n{err}")
-        self.log("=" * 50)
+            return {"copy_ok": True, "excel_result": excel_result}
+
+        def _done(result):
+            if not result["copy_ok"]:
+                return
+            excel_result = result["excel_result"]
+            if excel_result["ok"]:
+                self._update_listbox_color(self.current_idx.get(), "待确认")
+                self._refresh_preview()
+            self.log("一键完成！请插入手控器测试 ✓")
+            if not excel_result["ok"] and excel_result["reason"] == "locked":
+                excel = self.excel_path.get()
+                tmp = excel_result["tmp_path"] or str(Path(excel).with_name(Path(excel).stem + "_刷机记录_待导入.xlsx"))
+                messagebox.showwarning(
+                    "Excel 被占用",
+                    f"U盘已准备好，但 Excel 写入失败（文件被占用）。\n\n记录已暂存到：\n{tmp}\n\n"
+                    "关闭 WPS/Excel 后，点【写入记录】补录即可。",
+                )
+            elif not excel_result["ok"]:
+                err = excel_result.get("error", "") or "未知错误"
+                messagebox.showerror("Excel 写入失败", f"U盘已准备好，但写入 Excel 失败。\n\n错误信息：\n{err}")
+            self.log("=" * 50)
+
+        self._run_task("一键执行", _work, _done)
 
     def _save_review(self):
         info = self._current_info()
@@ -415,29 +571,35 @@ class App(tk.Tk):
         status = self.review_status.get()
         final_remark = status if not remark or remark == status else f"{status}  |  {remark}"
         rom_path = str(Path(info["path"]) / info["rom_file"])
-        self.log(f"审核保存: {info['model']} {info['version']}  logo={logo}  语言={language}  [{status}]")
-        result = write_excel_record(
-            excel,
-            EXCEL_SHEET,
-            info["model"],
-            info["version"],
-            remark=final_remark,
-            rom_path=rom_path,
-            logo=logo,
-            language=language,
-            salesman=salesman,
-            log_fn=self.log,
-        )
-        if result["ok"]:
-            self._update_listbox_color(self.current_idx.get(), status)
-            self._refresh_preview()
-            self.log("  保存成功 ✓")
-        elif result["reason"] == "locked":
-            tmp = result["tmp_path"] or str(Path(excel).with_name(Path(excel).stem + "_刷机记录_待导入.xlsx"))
-            messagebox.showwarning("Excel 被占用", f"请关闭 WPS/Excel 后重试。\n已暂存到：\n{tmp}")
-        else:
-            err = result.get("error", "") or "未知错误"
-            messagebox.showerror("Excel 写入失败", f"保存失败。\n\n错误信息：\n{err}")
+        def _work(log_fn):
+            log_fn(f"审核保存: {info['model']} {info['version']}  logo={logo}  语言={language}  [{status}]")
+            return write_excel_record(
+                excel,
+                EXCEL_SHEET,
+                info["model"],
+                info["version"],
+                remark=final_remark,
+                rom_path=rom_path,
+                logo=logo,
+                language=language,
+                salesman=salesman,
+                log_fn=log_fn,
+            )
+
+        def _done(result):
+            if result["ok"]:
+                self._update_listbox_color(self.current_idx.get(), status)
+                self._refresh_preview()
+                self.log("  保存成功 ✓")
+                return
+            if result["reason"] == "locked":
+                tmp = result["tmp_path"] or str(Path(excel).with_name(Path(excel).stem + "_刷机记录_待导入.xlsx"))
+                messagebox.showwarning("Excel 被占用", f"请关闭 WPS/Excel 后重试。\n已暂存到：\n{tmp}")
+            else:
+                err = result.get("error", "") or "未知错误"
+                messagebox.showerror("Excel 写入失败", f"保存失败。\n\n错误信息：\n{err}")
+
+        self._run_task("审核保存", _work, _done)
 
     def _next_folder(self):
         idx = self.current_idx.get()

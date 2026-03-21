@@ -20,9 +20,14 @@ _DEFAULTS = {
 }
 
 
-def _load_toml(path: Path) -> dict:
+def load_toml_config(path: Path) -> tuple[dict, str, str]:
+    """
+    Load TOML config from file.
+    Returns: (config_dict, status, error_message)
+    status: ok | missing | parser_missing | parse_error
+    """
     if not path.exists():
-        return {}
+        return {}, "missing", ""
 
     # Python 3.11+ uses tomllib; older Python can use optional tomli if installed.
     toml_loader = None
@@ -36,14 +41,16 @@ def _load_toml(path: Path) -> dict:
 
             toml_loader = tomllib
         except ModuleNotFoundError:
-            return {}
+            return {}, "parser_missing", "Python<3.11 需要安装 tomli 才能读取 config.toml"
 
     try:
         with open(path, "rb") as f:
             data = toml_loader.load(f)
-        return data if isinstance(data, dict) else {}
-    except Exception:
-        return {}
+        if isinstance(data, dict):
+            return data, "ok", ""
+        return {}, "parse_error", "config.toml 顶层结构必须是 TOML 表（table）"
+    except Exception as e:
+        return {}, "parse_error", str(e)
 
 
 def _cfg_get(cfg: dict, section: str, key: str, default):
@@ -70,7 +77,8 @@ def _as_str_set(values, default: set[str], lower: bool = False) -> set[str]:
     return out or default
 
 
-_cfg = _load_toml(CONFIG_PATH)
+_cfg, CONFIG_LOAD_STATUS, CONFIG_LOAD_ERROR = load_toml_config(CONFIG_PATH)
+CONFIG_LOAD_SOURCE = str(CONFIG_PATH)
 
 _root_dir = _cfg_get(_cfg, "paths", "root_dir", _DEFAULTS["paths"]["root_dir"])
 _excel_path_cfg = _cfg_get(_cfg, "paths", "excel_path", _DEFAULTS["paths"]["excel_path"])

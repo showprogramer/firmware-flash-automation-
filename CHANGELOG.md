@@ -25,6 +25,7 @@
 - 调整 Excel 写入调用逻辑：从布尔返回值改为读取结构化结果。
 - 根据写入结果区分提示：`locked` 显示“占用并给出备用文件路径”，其他失败显示具体错误信息。
 - 修复 `_write_excel` 与 `_one_click`：写表时补充传入 `logo/language/salesman` 字段，保持与审核保存一致。
+- 高优修复：扫描、复制、格式化、写表、预览读取改为后台任务执行，避免 Tk 主线程阻塞导致界面“未响应”。
 
 ### core
 - `core/excel_ops.py`：
@@ -35,12 +36,16 @@
   - 新增 `config.toml` 加载能力（优先 `tomllib`，回退可选 `tomli`）。
   - 增加默认配置回退与类型兜底（路径、Excel Sheet/Header、USB 清理规则）。
   - 支持相对 `excel_path` 按项目根目录解析为绝对路径。
+  - 高优修复：配置加载新增状态与错误信息（`ok/missing/parser_missing/parse_error`），不再静默吞掉配置失效。
 
 ### data
 - 更新 `data/handcontrol_ui_template.xlsx` 模板内容（二进制文件变更）。
 
 ### config
 - 新增 `config.toml`，用于集中配置扫描目录、Excel 参数和 USB 清理规则。
+
+### compat
+- `pyproject.toml` 增加 `tomli` 条件依赖（`python_version < 3.11`），确保 Python 3.8-3.10 可读取 TOML 配置。
 
 ### 接口变更
 - `core.excel_ops.write_excel_record` 的返回类型由 `bool` 变为结果字典；调用方需按键读取状态，不再只判断真/假。

@@ -14,6 +14,7 @@ HandControlUITool 是一个 Windows 桌面刷机辅助工具，用于手控 UI �
 - 审核页支持写入 `logo / 语言 / 业务员 / 备注 / 测试状态`。
 - Excel 被 WPS/Excel 占用时，自动写入备用文件 `*_刷机记录_待导入.xlsx`。
 - 支持 `config.toml` 配置默认路径、Excel 参数、USB 清理规则。
+- 扫描、复制、格式化、写表等耗时操作在后台线程执行，界面保持可响应。
 
 ## 运行环境
 
@@ -22,6 +23,7 @@ HandControlUITool 是一个 Windows 桌面刷机辅助工具，用于手控 UI �
 - 依赖库：
 - `openpyxl>=3.1.0`
 - `psutil>=5.9.0`
+- `tomli>=2.0.0`（仅 Python 3.8-3.10 读取 `config.toml` 时需要）
 
 ## 安装依赖
 
@@ -117,9 +119,12 @@ python 手控刷机工具_v1.1.py
 - 使用 uv 时优先执行 `uv sync --extra dev`。
 - 使用 pip 时重新安装依赖：`pip install openpyxl>=3.1.0 psutil>=5.9.0 pytest>=8.0.0 pytest-cov>=5.0.0`。
 
-## 后续规划
+### 5) `config.toml` 修改后未生效
 
-- 为 `core/file_scan.py`、`core/excel_ops.py` 增加单元测试，覆盖关键解析与写入路径。
+- 启动后查看日志顶部配置加载提示。
+- 若显示“配置回退”，请按提示检查 `config.toml` 路径、语法，或在 Python 3.8-3.10 下确认已安装 `tomli`。
+
+## 后续规划
 - 增加 service 层，进一步减少 UI 代码中的流程编排逻辑。
 - 为关键返回结构增加更严格类型注解（如 `TypedDict`）。
 - 增加错误日志落盘与最小化诊断信息导出能力。
