@@ -3,7 +3,7 @@
 ## 项目简介
 
 HandControlUITool 是一个 Windows 桌面刷机辅助工具，用于手控 UI 程序的日常作业流程：扫描 ROM/PKG 文件夹、准备 U 盘、记录测试状态，并同步到 Excel 台账。  
-项目当前采用 `app.py (UI)` + `core/* (业务能力)` 的模块化结构，并保留 `手控刷机工具_v1.1.py` 兼容启动入口。
+项目当前采用 `app.py (UI)` + `core/* (业务能力)` 的模块化结构。
 
 ## 功能说明
 
@@ -53,14 +53,10 @@ pip install openpyxl>=3.1.0 psutil>=5.9.0 pytest>=8.0.0
 ## 使用步骤
 
 1. 准备并激活虚拟环境（见“安装依赖”）。
-2. 启动程序（两种方式任选其一）：
+2. 启动程序：
 
 ```powershell
 python app.py
-```
-
-```powershell
-python 手控刷机工具_v1.1.py
 ```
 
 3. 首次运行前检查 `config.toml`：
