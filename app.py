@@ -6,7 +6,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from core.excel_ops import load_excel_row, read_all_excel_rows
-from core.services.excel_service import write_record
+from core.services.excel_service import delete_record, update_record_fields, write_record
 from core.services.flash_service import run_one_click
 from core.services.scan_service import build_scan_result
 from core.services.usb_repair_service import diagnose_drive, repair_drive
@@ -43,11 +43,15 @@ class App(tk.Tk):
         self.busy = tk.BooleanVar(value=False)
         self.status_text = tk.StringVar(value="就绪")
 
+        # 搜索关键词
+        self.search_var = tk.StringVar()
+
         self._task_queue: queue.Queue = queue.Queue()
         self._task_id = 0
         self._preview_rows: list[dict] = []
         self._preview_by_key: dict[tuple[str, str], dict] = {}
         self._preview_item_by_key: dict[tuple[str, str], str] = {}
+        self._editing_preview_key: tuple[str, str] | None = None
         self._known_usb_drives: set[str] = set()
         self._usb_diag_inflight: set[str] = set()
 
@@ -113,6 +117,18 @@ class App(tk.Tk):
         bottom.add(log_frame, weight=1)
 
         prev_frame = ttk.LabelFrame(bottom, text="表格预览（所有已记录条目）")
+
+        # ── 阶段1：搜索栏 ──────────────────────────────────────────────────
+        search_bar = ttk.Frame(prev_frame)
+        search_bar.grid(row=0, column=0, columnspan=2, sticky="ew", padx=4, pady=(4, 2))
+        ttk.Label(search_bar, text="搜索:").pack(side="left")
+        search_entry = ttk.Entry(search_bar, textvariable=self.search_var, width=22)
+        search_entry.pack(side="left", padx=(4, 8))
+        ttk.Button(search_bar, text="清除", command=lambda: self.search_var.set("")).pack(side="left")
+        # ── 阶段3：删除按钮 ────────────────────────────────────────────────
+        ttk.Button(search_bar, text="删除选中行", command=self._delete_selected_preview_row).pack(side="right", padx=4)
+        self.search_var.trace_add("write", lambda *_: self._filter_preview())
+
         cols = ("序号", "型号", "logo", "业务员", "语言", "版本号", "完成日期", "备注")
         self.preview = ttk.Treeview(prev_frame, columns=cols, show="headings", height=6, selectmode="browse")
         col_widths = [40, 80, 60, 60, 110, 80, 80, 180]
@@ -122,13 +138,15 @@ class App(tk.Tk):
         psb_y = ttk.Scrollbar(prev_frame, orient="vertical", command=self.preview.yview)
         psb_x = ttk.Scrollbar(prev_frame, orient="horizontal", command=self.preview.xview)
         self.preview.configure(yscrollcommand=psb_y.set, xscrollcommand=psb_x.set)
-        self.preview.grid(row=0, column=0, sticky="nsew")
-        psb_y.grid(row=0, column=1, sticky="ns")
-        psb_x.grid(row=1, column=0, sticky="ew")
+        self.preview.grid(row=1, column=0, sticky="nsew")
+        psb_y.grid(row=1, column=1, sticky="ns")
+        psb_x.grid(row=2, column=0, sticky="ew")
         prev_frame.columnconfigure(0, weight=1)
-        prev_frame.rowconfigure(0, weight=1)
+        prev_frame.rowconfigure(1, weight=1)
         self.preview.tag_configure("待确认", background="#FFFF99")
         self.preview.tag_configure("测试通过", background="#C6EFCE")
+        # ── 阶段2：双击回填 ────────────────────────────────────────────────
+        self.preview.bind("<Double-1>", self._on_preview_double_click)
         bottom.add(prev_frame, weight=2)
 
         btn_bar = ttk.Frame(self)
@@ -170,6 +188,7 @@ class App(tk.Tk):
     def _build_review_tab(self, parent):
         pad = dict(padx=8, pady=4)
         ttk.Label(parent, text="选中列表项后填写详情，点【保存】直接写入 Excel。", foreground="gray").pack(anchor="w", **pad)
+        ttk.Label(parent, text="也可双击下方预览表格任意行快速回填字段。", foreground="gray", font=("", 8)).pack(anchor="w", padx=8)
         ttk.Separator(parent).pack(fill="x", padx=4, pady=2)
         fields = [
             ("Logo / 品牌:", self.field_logo, ["中性", "通用", "定制"]),
@@ -348,13 +367,137 @@ class App(tk.Tk):
         }
 
     def _rebuild_preview_tree(self):
+        """重建预览树（应用当前搜索过滤）。"""
         for row in self.preview.get_children():
             self.preview.delete(row)
         self._preview_item_by_key = {}
+        keyword = self._current_search_keyword()
         for row in self._preview_rows:
+            if keyword and not self._row_matches_keyword(row, keyword):
+                continue
             key = self._preview_key(row["model"], row["version"])
             item_id = self.preview.insert("", "end", values=self._preview_values(row), tags=(self._preview_tag(row["remark"]),))
             self._preview_item_by_key[key] = item_id
+
+    def _current_search_keyword(self) -> str:
+        search_var = self.__dict__.get("search_var")
+        if search_var is None:
+            return ""
+        try:
+            return str(search_var.get() or "").strip().lower()
+        except Exception:
+            return ""
+
+    def _row_matches_keyword(self, row: dict, keyword: str) -> bool:
+        """检查行是否包含关键词（不区分大小写，匹配型号/版本/logo/备注/语言/业务员）。"""
+        fields = ("model", "version", "logo", "salesman", "language", "remark", "serial")
+        return any(keyword in str(row.get(f, "")).lower() for f in fields)
+
+    # ── 阶段1：搜索过滤 ───────────────────────────────────────────────────────
+
+    def _filter_preview(self):
+        """搜索框内容变化时重建预览树（纯内存过滤，不读磁盘）。"""
+        self._rebuild_preview_tree()
+
+    def _reindex_preview_serials(self):
+        for i, row in enumerate(self._preview_rows, start=1):
+            row["serial"] = str(i)
+
+    def _update_listbox_color_by_key(self, model: str, version: str, remark: str):
+        target_key = self._preview_key(model, version)
+        for i, item in enumerate(self.folders):
+            if self._preview_key(item.get("model", ""), item.get("version", "")) == target_key:
+                self._update_listbox_color(i, remark)
+
+    # ── 阶段2：双击预览行回填到审核 tab ──────────────────────────────────────
+
+    def _on_preview_double_click(self, _event=None):
+        """双击预览表格中的行，将该行数据回填到审核填写 tab。"""
+        sel = self.preview.selection()
+        if not sel:
+            return
+        values = self.preview.item(sel[0], "values")
+        # values 顺序: 序号 型号 logo 业务员 语言 版本号 完成日期 备注
+        if len(values) < 8:
+            return
+        _serial, model, logo, salesman, language, version, _date, remark = values[:8]
+        key = self._preview_key(model, version)
+        self._editing_preview_key = key
+        source = self._preview_by_key.get(key, {})
+        if source:
+            model = source.get("model", model)
+            version = source.get("version", version)
+            logo = source.get("logo", logo)
+            salesman = source.get("salesman", salesman)
+            language = source.get("language", language)
+            remark = source.get("remark", remark)
+
+        self.field_logo.set(logo)
+        self.field_language.set(language)
+        self.field_salesman.set(salesman)
+        self.remark_text.delete("1.0", "end")
+        self.remark_text.insert("1.0", remark)
+
+        # 同步更新刷机操作 tab 的型号/版本显示
+        self.lbl_model.config(text=f"型号：{model}")
+        self.lbl_ver.config(text=f"版本：{version}")
+        self.lbl_rom.config(text="ROM：（从预览回填，请在列表选择后确认）")
+        self.lbl_pkg.config(text="PKG：-")
+
+        self.log(f"已从预览回填: {model} {version}")
+
+    # ── 阶段3：删除选中预览行 ─────────────────────────────────────────────────
+
+    def _delete_selected_preview_row(self):
+        """删除预览表格中选中的行（同步删除 Excel 中对应记录）。"""
+        sel = self.preview.selection()
+        if not sel:
+            messagebox.showwarning("提示", "请先在预览表格中选择要删除的行")
+            return
+        values = self.preview.item(sel[0], "values")
+        if len(values) < 6:
+            return
+        model = str(values[1]).strip()
+        version = str(values[5]).strip()
+        if not model or not version:
+            messagebox.showwarning("提示", "所选行缺少型号或版本号，无法删除")
+            return
+        if not messagebox.askyesno(
+            "确认删除",
+            f"将从 Excel 表格中永久删除以下记录：\n\n型号：{model}\n版本：{version}\n\n此操作不可撤销，确认吗？"
+        ):
+            return
+
+        excel = self.excel_path.get()
+
+        def _work(log_fn):
+            log_fn(f"删除记录: {model} {version}")
+            return delete_record(excel, EXCEL_SHEET, model, version, log_fn=log_fn)
+
+        def _done(result):
+            if result.get("ok"):
+                # 从内存缓存和预览树移除
+                key = self._preview_key(model, version)
+                self._preview_rows = [r for r in self._preview_rows
+                                      if self._preview_key(r["model"], r["version"]) != key]
+                self._preview_by_key.pop(key, None)
+                self._preview_item_by_key.pop(key, None)
+                if self._editing_preview_key == key:
+                    self._editing_preview_key = None
+                self._reindex_preview_serials()
+                self._rebuild_preview_tree()
+                self.log(f"  已删除: {model} {version} ✓")
+            else:
+                code = str(result.get("code", "delete_failed"))
+                msg = str(result.get("message", "未知错误"))
+                if code == "not_found":
+                    messagebox.showwarning("未找到记录", f"Excel 中未找到 {model} {version} 的记录")
+                elif code == "locked":
+                    messagebox.showwarning("Excel 被占用", "请关闭 WPS/Excel 后重试")
+                else:
+                    messagebox.showerror("删除失败", f"删除失败：\n{msg}")
+
+        self._run_task("删除记录", _work, _done)
 
     def _upsert_preview_row(self, row: dict):
         key = self._preview_key(row.get("model", ""), row.get("version", ""))
@@ -368,22 +511,47 @@ class App(tk.Tk):
             "date": str(row.get("date", "")),
             "remark": str(row.get("remark", "")),
         }
-        item_id = self._preview_item_by_key.get(key)
-        if item_id:
-            existing = self._preview_by_key.get(key, {})
+        keyword = self._current_search_keyword()
+        existing = self._preview_by_key.get(key)
+        if existing is not None:
             if not normalized["serial"]:
                 normalized["serial"] = str(existing.get("serial", ""))
-            self.preview.item(item_id, values=self._preview_values(normalized), tags=(self._preview_tag(normalized["remark"]),))
+            if not normalized["date"]:
+                normalized["date"] = str(existing.get("date", ""))
             self._preview_by_key[key] = normalized
-            for i, existing in enumerate(self._preview_rows):
-                if self._preview_key(existing["model"], existing["version"]) == key:
+            replaced = False
+            for i, cached in enumerate(self._preview_rows):
+                if self._preview_key(cached["model"], cached["version"]) == key:
                     self._preview_rows[i] = normalized
+                    replaced = True
                     break
+            if not replaced:
+                self._preview_rows.append(normalized)
+
+            visible = not keyword or self._row_matches_keyword(normalized, keyword)
+            item_id = self._preview_item_by_key.get(key)
+            if visible:
+                if item_id:
+                    self.preview.item(
+                        item_id,
+                        values=self._preview_values(normalized),
+                        tags=(self._preview_tag(normalized["remark"]),),
+                    )
+                else:
+                    item_id = self.preview.insert(
+                        "", "end", values=self._preview_values(normalized), tags=(self._preview_tag(normalized["remark"]),)
+                    )
+                    self._preview_item_by_key[key] = item_id
+            elif item_id:
+                self.preview.delete(item_id)
+                self._preview_item_by_key.pop(key, None)
             return
-        item_id = self.preview.insert("", "end", values=self._preview_values(normalized), tags=(self._preview_tag(normalized["remark"]),))
+
         self._preview_rows.append(normalized)
         self._preview_by_key[key] = normalized
-        self._preview_item_by_key[key] = item_id
+        if not keyword or self._row_matches_keyword(normalized, keyword):
+            item_id = self.preview.insert("", "end", values=self._preview_values(normalized), tags=(self._preview_tag(normalized["remark"]),))
+            self._preview_item_by_key[key] = item_id
 
     def _manual_refresh_preview(self):
         self._reload_preview_cache_from_disk()
@@ -513,6 +681,7 @@ class App(tk.Tk):
         sel = self.listbox.curselection()
         if not sel:
             return
+        self._editing_preview_key = None
         idx = sel[0]
         self.current_idx.set(idx)
         info = self.folders[idx]
@@ -725,9 +894,6 @@ class App(tk.Tk):
         self._run_task("一键执行", _work, _done)
 
     def _save_review(self):
-        info = self._current_info()
-        if not info:
-            return
         excel = self.excel_path.get()
         logo = self.field_logo.get().strip()
         language = self.field_language.get().strip()
@@ -735,7 +901,49 @@ class App(tk.Tk):
         remark = self.remark_text.get("1.0", "end").strip()
         status = self.review_status.get()
         final_remark = status if not remark or remark == status else f"{status}  |  {remark}"
+        editing_key = getattr(self, "_editing_preview_key", None)
+        if editing_key:
+            existing = self._preview_by_key.get(editing_key, {})
+            model = str(existing.get("model", editing_key[0]))
+            version = str(existing.get("version", editing_key[1]))
+
+            def _work(log_fn):
+                log_fn(f"审核保存(历史): {model} {version}  logo={logo}  语言={language}  [{status}]")
+                return update_record_fields(
+                    excel_path=excel,
+                    sheet_name=EXCEL_SHEET,
+                    model=model,
+                    version=version,
+                    logo=logo,
+                    salesman=salesman,
+                    language=language,
+                    remark=final_remark,
+                    log_fn=log_fn,
+                )
+
+            def _done(result):
+                if result.get("ok"):
+                    self._update_listbox_color_by_key(model, version, status)
+                    written = (result.get("payload", {}) or {}).get("preview_row", {})
+                    if written:
+                        self._upsert_preview_row(written)
+                    self.log("  保存成功 ✓")
+                    return
+                code = str(result.get("code", "write_failed"))
+                msg = str(result.get("message", "未知错误"))
+                if code == "locked":
+                    messagebox.showwarning("Excel 被占用", "请关闭 WPS/Excel 后重试。")
+                else:
+                    messagebox.showerror("Excel 写入失败", f"保存失败。\n\n错误信息：\n{msg}")
+
+            self._run_task("审核保存", _work, _done)
+            return
+
+        info = self._current_info()
+        if not info:
+            return
         rom_path = str(Path(info["path"]) / info["rom_file"])
+
         def _work(log_fn):
             log_fn(f"审核保存: {info['model']} {info['version']}  logo={logo}  语言={language}  [{status}]")
             return write_record(
@@ -789,5 +997,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-

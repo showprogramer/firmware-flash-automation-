@@ -14,6 +14,9 @@
 - 新增 `tests/test_app_service_smoke.py`，验证 `app.py` 通过 service 返回结果做 UI 渲染与提示。
 - 扩展 `tests/test_usb_ops.py`：覆盖 `diagnose_usb_health` 与 `repair_usb_driver` 的成功、失败、权限分支。
 - 新增 `tests/test_usb_repair_service.py`，覆盖 USB 修复 service 的成功、失败与异常分支。
+- 新增 `tests/test_crud_ops.py`，覆盖 CRUD 三阶段核心路径（搜索匹配逻辑、字段更新、行删除分支）。
+- 扩展 `tests/test_app_preview_cache.py` 与 `tests/test_app_service_smoke.py`，补充过滤态 upsert 去重、离线历史保存、删除后序号重排等回归场景。
+- 扩展 `tests/test_excel_service.py`，覆盖 `update_record_fields` 与 `delete_record` 的成功/失败分支映射。
 
 ### chore
 - `pyproject.toml` 增加 `dev` 额外依赖组：`pytest>=8.0.0`，用于本地单元测试。
@@ -37,6 +40,9 @@
 - 数量统计：扫描结果列表新增 `001.` 样式序号前缀，便于人工快速计数（仅展示层，不影响业务字段）。
 - U盘驱动修复：新增插入后轻量健康检测（后台轮询、仅异常提示），不自动执行重修复。
 - 新增“驱动扫描/修复”按钮，调用 Windows 内置修复链路（`chkdsk /scan` + `pnputil /scan-devices`）。
+- CRUD 修复：预览搜索新增统一关键词读取，修复过滤态下预览缓存 upsert 重复追加问题。
+- CRUD 修复：双击预览进入离线编辑上下文，`_save_review` 支持不依赖左侧扫描列表直接保存历史记录。
+- CRUD 修复：删除预览记录改为 service 调用，成功后仅内存增量移除并重排序号，避免全量读盘。
 
 ### core
 - 为关键返回结构引入 TypedDict：`HandcontrolFolder`、`ExcelWrittenRow`、`ExcelWriteResult`，并在 `find_handcontrol_folders` 与 `write_excel_record` 上落地类型注解。
@@ -57,6 +63,7 @@
   - `excel_service.py`：封装写表请求与返回转换（含 `preview_row`）。
   - `flash_service.py`：封装一键流程编排（清理→复制→弹出→写表）。
   - `usb_repair_service.py`：封装 U 盘健康检测与驱动修复返回转换。
+  - `excel_service.py` 扩展：新增 `update_record_fields` 与 `delete_record` 封装，统一 CRUD 的 service 返回结构。
 
 ### data
 - 更新 `data/handcontrol_ui_template.xlsx` 模板内容（二进制文件变更）。

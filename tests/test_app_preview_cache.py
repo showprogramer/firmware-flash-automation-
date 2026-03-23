@@ -1,6 +1,17 @@
 from app import App
 
 
+class FakeVar:
+    def __init__(self, value=""):
+        self._value = value
+
+    def get(self):
+        return self._value
+
+    def set(self, value):
+        self._value = value
+
+
 class FakePreview:
     def __init__(self):
         self._items = {}
@@ -35,6 +46,7 @@ def _build_app_stub():
     app._preview_rows = []
     app._preview_by_key = {}
     app._preview_item_by_key = {}
+    app.search_var = FakeVar("")
     return app
 
 
@@ -95,3 +107,46 @@ def test_row_to_preview_dict_maps_excel_columns():
         "date": "2026.03.21",
         "remark": "待确认",
     }
+
+
+def test_upsert_preview_row_no_duplicate_when_filtered_out():
+    app = _build_app_stub()
+
+    app._upsert_preview_row(
+        {
+            "model": "L36",
+            "version": "V1.2.3",
+            "logo": "品牌A",
+            "salesman": "张三",
+            "language": "中、英",
+            "date": "2026.03.21",
+            "remark": "待确认",
+        }
+    )
+    assert len(app._preview_rows) == 1
+
+    app.search_var.set("L50")
+    app._rebuild_preview_tree()
+    assert len(app.preview.get_children()) == 0
+
+    app._upsert_preview_row(
+        {
+            "model": "L36",
+            "version": "V1.2.3",
+            "logo": "品牌B",
+            "salesman": "李四",
+            "language": "英文",
+            "date": "2026.03.22",
+            "remark": "测试通过",
+        }
+    )
+
+    assert len(app._preview_rows) == 1
+    key = app._preview_key("L36", "V1.2.3")
+    assert app._preview_by_key[key]["logo"] == "品牌B"
+    assert len(app.preview.get_children()) == 0
+
+
+def test_current_search_keyword_handles_missing_search_var():
+    app = App.__new__(App)
+    assert app._current_search_keyword() == ""

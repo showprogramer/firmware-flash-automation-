@@ -39,25 +39,97 @@ class FakeCombo:
             self.values = list(value)
 
 
+class FakeText:
+    def __init__(self):
+        self.value = ""
+
+    def delete(self, _start, _end):
+        self.value = ""
+
+    def insert(self, _idx, text):
+        self.value = text
+
+    def get(self, _start, _end):
+        return self.value
+
+
+class FakeLabel:
+    def __init__(self):
+        self.text = ""
+
+    def config(self, **kwargs):
+        self.text = kwargs.get("text", self.text)
+
+
+class FakePreview:
+    def __init__(self):
+        self.items = {}
+        self.order = []
+        self.sel = []
+        self.idx = 0
+
+    def insert(self, _parent, _where, values=None, tags=()):
+        self.idx += 1
+        item_id = f"i{self.idx}"
+        self.items[item_id] = {"values": list(values or []), "tags": tuple(tags)}
+        self.order.append(item_id)
+        return item_id
+
+    def item(self, item_id, option=None, values=None, tags=None):
+        if values is not None:
+            self.items[item_id]["values"] = list(values)
+        if tags is not None:
+            self.items[item_id]["tags"] = tuple(tags)
+        if option == "values":
+            return self.items[item_id]["values"]
+        return self.items[item_id]
+
+    def get_children(self):
+        return list(self.order)
+
+    def delete(self, item_id):
+        if item_id in self.items:
+            self.items.pop(item_id)
+        self.order = [x for x in self.order if x != item_id]
+
+    def selection(self):
+        return tuple(self.sel)
+
+    def selection_set(self, item_id):
+        self.sel = [item_id]
+
+
 def _mk_app_stub():
     app = App.__new__(App)
     app.root_dir = FakeVar("D:/root")
     app.excel_path = FakeVar("a.xlsx")
     app.usb_drive = FakeVar("")
     app.status_text = FakeVar("就绪")
+    app.search_var = FakeVar("")
     app.usb_combo = FakeCombo()
     app.folders = []
     app.current_idx = FakeVar(0)
     app.listbox = FakeListbox()
+    app.preview = FakePreview()
     app.logs = []
     app.log = app.logs.append
     app._known_usb_drives = set()
     app._usb_diag_inflight = set()
+    app._preview_rows = []
+    app._preview_by_key = {}
+    app._preview_item_by_key = {}
+    app._editing_preview_key = None
     app._update_listbox_color = lambda *args, **kwargs: None
-    app._upsert_preview_row = lambda row: app.logs.append(f"UPSERT:{row.get('model','')}")
     app.field_logo = FakeVar("logo")
     app.field_language = FakeVar("lang")
     app.field_salesman = FakeVar("sale")
+    app.review_status = FakeVar("测试通过")
+    app.remark_text = FakeText()
+    app.remark_text.value = ""
+    app.lbl_model = FakeLabel()
+    app.lbl_ver = FakeLabel()
+    app.lbl_rom = FakeLabel()
+    app.lbl_pkg = FakeLabel()
     app._current_info = lambda: {"model": "L36", "version": "V1.0.0", "path": "D:/root/x", "rom_file": "a.ROM"}
     app.after = lambda _ms, _fn: None
     return app
@@ -120,7 +192,8 @@ def test_write_excel_uses_service_result(monkeypatch):
 
     App._write_excel(app, "待确认")
 
-    assert any(m.startswith("UPSERT:L36") for m in app.logs)
+    key = app._preview_key("L36", "V1.0.0")
+    assert app._preview_by_key[key]["remark"] == "待确认"
 
 
 def test_refresh_usb_returns_inserted_and_updates_combo(monkeypatch):
@@ -173,3 +246,81 @@ def test_repair_usb_driver_success(monkeypatch):
 
     assert called["info"] == 1
     assert app.status_text.get() == "U盘驱动修复完成"
+
+
+def test_save_review_uses_preview_editing_key(monkeypatch):
+    app = _mk_app_stub()
+    app._editing_preview_key = ("L50S", "V2.0.0")
+    app._preview_by_key[("L50S", "V2.0.0")] = {
+        "model": "L50S",
+        "version": "V2.0.0",
+        "logo": "旧",
+        "salesman": "旧",
+        "language": "旧",
+        "date": "2026.03.21",
+        "remark": "待确认",
+        "serial": "2",
+    }
+    app.field_logo.set("新品牌")
+    app.field_salesman.set("新业务")
+    app.field_language.set("中、英")
+    app.review_status.set("测试通过")
+    app.remark_text.value = ""
+
+    monkeypatch.setattr(
+        "app.update_record_fields",
+        lambda **kwargs: {
+            "ok": True,
+            "code": "ok",
+            "message": "ok",
+            "payload": {
+                "preview_row": {
+                    "model": "L50S",
+                    "version": "V2.0.0",
+                    "logo": "新品牌",
+                    "salesman": "新业务",
+                    "language": "中、英",
+                    "remark": "测试通过",
+                    "date": "",
+                    "serial": "",
+                }
+            },
+        },
+    )
+
+    app._run_task = lambda _name, fn, on_done: on_done(fn(lambda _m: None))
+
+    App._save_review(app)
+
+    key = app._preview_key("L50S", "V2.0.0")
+    assert app._preview_by_key[key]["logo"] == "新品牌"
+    assert app._preview_by_key[key]["remark"] == "测试通过"
+
+
+def test_delete_selected_preview_row_reindexes_cache(monkeypatch):
+    app = _mk_app_stub()
+    app._preview_rows = [
+        {"serial": "1", "model": "L36", "version": "V1.0.0", "logo": "", "salesman": "", "language": "", "date": "", "remark": "待确认"},
+        {"serial": "2", "model": "L50S", "version": "V2.0.0", "logo": "", "salesman": "", "language": "", "date": "", "remark": "待确认"},
+    ]
+    app._preview_by_key = {
+        app._preview_key("L36", "V1.0.0"): app._preview_rows[0],
+        app._preview_key("L50S", "V2.0.0"): app._preview_rows[1],
+    }
+    app._rebuild_preview_tree()
+    target_key = app._preview_key("L36", "V1.0.0")
+    app.preview.selection_set(app._preview_item_by_key[target_key])
+
+    monkeypatch.setattr("app.messagebox.askyesno", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(
+        "app.delete_record",
+        lambda *args, **kwargs: {"ok": True, "code": "ok", "message": "删除成功", "payload": {}},
+    )
+
+    app._run_task = lambda _name, fn, on_done: on_done(fn(lambda _m: None))
+
+    App._delete_selected_preview_row(app)
+
+    assert len(app._preview_rows) == 1
+    assert app._preview_rows[0]["model"] == "L50S"
+    assert app._preview_rows[0]["serial"] == "1"
