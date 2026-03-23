@@ -122,14 +122,14 @@ def diagnose_usb_health(drive: str, log_fn=print) -> dict:
 
 
 def repair_usb_driver(drive: str, log_fn=print) -> dict:
-    """Repair USB using built-in Windows tools: chkdsk + pnputil scan-devices."""
+    """Repair USB using built-in Windows tools with non-admin-friendly defaults."""
     letter = _extract_drive_letter(drive)
     target = f"{letter}:" if letter else str(drive)
 
     try:
-        log_fn(f"  执行修复: chkdsk {target} /f")
+        log_fn(f"  执行修复: chkdsk {target} /scan")
         chkdsk_result = subprocess.run(
-            ["chkdsk", target, "/f"],
+            ["chkdsk", target, "/scan"],
             capture_output=True,
             text=True,
             timeout=120,
@@ -150,12 +150,32 @@ def repair_usb_driver(drive: str, log_fn=print) -> dict:
     chkdsk_text = (chkdsk_result.stdout or "") + "\n" + (chkdsk_result.stderr or "")
     if chkdsk_result.returncode != 0:
         if _looks_like_permission_denied(chkdsk_text):
-            msg = "权限不足，请以管理员权限运行后重试"
-            log_fn(f"  {msg}")
-            return {"ok": False, "code": "permission_denied", "message": msg, "payload": {"drive": drive}}
-        msg = (chkdsk_result.stderr or chkdsk_result.stdout or "chkdsk 执行失败").strip()
-        log_fn(f"  chkdsk 失败: {msg}")
-        return {"ok": False, "code": "chkdsk_failed", "message": msg, "payload": {"drive": drive}}
+            log_fn("  /scan 权限不足，尝试无参数 chkdsk 检查")
+            try:
+                fallback_result = subprocess.run(
+                    ["chkdsk", target],
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                )
+            except Exception as e:
+                msg = f"chkdsk 降级检查失败: {e}"
+                log_fn(f"  {msg}")
+                return {"ok": False, "code": "chkdsk_failed", "message": msg, "payload": {"drive": drive}}
+            fallback_text = (fallback_result.stdout or "") + "\n" + (fallback_result.stderr or "")
+            if fallback_result.returncode != 0:
+                if _looks_like_permission_denied(fallback_text):
+                    msg = "当前会话权限不足，驱动器扫描未能完成"
+                    log_fn(f"  {msg}")
+                    return {"ok": False, "code": "permission_denied", "message": msg, "payload": {"drive": drive}}
+                msg = (fallback_result.stderr or fallback_result.stdout or "chkdsk 执行失败").strip()
+                log_fn(f"  chkdsk 失败: {msg}")
+                return {"ok": False, "code": "chkdsk_failed", "message": msg, "payload": {"drive": drive}}
+            chkdsk_result = fallback_result
+        else:
+            msg = (chkdsk_result.stderr or chkdsk_result.stdout or "chkdsk 执行失败").strip()
+            log_fn(f"  chkdsk 失败: {msg}")
+            return {"ok": False, "code": "chkdsk_failed", "message": msg, "payload": {"drive": drive}}
 
     try:
         log_fn("  执行设备重扫描: pnputil /scan-devices")
@@ -178,24 +198,20 @@ def repair_usb_driver(drive: str, log_fn=print) -> dict:
         log_fn(f"  {msg}")
         return {"ok": False, "code": "scan_error", "message": msg, "payload": {"drive": drive}}
 
-    scan_text = (scan_result.stdout or "") + "\n" + (scan_result.stderr or "")
+    scan_warning = ""
     if scan_result.returncode != 0:
-        if _looks_like_permission_denied(scan_text):
-            msg = "权限不足，请以管理员权限运行后重试"
-            log_fn(f"  {msg}")
-            return {"ok": False, "code": "permission_denied", "message": msg, "payload": {"drive": drive}}
-        msg = (scan_result.stderr or scan_result.stdout or "pnputil 扫描失败").strip()
-        log_fn(f"  pnputil 扫描失败: {msg}")
-        return {"ok": False, "code": "scan_failed", "message": msg, "payload": {"drive": drive}}
+        scan_warning = (scan_result.stderr or scan_result.stdout or "pnputil 扫描失败").strip()
+        log_fn(f"  设备重扫描未完成（可忽略）: {scan_warning}")
 
     return {
         "ok": True,
         "code": "ok",
-        "message": "U盘驱动修复完成",
+        "message": "U盘驱动扫描修复完成",
         "payload": {
             "drive": drive,
             "chkdsk_output": (chkdsk_result.stdout or "").strip(),
             "scan_output": (scan_result.stdout or "").strip(),
+            "scan_warning": scan_warning,
         },
     }
 

@@ -36,7 +36,7 @@
 - 高优重构：`_scan`、`_write_excel`、`_one_click`、`_save_review` 改为调用 service 层，UI 仅负责事件绑定、状态展示与提示。
 - 数量统计：扫描结果列表新增 `001.` 样式序号前缀，便于人工快速计数（仅展示层，不影响业务字段）。
 - U盘驱动修复：新增插入后轻量健康检测（后台轮询、仅异常提示），不自动执行重修复。
-- 新增“驱动修复（管理员）”按钮，调用 Windows 内置修复链路（`chkdsk /f` + `pnputil /scan-devices`）。
+- 新增“驱动扫描/修复”按钮，调用 Windows 内置修复链路（`chkdsk /scan` + `pnputil /scan-devices`）。
 
 ### core
 - 为关键返回结构引入 TypedDict：`HandcontrolFolder`、`ExcelWrittenRow`、`ExcelWriteResult`，并在 `find_handcontrol_folders` 与 `write_excel_record` 上落地类型注解。
@@ -81,4 +81,5 @@
 ### 789b8e6
 - `chore: initialize repo, uv setup, sanitize template, and module1 cleanup`
 - 完成仓库初始化与基础工程落地（含模板文件、项目配置与初始脚手架整理）。
+
 

@@ -153,7 +153,7 @@ class App(tk.Tk):
         self.usb_combo = ttk.Combobox(usb_row, textvariable=self.usb_drive, width=6)
         self.usb_combo.pack(side="left", padx=4)
         ttk.Button(usb_row, text="刷新", command=self._refresh_usb).pack(side="left")
-        ttk.Button(usb_row, text="驱动修复（管理员）", command=self._repair_usb_driver).pack(side="left", padx=4)
+        ttk.Button(usb_row, text="驱动扫描/修复", command=self._repair_usb_driver).pack(side="left", padx=4)
         ttk.Separator(parent).pack(fill="x", padx=4, pady=4)
         ttk.Button(parent, text="1  清理 U 盘垃圾文件", command=self._clean_usb).pack(**btn)
         ttk.Button(parent, text="2  格式化 U 盘 (FAT32)", command=self._format_usb).pack(**btn)
@@ -604,7 +604,7 @@ class App(tk.Tk):
         if not drive:
             messagebox.showwarning("提示", "未检测到 U 盘")
             return
-        if not messagebox.askyesno("确认", f"将对 {drive} 执行 Windows 修复命令（chkdsk + pnputil），确认吗？"):
+        if not messagebox.askyesno("确认", f"将对 {drive} 执行 Windows 扫描/修复命令（chkdsk + pnputil），确认吗？"):
             return
 
         def _work(log_fn):
@@ -615,12 +615,8 @@ class App(tk.Tk):
                 self._set_status("U盘驱动修复完成")
                 messagebox.showinfo("完成", "U盘驱动修复完成")
                 return
-            code = str(result.get("code", "repair_failed"))
             msg = str(result.get("message", "U盘驱动修复失败"))
-            if code == "permission_denied":
-                messagebox.showwarning("权限不足", f"{msg}\n\n请以管理员权限运行后重试。")
-            else:
-                messagebox.showerror("修复失败", msg)
+            messagebox.showerror("修复失败", msg)
 
         self._run_task("驱动修复", _work, _done)
 
@@ -793,4 +789,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 

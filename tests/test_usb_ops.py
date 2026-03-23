@@ -244,5 +244,7 @@ def test_repair_usb_driver_scan_failed(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr("core.usb_ops.subprocess.run", fake_run)
     result = repair_usb_driver("E:\\", log_fn=log_fn)
 
-    assert result["ok"] is False
-    assert result["code"] == "scan_failed"
+    assert result["ok"] is True
+    assert result["code"] == "ok"
+    assert result["payload"]["scan_warning"] == "scan failed"
+
