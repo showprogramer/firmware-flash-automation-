@@ -9,4 +9,6 @@ header_row = 2
 [usb]
 junk_extensions = [".usu", ".tmp", ".bak"]
 junk_filenames = ["autorun.inf"]
+auto_diagnose_on_insert = true
+health_check_interval_sec = 3
 

@@ -12,6 +12,8 @@
 - 新增 `tests/test_app_preview_cache.py`，覆盖预览缓存增量更新（insert/update）与 Excel 行映射逻辑。
 - 新增 `tests/test_scan_service.py`、`tests/test_excel_service.py`、`tests/test_flash_service.py`，覆盖 service 层扫描聚合、写表转换与一键流程编排。
 - 新增 `tests/test_app_service_smoke.py`，验证 `app.py` 通过 service 返回结果做 UI 渲染与提示。
+- 扩展 `tests/test_usb_ops.py`：覆盖 `diagnose_usb_health` 与 `repair_usb_driver` 的成功、失败、权限分支。
+- 新增 `tests/test_usb_repair_service.py`，覆盖 USB 修复 service 的成功、失败与异常分支。
 
 ### chore
 - `pyproject.toml` 增加 `dev` 额外依赖组：`pytest>=8.0.0`，用于本地单元测试。
@@ -33,6 +35,8 @@
 - 预览全量读盘收敛为手动刷新（含启动初次加载、切换 Excel 路径时重载）。
 - 高优重构：`_scan`、`_write_excel`、`_one_click`、`_save_review` 改为调用 service 层，UI 仅负责事件绑定、状态展示与提示。
 - 数量统计：扫描结果列表新增 `001.` 样式序号前缀，便于人工快速计数（仅展示层，不影响业务字段）。
+- U盘驱动修复：新增插入后轻量健康检测（后台轮询、仅异常提示），不自动执行重修复。
+- 新增“驱动修复（管理员）”按钮，调用 Windows 内置修复链路（`chkdsk /f` + `pnputil /scan-devices`）。
 
 ### core
 - 为关键返回结构引入 TypedDict：`HandcontrolFolder`、`ExcelWrittenRow`、`ExcelWriteResult`，并在 `find_handcontrol_folders` 与 `write_excel_record` 上落地类型注解。
@@ -52,6 +56,7 @@
   - `scan_service.py`：封装扫描与状态聚合。
   - `excel_service.py`：封装写表请求与返回转换（含 `preview_row`）。
   - `flash_service.py`：封装一键流程编排（清理→复制→弹出→写表）。
+  - `usb_repair_service.py`：封装 U 盘健康检测与驱动修复返回转换。
 
 ### data
 - 更新 `data/handcontrol_ui_template.xlsx` 模板内容（二进制文件变更）。
@@ -59,6 +64,7 @@
 ### config
 - 新增 `config.toml`，用于集中配置扫描目录、Excel 参数和 USB 清理规则。
 - `config.toml` 示例 `paths.root_dir` 改为空字符串，避免模板携带特定机器绝对路径。
+- `config.toml` 新增 `usb.auto_diagnose_on_insert` 与 `usb.health_check_interval_sec` 配置项。
 
 ### compat
 - `pyproject.toml` 增加 `tomli` 条件依赖（`python_version < 3.11`），确保 Python 3.8-3.10 可读取 TOML 配置。

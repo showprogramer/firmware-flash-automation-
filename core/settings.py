@@ -16,6 +16,8 @@ _DEFAULTS = {
     "usb": {
         "junk_extensions": [".usu", ".tmp", ".bak"],
         "junk_filenames": ["autorun.inf"],
+        "auto_diagnose_on_insert": True,
+        "health_check_interval_sec": 3,
     },
 }
 
@@ -67,6 +69,18 @@ def _as_int(value, default: int) -> int:
         return default
 
 
+def _as_bool(value, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if text in {"1", "true", "yes", "on"}:
+            return True
+        if text in {"0", "false", "no", "off"}:
+            return False
+    return default
+
+
 def _as_str_set(values, default: set[str], lower: bool = False) -> set[str]:
     if not isinstance(values, list):
         return default
@@ -102,4 +116,14 @@ JUNK_FILENAMES = _as_str_set(
     set(_DEFAULTS["usb"]["junk_filenames"]),
     lower=True,
 )
-
+USB_AUTO_DIAGNOSE_ON_INSERT = _as_bool(
+    _cfg_get(_cfg, "usb", "auto_diagnose_on_insert", _DEFAULTS["usb"]["auto_diagnose_on_insert"]),
+    True,
+)
+USB_HEALTH_CHECK_INTERVAL_SEC = max(
+    2,
+    _as_int(
+        _cfg_get(_cfg, "usb", "health_check_interval_sec", _DEFAULTS["usb"]["health_check_interval_sec"]),
+        3,
+    ),
+)

@@ -9,6 +9,7 @@ from core.excel_ops import load_excel_row, read_all_excel_rows
 from core.services.excel_service import write_record
 from core.services.flash_service import run_one_click
 from core.services.scan_service import build_scan_result
+from core.services.usb_repair_service import diagnose_drive, repair_drive
 from core.settings import (
     CONFIG_LOAD_ERROR,
     CONFIG_LOAD_SOURCE,
@@ -16,6 +17,8 @@ from core.settings import (
     DEFAULT_EXCEL,
     DEFAULT_ROOT,
     EXCEL_SHEET,
+    USB_AUTO_DIAGNOSE_ON_INSERT,
+    USB_HEALTH_CHECK_INTERVAL_SEC,
 )
 from core.usb_ops import clean_usb, copy_to_usb, eject_usb, format_usb, get_usb_drives
 
@@ -45,11 +48,14 @@ class App(tk.Tk):
         self._preview_rows: list[dict] = []
         self._preview_by_key: dict[tuple[str, str], dict] = {}
         self._preview_item_by_key: dict[tuple[str, str], str] = {}
+        self._known_usb_drives: set[str] = set()
+        self._usb_diag_inflight: set[str] = set()
 
         self._build_ui()
-        self._refresh_usb()
+        self._refresh_usb(log_events=True, detect_insert=False)
         self._report_config_status()
         self._poll_task_queue()
+        self._poll_usb_insert_events()
         self._manual_refresh_preview()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
@@ -147,6 +153,7 @@ class App(tk.Tk):
         self.usb_combo = ttk.Combobox(usb_row, textvariable=self.usb_drive, width=6)
         self.usb_combo.pack(side="left", padx=4)
         ttk.Button(usb_row, text="刷新", command=self._refresh_usb).pack(side="left")
+        ttk.Button(usb_row, text="驱动修复（管理员）", command=self._repair_usb_driver).pack(side="left", padx=4)
         ttk.Separator(parent).pack(fill="x", padx=4, pady=4)
         ttk.Button(parent, text="1  清理 U 盘垃圾文件", command=self._clean_usb).pack(**btn)
         ttk.Button(parent, text="2  格式化 U 盘 (FAT32)", command=self._format_usb).pack(**btn)
@@ -258,6 +265,18 @@ class App(tk.Tk):
         t = threading.Thread(target=worker, daemon=True)
         t.start()
 
+    def _run_non_blocking_task(self, name: str, fn, on_done=None):
+        def worker():
+            try:
+                result = fn(self._thread_log)
+                self._task_queue.put(("done_nb", name, result, on_done))
+            except Exception as e:
+                tb = traceback.format_exc()
+                self._task_queue.put(("fail_nb", name, str(e), tb))
+
+        t = threading.Thread(target=worker, daemon=True)
+        t.start()
+
     def _poll_task_queue(self):
         try:
             while True:
@@ -277,6 +296,15 @@ class App(tk.Tk):
                     self.log(f"{name}失败: {err}")
                     self.log(tb)
                     messagebox.showerror(f"{name}失败", f"{err}\n\n详情见日志")
+                elif kind == "done_nb":
+                    _, name, result, on_done = item
+                    if callable(on_done):
+                        on_done(result)
+                    self.log(f"{name}完成")
+                elif kind == "fail_nb":
+                    _, name, err, tb = item
+                    self.log(f"{name}失败: {err}")
+                    self.log(tb)
         except queue.Empty:
             pass
         self.after(120, self._poll_task_queue)
@@ -386,14 +414,55 @@ class App(tk.Tk):
             self.excel_path.set(f)
             self._manual_refresh_preview()
 
-    def _refresh_usb(self):
+    def _refresh_usb(self, log_events: bool = True, detect_insert: bool = True) -> list[str]:
         drives = get_usb_drives()
+        prev = set(self._known_usb_drives)
+        current = set(drives)
+        inserted = [d for d in drives if d not in prev] if detect_insert else []
+        removed = [d for d in prev if d not in current]
+        self._known_usb_drives = current
+
         self.usb_combo["values"] = drives
+        current_selected = self.usb_drive.get()
         if drives:
-            self.usb_drive.set(drives[0])
-            self.log(f"检测到 U 盘: {', '.join(drives)}")
+            if current_selected not in current:
+                self.usb_drive.set(drives[0])
+            if log_events and inserted:
+                self.log(f"检测到 U 盘: {', '.join(inserted)}")
         else:
             self.usb_drive.set("")
+            if log_events and removed:
+                self.log("未检测到可用 U 盘")
+        return inserted
+
+    def _poll_usb_insert_events(self):
+        try:
+            inserted = self._refresh_usb(log_events=False, detect_insert=True)
+            if USB_AUTO_DIAGNOSE_ON_INSERT and inserted:
+                for drive in inserted:
+                    self._diagnose_usb_inserted(drive)
+        finally:
+            self.after(max(2, int(USB_HEALTH_CHECK_INTERVAL_SEC)) * 1000, self._poll_usb_insert_events)
+
+    def _diagnose_usb_inserted(self, drive: str):
+        key = drive.upper()
+        if key in self._usb_diag_inflight:
+            return
+        self._usb_diag_inflight.add(key)
+
+        def _work(log_fn):
+            log_fn(f"检测到新 U 盘，开始健康检查: {drive}")
+            return diagnose_drive(drive, log_fn=log_fn)
+
+        def _done(result):
+            self._usb_diag_inflight.discard(key)
+            if result.get("ok"):
+                return
+            self._set_status("U盘可能异常，请点驱动修复")
+            msg = result.get("message", "U盘健康检查失败")
+            self.log(f"U盘健康检查提示: {msg}")
+
+        self._run_non_blocking_task("U盘健康检查", _work, _done)
 
     def _scan(self):
         root = self.root_dir.get()
@@ -529,6 +598,31 @@ class App(tk.Tk):
             return eject_usb(drive, log_fn)
 
         self._run_task("弹出U盘", _work, lambda _ok: None)
+
+    def _repair_usb_driver(self):
+        drive = self.usb_drive.get()
+        if not drive:
+            messagebox.showwarning("提示", "未检测到 U 盘")
+            return
+        if not messagebox.askyesno("确认", f"将对 {drive} 执行 Windows 修复命令（chkdsk + pnputil），确认吗？"):
+            return
+
+        def _work(log_fn):
+            return repair_drive(drive, log_fn=log_fn)
+
+        def _done(result):
+            if result.get("ok"):
+                self._set_status("U盘驱动修复完成")
+                messagebox.showinfo("完成", "U盘驱动修复完成")
+                return
+            code = str(result.get("code", "repair_failed"))
+            msg = str(result.get("message", "U盘驱动修复失败"))
+            if code == "permission_denied":
+                messagebox.showwarning("权限不足", f"{msg}\n\n请以管理员权限运行后重试。")
+            else:
+                messagebox.showerror("修复失败", msg)
+
+        self._run_task("驱动修复", _work, _done)
 
     def _write_excel(self, remark: str):
         info = self._current_info()

@@ -3,7 +3,15 @@ from types import SimpleNamespace
 
 import pytest
 
-from core.usb_ops import clean_usb, copy_to_usb, eject_usb, format_usb, get_usb_drives
+from core.usb_ops import (
+    clean_usb,
+    copy_to_usb,
+    diagnose_usb_health,
+    eject_usb,
+    format_usb,
+    get_usb_drives,
+    repair_usb_driver,
+)
 
 
 def _logs():
@@ -149,3 +157,92 @@ def test_format_usb_success_failure_and_exception(monkeypatch: pytest.MonkeyPatc
     ok3 = format_usb("E:\\", log_fn=log_fn3)
     assert ok3 is False
     assert any("格式化异常" in msg for msg in logs3)
+
+
+def test_diagnose_usb_health_ok(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    logs, log_fn = _logs()
+    usb = tmp_path / "usb"
+    usb.mkdir()
+    (usb / "a.txt").write_text("x", encoding="utf-8")
+
+    monkeypatch.setattr(
+        "core.usb_ops.subprocess.run",
+        lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout="ok", stderr=""),
+    )
+
+    result = diagnose_usb_health(str(usb), log_fn=log_fn)
+
+    assert result["ok"] is True
+    assert result["code"] == "ok"
+
+
+def test_diagnose_usb_health_unavailable(tmp_path: Path):
+    logs, log_fn = _logs()
+    missing = tmp_path / "missing"
+    result = diagnose_usb_health(str(missing), log_fn=log_fn)
+    assert result["ok"] is False
+    assert result["code"] == "drive_unavailable"
+    assert any("盘符不存在或不可访问" in msg for msg in logs)
+
+
+def test_diagnose_usb_health_timeout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    logs, log_fn = _logs()
+    usb = tmp_path / "usb"
+    usb.mkdir()
+
+    def raise_timeout(*args, **kwargs):
+        raise TimeoutError("timeout")
+
+    monkeypatch.setattr("core.usb_ops.subprocess.run", raise_timeout)
+    result = diagnose_usb_health(str(usb), log_fn=log_fn)
+
+    assert result["ok"] is False
+    assert result["code"] == "check_error"
+
+
+def test_repair_usb_driver_ok(monkeypatch: pytest.MonkeyPatch):
+    logs, log_fn = _logs()
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return SimpleNamespace(returncode=0, stdout="ok", stderr="")
+
+    monkeypatch.setattr("core.usb_ops.subprocess.run", fake_run)
+    result = repair_usb_driver("E:\\", log_fn=log_fn)
+
+    assert result["ok"] is True
+    assert result["code"] == "ok"
+    assert calls[0][0] == "chkdsk"
+    assert calls[1][0] == "pnputil"
+
+
+def test_repair_usb_driver_permission_denied(monkeypatch: pytest.MonkeyPatch):
+    logs, log_fn = _logs()
+
+    def fake_run(cmd, **kwargs):
+        if cmd[0] == "chkdsk":
+            return SimpleNamespace(returncode=1, stdout="", stderr="Access is denied.")
+        return SimpleNamespace(returncode=0, stdout="ok", stderr="")
+
+    monkeypatch.setattr("core.usb_ops.subprocess.run", fake_run)
+    result = repair_usb_driver("E:\\", log_fn=log_fn)
+
+    assert result["ok"] is False
+    assert result["code"] == "permission_denied"
+    assert any("权限不足" in msg for msg in logs)
+
+
+def test_repair_usb_driver_scan_failed(monkeypatch: pytest.MonkeyPatch):
+    logs, log_fn = _logs()
+
+    def fake_run(cmd, **kwargs):
+        if cmd[0] == "chkdsk":
+            return SimpleNamespace(returncode=0, stdout="ok", stderr="")
+        return SimpleNamespace(returncode=1, stdout="", stderr="scan failed")
+
+    monkeypatch.setattr("core.usb_ops.subprocess.run", fake_run)
+    result = repair_usb_driver("E:\\", log_fn=log_fn)
+
+    assert result["ok"] is False
+    assert result["code"] == "scan_failed"
