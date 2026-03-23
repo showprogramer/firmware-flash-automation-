@@ -32,13 +32,16 @@
 - 预览性能优化：引入内存缓存（`_preview_rows/_preview_by_key/_preview_item_by_key`），写入成功后按 `(MODEL, VERSION)` 增量更新 Treeview，不再每次全量读盘重绘。
 - 预览全量读盘收敛为手动刷新（含启动初次加载、切换 Excel 路径时重载）。
 - 高优重构：`_scan`、`_write_excel`、`_one_click`、`_save_review` 改为调用 service 层，UI 仅负责事件绑定、状态展示与提示。
+- 数量统计：扫描结果列表新增 `001.` 样式序号前缀，便于人工快速计数（仅展示层，不影响业务字段）。
 
 ### core
-- 为关键返回结构引入 TypedDict：`HandcontrolFolder`、`ExcelWrittenRow`、`ExcelWriteResult`，并在 `find_handcontrol_folders` 与 `write_excel_record` 上落地类型注解。`r`n- `core/excel_ops.py`：
+- 为关键返回结构引入 TypedDict：`HandcontrolFolder`、`ExcelWrittenRow`、`ExcelWriteResult`，并在 `find_handcontrol_folders` 与 `write_excel_record` 上落地类型注解。
+- core/excel_ops.py：
   - `write_excel_record` 返回结构改为 `ok / reason / tmp_path / error`。
   - `write_excel_record` 成功返回新增 `written_row`（model/logo/salesman/language/version/date/remark），供 UI 直接增量刷新。
   - 增加文件不存在场景处理；Excel 被占用时写入 `*_刷机记录_待导入.xlsx` 并返回 `reason=locked`。
   - 新建表格首行标题文案调整为“现有手控UI明细”。
+  - 新增 A 列序号自动重排：按有效数据行（B~I 任一非空）连续编号 `1..N`，仅用于数量统计，与型号无绑定。
 - `core/settings.py`：
   - 新增 `config.toml` 加载能力（优先 `tomllib`，回退可选 `tomli`）。
   - 增加默认配置回退与类型兜底（路径、Excel Sheet/Header、USB 清理规则）。

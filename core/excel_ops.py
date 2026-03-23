@@ -27,6 +27,32 @@ def find_or_create_row(ws, model: str, version: str) -> int:
     return ws.max_row + 1
 
 
+def _has_non_empty_value(value) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return value.strip() != ""
+    return True
+
+
+def _is_effective_data_row(ws, row_num: int) -> bool:
+    # B~I 任一非空即视为有效数据行
+    for col in range(2, 10):
+        if _has_non_empty_value(ws.cell(row=row_num, column=col).value):
+            return True
+    return False
+
+
+def _rebuild_serial_numbers(ws):
+    serial = 1
+    for row_num in range(EXCEL_HEADER_ROW + 1, ws.max_row + 1):
+        if _is_effective_data_row(ws, row_num):
+            ws.cell(row=row_num, column=1).value = serial
+            serial += 1
+        else:
+            ws.cell(row=row_num, column=1).value = None
+
+
 def _do_write(
     excel_path: str,
     sheet_name: str,
@@ -78,6 +104,7 @@ def _do_write(
         for col in range(1, 10):
             ws.cell(row=row_num, column=col).fill = fill
 
+        _rebuild_serial_numbers(ws)
         wb.save(excel_path)
         label = "（备用文件）" if is_tmp else ""
         log_fn(f"  Excel 已写入{label}: 第{row_num}行  {model} {version}  {date_str}  [{remark}]")
@@ -240,3 +267,4 @@ def load_excel_row(excel_path: str, sheet_name: str, model: str, version: str) -
     except Exception:
         pass
     return {}
+

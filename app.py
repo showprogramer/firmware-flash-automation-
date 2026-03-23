@@ -413,7 +413,8 @@ class App(tk.Tk):
             self.folders = payload.get("folders", [])
             status_map = payload.get("status_map", {})
             for i, item in enumerate(self.folders):
-                self.listbox.insert("end", item["label"])
+                display_label = f"{i + 1:03d}. {item['label']}"
+                self.listbox.insert("end", display_label)
                 key = (item["model"].upper(), item["version"].upper())
                 status = status_map.get(key, "")
                 if status == "待确认":
@@ -698,3 +699,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

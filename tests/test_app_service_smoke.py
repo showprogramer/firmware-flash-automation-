@@ -74,7 +74,7 @@ def test_scan_uses_service_result(monkeypatch):
     App._scan(app)
 
     assert len(app.folders) == 1
-    assert app.listbox.items == ["L36 V1"]
+    assert app.listbox.items == ["001. L36 V1"]
     assert any("共找到" in m for m in app.logs)
 
 
@@ -106,3 +106,4 @@ def test_write_excel_uses_service_result(monkeypatch):
     App._write_excel(app, "待确认")
 
     assert any(m.startswith("UPSERT:L36") for m in app.logs)
+

@@ -180,3 +180,102 @@ def test_read_helpers_return_expected_data(tmp_path: Path):
         "language": "英文",
         "remark": "测试通过",
     }
+
+def test_serial_numbers_increment_for_new_rows(tmp_path: Path):
+    excel = tmp_path / "records.xlsx"
+
+    write_excel_record(
+        excel_path=str(excel),
+        sheet_name="Sheet1",
+        model="L36",
+        version="V1.0.0",
+        remark="待确认",
+        log_fn=lambda _: None,
+    )
+    write_excel_record(
+        excel_path=str(excel),
+        sheet_name="Sheet1",
+        model="L50S",
+        version="V2.0.0",
+        remark="测试通过",
+        log_fn=lambda _: None,
+    )
+
+    wb = openpyxl.load_workbook(excel)
+    ws = wb["Sheet1"]
+    assert ws.cell(row=3, column=1).value == 1
+    assert ws.cell(row=4, column=1).value == 2
+    wb.close()
+
+
+def test_serial_numbers_stay_continuous_after_update(tmp_path: Path):
+    excel = tmp_path / "records.xlsx"
+
+    write_excel_record(
+        excel_path=str(excel),
+        sheet_name="Sheet1",
+        model="L36",
+        version="V1.0.0",
+        remark="待确认",
+        log_fn=lambda _: None,
+    )
+    write_excel_record(
+        excel_path=str(excel),
+        sheet_name="Sheet1",
+        model="L50S",
+        version="V2.0.0",
+        remark="待确认",
+        log_fn=lambda _: None,
+    )
+
+    write_excel_record(
+        excel_path=str(excel),
+        sheet_name="Sheet1",
+        model="L36",
+        version="V1.0.0",
+        remark="测试通过",
+        logo="品牌A",
+        log_fn=lambda _: None,
+    )
+
+    wb = openpyxl.load_workbook(excel)
+    ws = wb["Sheet1"]
+    assert ws.cell(row=3, column=1).value == 1
+    assert ws.cell(row=4, column=1).value == 2
+    assert ws.cell(row=3, column=9).value == "测试通过"
+    wb.close()
+
+
+def test_serial_numbers_ignore_blank_rows(tmp_path: Path):
+    excel = tmp_path / "records.xlsx"
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Sheet1"
+    ws.cell(row=1, column=1, value="现有手控UI明细")
+    ws.cell(row=2, column=1, value="序号")
+    ws.cell(row=2, column=2, value="型号")
+    ws.cell(row=2, column=6, value="版本号")
+    ws.cell(row=3, column=2, value="L36")
+    ws.cell(row=3, column=6, value="V1.0.0")
+    ws.cell(row=4, column=1, value=999)
+    ws.cell(row=5, column=2, value="L50S")
+    ws.cell(row=5, column=6, value="V2.0.0")
+    wb.save(excel)
+    wb.close()
+
+    write_excel_record(
+        excel_path=str(excel),
+        sheet_name="Sheet1",
+        model="L50S",
+        version="V2.0.0",
+        remark="待确认",
+        log_fn=lambda _: None,
+    )
+
+    wb = openpyxl.load_workbook(excel)
+    ws = wb["Sheet1"]
+    assert ws.cell(row=3, column=1).value == 1
+    assert ws.cell(row=4, column=1).value is None
+    assert ws.cell(row=5, column=1).value == 2
+    wb.close()
