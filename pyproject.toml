@@ -16,4 +16,4 @@ package = false
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-addopts = "--cov=core --cov-report=term-missing --cov-fail-under=70"
+addopts = "--cov=core --cov-report=term-missing --cov-fail-under=80"

@@ -45,14 +45,18 @@ class App(tk.Tk):
         self.busy = tk.BooleanVar(value=False)
         self.status_text = tk.StringVar(value="就绪")
 
-        # 搜索关键词
+        # 预览搜索关键词
         self.search_var = tk.StringVar()
+        # 左侧手控文件夹列表过滤关键词
+        self.folder_search_var = tk.StringVar()
 
         self._task_queue: queue.Queue = queue.Queue()
         self._task_id = 0
+        self._all_folders: list[dict] = []
         self._preview_rows: list[dict] = []
         self._preview_by_key: dict[tuple[str, str], dict] = {}
         self._preview_item_by_key: dict[tuple[str, str], str] = {}
+        self._folder_status_map: dict[tuple[str, str], str] = {}
         self._editing_preview_key: tuple[str, str] | None = None
         self._known_usb_drives: set[str] = set()
         self._usb_diag_inflight: set[str] = set()
@@ -85,6 +89,14 @@ class App(tk.Tk):
         left.pack(side="left", fill="both", expand=True, padx=(0, 4))
         ttk.Button(left, text="扫描目录", command=self._scan).pack(fill="x", padx=4, pady=2)
         ttk.Button(left, text="刷新预览", command=self._manual_refresh_preview).pack(fill="x", padx=4, pady=(0, 2))
+        folder_search_bar = ttk.Frame(left)
+        folder_search_bar.pack(fill="x", padx=4, pady=(0, 2))
+        ttk.Label(folder_search_bar, text="过滤:").pack(side="left")
+        ttk.Entry(folder_search_bar, textvariable=self.folder_search_var, width=24).pack(
+            side="left", fill="x", expand=True, padx=(4, 6)
+        )
+        ttk.Button(folder_search_bar, text="清除", command=lambda: self.folder_search_var.set("")).pack(side="left")
+        self.folder_search_var.trace_add("write", lambda *_: self._filter_folder_list())
         self.listbox = tk.Listbox(left, selectmode="browse", font=("Consolas", 9), activestyle="dotbox")
         sb = ttk.Scrollbar(left, orient="vertical", command=self.listbox.yview)
         self.listbox.configure(yscrollcommand=sb.set)
@@ -195,7 +207,9 @@ class App(tk.Tk):
         ttk.Separator(parent).pack(fill="x", padx=4, pady=2)
         fields = [
             ("Logo / 品牌:", self.field_logo, ["中性", "通用", "定制"]),
-            ("语言:", self.field_language, ["中、英、越", "中、英", "英文", "希伯来语、俄、英"]),
+            ("语言:", self.field_language, ["中", "中、英", "中、英、俄", "中、英、土", "中、英、德", "中、英、葡", "中、英、西班牙语", 
+            "中、英、越", "中、韩、日、葡", "中、越", 
+            "德语", "法语", "英文", "英、乌克兰、波兰", "英、俄", "英、俄、塞尔维亚", "希伯来语、俄、英", "英、越", "越南"]),
             ("业务员:", self.field_salesman, []),
             ("附图:", self.field_attachment, ["定制", "可通用"]),
         ]
@@ -393,6 +407,59 @@ class App(tk.Tk):
             return str(search_var.get() or "").strip().lower()
         except Exception:
             return ""
+
+    def _current_folder_keyword(self) -> str:
+        folder_search_var = self.__dict__.get("folder_search_var")
+        if folder_search_var is None:
+            return ""
+        try:
+            return str(folder_search_var.get() or "").strip().lower()
+        except Exception:
+            return ""
+
+    def _folder_matches_keyword(self, folder: dict, keyword: str) -> bool:
+        fields = ("label", "model", "version", "path", "rom_file", "pkg_file")
+        return any(keyword in str(folder.get(field, "")).lower() for field in fields)
+
+    def _render_folder_list(self):
+        self.listbox.delete(0, "end")
+        for i, item in enumerate(self.folders):
+            display_label = f"{i + 1:03d}. {item['label']}"
+            self.listbox.insert("end", display_label)
+            key = self._preview_key(item.get("model", ""), item.get("version", ""))
+            status = self._folder_status_map.get(key, "")
+            if status == "待确认":
+                self.listbox.itemconfig(i, bg="#FFFF99", fg="black")
+            elif status == "测试通过":
+                self.listbox.itemconfig(i, bg="#C6EFCE", fg="black")
+
+    def _filter_folder_list(self):
+        all_folders = list(getattr(self, "_all_folders", []))
+        keyword = self._current_folder_keyword()
+        prev_idx = self.current_idx.get()
+        prev_key: tuple[str, str] | None = None
+        if 0 <= prev_idx < len(self.folders):
+            prev = self.folders[prev_idx]
+            prev_key = self._preview_key(prev.get("model", ""), prev.get("version", ""))
+
+        if keyword:
+            filtered = [item for item in all_folders if self._folder_matches_keyword(item, keyword)]
+        else:
+            filtered = all_folders
+        self.folders = filtered
+        self._render_folder_list()
+
+        self.current_idx.set(-1)
+        if prev_key is not None:
+            for i, item in enumerate(self.folders):
+                if self._preview_key(item.get("model", ""), item.get("version", "")) == prev_key:
+                    self.current_idx.set(i)
+                    try:
+                        self.listbox.selection_set(i)
+                        self.listbox.see(i)
+                    except Exception:
+                        pass
+                    break
 
     def _row_matches_keyword(self, row: dict, keyword: str) -> bool:
         """检查行是否包含关键词（不区分大小写，匹配型号/版本/logo/备注/语言/业务员）。"""
@@ -655,21 +722,23 @@ class App(tk.Tk):
                 messagebox.showerror("扫描失败", result.get("message", "未知错误"))
                 return
             payload = result.get("payload", {})
-            self.listbox.delete(0, "end")
-            self.folders = payload.get("folders", [])
-            status_map = payload.get("status_map", {})
-            for i, item in enumerate(self.folders):
-                display_label = f"{i + 1:03d}. {item['label']}"
-                self.listbox.insert("end", display_label)
-                key = (item["model"].upper(), item["version"].upper())
-                status = status_map.get(key, "")
-                if status == "待确认":
-                    self.listbox.itemconfig(i, bg="#FFFF99", fg="black")
-                elif status == "测试通过":
-                    self.listbox.itemconfig(i, bg="#C6EFCE", fg="black")
+            self.current_idx.set(-1)
+            self._all_folders = payload.get("folders", [])
+            status_map_raw = payload.get("status_map", {}) or {}
+            self._folder_status_map = {
+                self._preview_key(k[0], k[1]): v
+                for k, v in status_map_raw.items()
+                if isinstance(k, tuple) and len(k) >= 2
+            }
+            self._filter_folder_list()
             tested = int(payload.get("tested", 0))
             pending = int(payload.get("pending", 0))
-            self.log(f"共找到 {len(self.folders)} 个手控文件夹（已测: {tested}，待确认: {pending}）")
+            total = len(self._all_folders)
+            shown = len(self.folders)
+            if self._current_folder_keyword():
+                self.log(f"共找到 {total} 个手控文件夹，过滤后显示 {shown} 个（已测: {tested}，待确认: {pending}）")
+            else:
+                self.log(f"共找到 {shown} 个手控文件夹（已测: {tested}，待确认: {pending}）")
 
         self._run_task("扫描目录", _work, _done)
 

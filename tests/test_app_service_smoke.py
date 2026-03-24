@@ -16,6 +16,7 @@ class FakeListbox:
     def __init__(self):
         self.items = []
         self.colors = {}
+        self.selected = None
 
     def delete(self, _start, _end):
         self.items = []
@@ -28,6 +29,12 @@ class FakeListbox:
 
     def size(self):
         return len(self.items)
+
+    def selection_set(self, idx):
+        self.selected = idx
+
+    def see(self, _idx):
+        return None
 
 
 class FakeCombo:
@@ -106,8 +113,11 @@ def _mk_app_stub():
     app.usb_drive = FakeVar("")
     app.status_text = FakeVar("就绪")
     app.search_var = FakeVar("")
+    app.folder_search_var = FakeVar("")
     app.usb_combo = FakeCombo()
     app.folders = []
+    app._all_folders = []
+    app._folder_status_map = {}
     app.current_idx = FakeVar(0)
     app.listbox = FakeListbox()
     app.preview = FakePreview()
@@ -165,6 +175,51 @@ def test_scan_uses_service_result(monkeypatch):
     assert app.listbox.items == ["001. L36 V1"]
     assert any("共找到" in m for m in app.logs)
 
+
+def test_filter_folder_list_by_keyword():
+    app = _mk_app_stub()
+    app._all_folders = [
+        {"model": "L36", "version": "V1.0.0", "label": "L36 V1", "path": "D:/a", "rom_file": "a.ROM", "pkg_file": "a.PKG"},
+        {"model": "L50S", "version": "V2.0.0", "label": "L50S V2", "path": "D:/b", "rom_file": "b.ROM", "pkg_file": "b.PKG"},
+    ]
+    app.folder_search_var.set("L50")
+
+    App._filter_folder_list(app)
+
+    assert len(app.folders) == 1
+    assert app.folders[0]["model"] == "L50S"
+    assert app.listbox.items == ["001. L50S V2"]
+
+
+def test_scan_applies_folder_filter_keyword(monkeypatch):
+    app = _mk_app_stub()
+    app.folder_search_var.set("L50")
+
+    monkeypatch.setattr(
+        "app.build_scan_result",
+        lambda root, excel, sheet, log_fn: {
+            "ok": True,
+            "code": "ok",
+            "message": "done",
+            "payload": {
+                "folders": [
+                    {"model": "L36", "version": "V1.0.0", "label": "L36 V1", "path": "D:/a", "rom_file": "a.ROM", "pkg_file": "a.PKG"},
+                    {"model": "L50S", "version": "V2.0.0", "label": "L50S V2", "path": "D:/b", "rom_file": "b.ROM", "pkg_file": "b.PKG"},
+                ],
+                "status_map": {},
+                "tested": 0,
+                "pending": 0,
+            },
+        },
+    )
+
+    app._run_task = lambda _name, fn, on_done: on_done(fn(lambda _m: None))
+
+    App._scan(app)
+
+    assert len(app.folders) == 1
+    assert app.listbox.items == ["001. L50S V2"]
+    assert any("过滤后显示 1 个" in m for m in app.logs)
 
 def test_write_excel_uses_service_result(monkeypatch):
     app = _mk_app_stub()
@@ -329,5 +384,3 @@ def test_delete_selected_preview_row_reindexes_cache(monkeypatch):
     assert len(app._preview_rows) == 1
     assert app._preview_rows[0]["model"] == "L50S"
     assert app._preview_rows[0]["serial"] == "1"
-
-
