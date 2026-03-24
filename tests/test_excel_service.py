@@ -18,6 +18,7 @@ def test_write_record_ok(monkeypatch: pytest.MonkeyPatch):
                 "language": "CN",
                 "version": "V1.0.0",
                 "date": "2026.03.21",
+                "attachment": "可通用",
                 "remark": "待确认",
             },
         },
@@ -27,6 +28,7 @@ def test_write_record_ok(monkeypatch: pytest.MonkeyPatch):
 
     assert result["ok"] is True
     assert result["payload"]["preview_row"]["model"] == "L36"
+    assert result["payload"]["preview_row"]["attachment"] == "可通用"
 
 
 def test_write_record_locked(monkeypatch: pytest.MonkeyPatch):
@@ -71,6 +73,7 @@ def test_update_record_fields_ok(monkeypatch: pytest.MonkeyPatch):
         logo="品牌A",
         salesman="张三",
         language="中、英",
+        attachment="定制",
         remark="测试通过",
         log_fn=lambda _m: None,
     )
@@ -78,10 +81,12 @@ def test_update_record_fields_ok(monkeypatch: pytest.MonkeyPatch):
     assert result["ok"] is True
     assert result["code"] == "ok"
     assert result["payload"]["preview_row"]["model"] == "L36"
+    assert result["payload"]["preview_row"]["attachment"] == "定制"
     assert calls == [
         ("logo", "品牌A"),
         ("salesman", "张三"),
         ("language", "中、英"),
+        ("attachment", "定制"),
         ("remark", "测试通过"),
     ]
 
@@ -102,6 +107,7 @@ def test_update_record_fields_locked(monkeypatch: pytest.MonkeyPatch):
         logo="品牌A",
         salesman="张三",
         language="中、英",
+        attachment="定制",
         remark="测试通过",
         log_fn=lambda _m: None,
     )
@@ -121,6 +127,7 @@ def test_update_record_fields_exception(monkeypatch: pytest.MonkeyPatch):
         logo="",
         salesman="",
         language="",
+        attachment="",
         remark="",
         log_fn=lambda _m: None,
     )
@@ -160,3 +167,6 @@ def test_delete_record_exception(monkeypatch: pytest.MonkeyPatch):
 
     assert result["ok"] is False
     assert result["code"] == "service_exception"
+
+
+

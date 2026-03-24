@@ -17,6 +17,7 @@ class ExcelWrittenRow(TypedDict):
     language: str
     version: str
     date: str
+    attachment: str
     remark: str
 
 

@@ -16,6 +16,7 @@
 
 - 新增 `tests/test_usb_repair_service.py`，覆盖 USB 修复 service 的成功、失败与异常分支。
 - 新增 `tests/test_crud_ops.py`，覆盖 CRUD 三阶段核心路径（搜索匹配逻辑、字段更新、行删除分支）。
+- 扩展 `tests/test_excel_ops.py`、`tests/test_excel_service.py`、`tests/test_flash_service.py`、`tests/test_app_*` 与 `tests/test_crud_ops.py`，覆盖附图字段读写、预览映射与搜索行为。
 - 扩展 `tests/test_app_preview_cache.py` 与 `tests/test_app_service_smoke.py`，补充过滤态 upsert 去重、离线历史保存、删除后序号重排等回归场景。
 - 扩展 `tests/test_excel_service.py`，覆盖 `update_record_fields` 与 `delete_record` 的成功/失败分支映射。
 
@@ -45,6 +46,7 @@
 - CRUD 修复：双击预览进入离线编辑上下文，`_save_review` 支持不依赖左侧扫描列表直接保存历史记录。
 - CRUD 修复：删除预览记录改为 service 调用，成功后仅内存增量移除并重排序号，避免全量读盘。
 - 快速定位：左侧手控文件夹列表支持双击直接打开对应目录（Explorer），并补充路径不存在/打开失败提示。
+- 表格新增列（附图）：在审核填写、Excel 写入/读取、预览缓存与搜索、一键执行与历史编辑链路中接入 `attachment` 字段。
 
 ### core
 - 为关键返回结构引入 TypedDict：`HandcontrolFolder`、`ExcelWrittenRow`、`ExcelWriteResult`，并在 `find_handcontrol_folders` 与 `write_excel_record` 上落地类型注解。

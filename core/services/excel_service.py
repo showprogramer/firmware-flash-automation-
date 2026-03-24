@@ -10,6 +10,7 @@ def _to_preview_row(written_row: dict | None) -> dict:
         "logo": str(written_row.get("logo", "")),
         "salesman": str(written_row.get("salesman", "")),
         "language": str(written_row.get("language", "")),
+        "attachment": str(written_row.get("attachment", "")),
         "version": str(written_row.get("version", "")),
         "date": str(written_row.get("date", "")),
         "remark": str(written_row.get("remark", "")),
@@ -26,6 +27,7 @@ def write_record(
     logo: str = "",
     language: str = "",
     salesman: str = "",
+    attachment: str = "",
     log_fn=print,
 ) -> dict:
     try:
@@ -39,6 +41,7 @@ def write_record(
             logo=logo,
             language=language,
             salesman=salesman,
+            attachment=attachment,
             log_fn=log_fn,
         )
         if result.get("ok"):
@@ -81,6 +84,7 @@ def update_record_fields(
     logo: str = "",
     salesman: str = "",
     language: str = "",
+    attachment: str = "",
     remark: str = "",
     log_fn=print,
 ) -> dict:
@@ -89,6 +93,7 @@ def update_record_fields(
             ("logo", logo),
             ("salesman", salesman),
             ("language", language),
+            ("attachment", attachment),
             ("remark", remark),
         ):
             result = update_excel_field(
@@ -128,6 +133,7 @@ def update_record_fields(
                     "logo": str(logo or ""),
                     "salesman": str(salesman or ""),
                     "language": str(language or ""),
+                    "attachment": str(attachment or ""),
                     "version": str(version or ""),
                     "date": "",
                     "remark": str(remark or ""),
@@ -189,3 +195,5 @@ def delete_record(
                 "excel_result": None,
             },
         }
+
+

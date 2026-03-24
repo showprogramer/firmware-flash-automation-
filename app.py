@@ -40,6 +40,7 @@ class App(tk.Tk):
         self.field_logo = tk.StringVar()
         self.field_language = tk.StringVar()
         self.field_salesman = tk.StringVar()
+        self.field_attachment = tk.StringVar()
         self.field_remark = tk.StringVar()
         self.busy = tk.BooleanVar(value=False)
         self.status_text = tk.StringVar(value="就绪")
@@ -131,9 +132,9 @@ class App(tk.Tk):
         ttk.Button(search_bar, text="删除选中行", command=self._delete_selected_preview_row).pack(side="right", padx=4)
         self.search_var.trace_add("write", lambda *_: self._filter_preview())
 
-        cols = ("序号", "型号", "logo", "业务员", "语言", "版本号", "完成日期", "备注")
+        cols = ("序号", "型号", "logo", "业务员", "语言", "版本号", "完成日期", "附图", "备注")
         self.preview = ttk.Treeview(prev_frame, columns=cols, show="headings", height=6, selectmode="browse")
-        col_widths = [40, 80, 60, 60, 110, 80, 80, 180]
+        col_widths = [40, 80, 60, 60, 110, 80, 80, 70, 150]
         for col, w in zip(cols, col_widths):
             self.preview.heading(col, text=col)
             self.preview.column(col, width=w, minwidth=w, anchor="w")
@@ -196,6 +197,7 @@ class App(tk.Tk):
             ("Logo / 品牌:", self.field_logo, ["中性", "通用", "定制"]),
             ("语言:", self.field_language, ["中、英、越", "中、英", "英文", "希伯来语、俄、英"]),
             ("业务员:", self.field_salesman, []),
+            ("附图:", self.field_attachment, ["定制", "可通用"]),
         ]
         for label, var, opts in fields:
             row = ttk.Frame(parent)
@@ -350,6 +352,7 @@ class App(tk.Tk):
             str(row.get("language", "")),
             str(row.get("version", "")),
             str(row.get("date", "")),
+            str(row.get("attachment", "")),
             str(row.get("remark", "")),
         ]
 
@@ -365,6 +368,7 @@ class App(tk.Tk):
             "language": values[4],
             "version": values[5],
             "date": values[6],
+            "attachment": values[7],
             "remark": values[8],
         }
 
@@ -392,7 +396,7 @@ class App(tk.Tk):
 
     def _row_matches_keyword(self, row: dict, keyword: str) -> bool:
         """检查行是否包含关键词（不区分大小写，匹配型号/版本/logo/备注/语言/业务员）。"""
-        fields = ("model", "version", "logo", "salesman", "language", "remark", "serial")
+        fields = ("model", "version", "logo", "salesman", "language", "attachment", "remark", "serial")
         return any(keyword in str(row.get(f, "")).lower() for f in fields)
 
     # ── 阶段1：搜索过滤 ───────────────────────────────────────────────────────
@@ -419,10 +423,10 @@ class App(tk.Tk):
         if not sel:
             return
         values = self.preview.item(sel[0], "values")
-        # values 顺序: 序号 型号 logo 业务员 语言 版本号 完成日期 备注
-        if len(values) < 8:
+        # values 顺序: 序号 型号 logo 业务员 语言 版本号 完成日期 附图 备注
+        if len(values) < 9:
             return
-        _serial, model, logo, salesman, language, version, _date, remark = values[:8]
+        _serial, model, logo, salesman, language, version, _date, attachment, remark = values[:9]
         key = self._preview_key(model, version)
         self._editing_preview_key = key
         source = self._preview_by_key.get(key, {})
@@ -432,11 +436,13 @@ class App(tk.Tk):
             logo = source.get("logo", logo)
             salesman = source.get("salesman", salesman)
             language = source.get("language", language)
+            attachment = source.get("attachment", attachment)
             remark = source.get("remark", remark)
 
         self.field_logo.set(logo)
         self.field_language.set(language)
         self.field_salesman.set(salesman)
+        self.field_attachment.set(attachment)
         self.remark_text.delete("1.0", "end")
         self.remark_text.insert("1.0", remark)
 
@@ -509,6 +515,7 @@ class App(tk.Tk):
             "logo": str(row.get("logo", "")),
             "salesman": str(row.get("salesman", "")),
             "language": str(row.get("language", "")),
+            "attachment": str(row.get("attachment", "")),
             "version": str(row.get("version", "")),
             "date": str(row.get("date", "")),
             "remark": str(row.get("remark", "")),
@@ -695,6 +702,7 @@ class App(tk.Tk):
         self.field_logo.set(existing.get("logo", ""))
         self.field_language.set(existing.get("language", ""))
         self.field_salesman.set(existing.get("salesman", ""))
+        self.field_attachment.set(existing.get("attachment", ""))
         self.remark_text.delete("1.0", "end")
         self.remark_text.insert("1.0", existing.get("remark", ""))
 
@@ -851,12 +859,13 @@ class App(tk.Tk):
         logo = self.field_logo.get().strip()
         language = self.field_language.get().strip()
         salesman = self.field_salesman.get().strip()
+        attachment = self.field_attachment.get().strip()
         rom_path = str(Path(info["path"]) / info["rom_file"])
 
         def _work(log_fn):
             log_fn(
                 f"写入 Excel: {info['model']} {info['version']}  "
-                f"logo={logo}  语言={language}  业务员={salesman}  [{remark}]"
+                f"logo={logo}  语言={language}  业务员={salesman}  附图={attachment}  [{remark}]"
             )
             return write_record(
                 excel_path=excel,
@@ -868,6 +877,7 @@ class App(tk.Tk):
                 logo=logo,
                 language=language,
                 salesman=salesman,
+                attachment=attachment,
                 log_fn=log_fn,
             )
 
@@ -903,6 +913,7 @@ class App(tk.Tk):
         logo = self.field_logo.get().strip()
         language = self.field_language.get().strip()
         salesman = self.field_salesman.get().strip()
+        attachment = self.field_attachment.get().strip()
         rom = str(Path(info["path"]) / info["rom_file"])
         pkg = str(Path(info["path"]) / info["pkg_file"])
 
@@ -918,6 +929,7 @@ class App(tk.Tk):
                 logo=logo,
                 language=language,
                 salesman=salesman,
+                attachment=attachment,
                 log_fn=log_fn,
             )
 
@@ -952,6 +964,7 @@ class App(tk.Tk):
         logo = self.field_logo.get().strip()
         language = self.field_language.get().strip()
         salesman = self.field_salesman.get().strip()
+        attachment = self.field_attachment.get().strip()
         remark = self.remark_text.get("1.0", "end").strip()
         status = self.review_status.get()
         final_remark = status if not remark or remark == status else f"{status}  |  {remark}"
@@ -962,7 +975,7 @@ class App(tk.Tk):
             version = str(existing.get("version", editing_key[1]))
 
             def _work(log_fn):
-                log_fn(f"审核保存(历史): {model} {version}  logo={logo}  语言={language}  [{status}]")
+                log_fn(f"审核保存(历史): {model} {version}  logo={logo}  语言={language}  附图={attachment}  [{status}]")
                 return update_record_fields(
                     excel_path=excel,
                     sheet_name=EXCEL_SHEET,
@@ -971,6 +984,7 @@ class App(tk.Tk):
                     logo=logo,
                     salesman=salesman,
                     language=language,
+                    attachment=attachment,
                     remark=final_remark,
                     log_fn=log_fn,
                 )
@@ -999,7 +1013,7 @@ class App(tk.Tk):
         rom_path = str(Path(info["path"]) / info["rom_file"])
 
         def _work(log_fn):
-            log_fn(f"审核保存: {info['model']} {info['version']}  logo={logo}  语言={language}  [{status}]")
+            log_fn(f"审核保存: {info['model']} {info['version']}  logo={logo}  语言={language}  附图={attachment}  [{status}]")
             return write_record(
                 excel_path=excel,
                 sheet_name=EXCEL_SHEET,
@@ -1010,6 +1024,7 @@ class App(tk.Tk):
                 logo=logo,
                 language=language,
                 salesman=salesman,
+                attachment=attachment,
                 log_fn=log_fn,
             )
 
@@ -1051,3 +1066,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+

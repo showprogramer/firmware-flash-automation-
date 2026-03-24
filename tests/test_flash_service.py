@@ -21,6 +21,7 @@ def test_run_one_click_ok(monkeypatch: pytest.MonkeyPatch):
                 "language": "CN",
                 "version": "V1.0.0",
                 "date": "2026.03.21",
+                "attachment": "可通用",
                 "remark": "待确认",
             },
         },
@@ -31,6 +32,7 @@ def test_run_one_click_ok(monkeypatch: pytest.MonkeyPatch):
     assert result["ok"] is True
     assert result["payload"]["copy_ok"] is True
     assert result["payload"]["preview_row"]["remark"] == "待确认"
+    assert result["payload"]["preview_row"]["attachment"] == "可通用"
 
 
 def test_run_one_click_copy_failed(monkeypatch: pytest.MonkeyPatch):
@@ -53,3 +55,5 @@ def test_run_one_click_exception(monkeypatch: pytest.MonkeyPatch):
 
     assert result["ok"] is False
     assert result["code"] == "service_exception"
+
+

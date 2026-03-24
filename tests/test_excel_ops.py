@@ -64,12 +64,14 @@ def test_write_excel_record_updates_existing_row(tmp_path: Path):
         logo="品牌A",
         language="中、英",
         salesman="张三",
+        attachment="定制",
         log_fn=lambda _: None,
     )
     assert second["ok"] is True
     assert second["written_row"]["logo"] == "品牌A"
     assert second["written_row"]["salesman"] == "张三"
     assert second["written_row"]["language"] == "中、英"
+    assert second["written_row"]["attachment"] == "定制"
     assert second["written_row"]["remark"] == "测试通过"
 
     wb = openpyxl.load_workbook(excel)
@@ -79,6 +81,7 @@ def test_write_excel_record_updates_existing_row(tmp_path: Path):
     assert ws.cell(row=3, column=3).value == "品牌A"
     assert ws.cell(row=3, column=4).value == "张三"
     assert ws.cell(row=3, column=5).value == "中、英"
+    assert ws.cell(row=3, column=8).value == "定制"
     assert ws.cell(row=3, column=9).value == "测试通过"
     wb.close()
 
@@ -161,6 +164,7 @@ def test_read_helpers_return_expected_data(tmp_path: Path):
         logo="品牌B",
         language="英文",
         salesman="李四",
+        attachment="可通用",
         log_fn=lambda _: None,
     )
 
@@ -168,6 +172,7 @@ def test_read_helpers_return_expected_data(tmp_path: Path):
     assert len(rows) == 1
     assert rows[0][1] == "L66"
     assert rows[0][5] == "V9.9.9"
+    assert rows[0][7] == "可通用"
     assert rows[0][8] == "测试通过"
 
     status = load_excel_status(str(excel), "Sheet1")
@@ -178,6 +183,7 @@ def test_read_helpers_return_expected_data(tmp_path: Path):
         "logo": "品牌B",
         "salesman": "李四",
         "language": "英文",
+        "attachment": "可通用",
         "remark": "测试通过",
     }
 
@@ -279,3 +285,5 @@ def test_serial_numbers_ignore_blank_rows(tmp_path: Path):
     assert ws.cell(row=4, column=1).value is None
     assert ws.cell(row=5, column=1).value == 2
     wb.close()
+
+

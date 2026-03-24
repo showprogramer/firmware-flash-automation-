@@ -123,6 +123,7 @@ def _mk_app_stub():
     app.field_logo = FakeVar("logo")
     app.field_language = FakeVar("lang")
     app.field_salesman = FakeVar("sale")
+    app.field_attachment = FakeVar("可通用")
     app.review_status = FakeVar("测试通过")
     app.remark_text = FakeText()
     app.remark_text.value = ""
@@ -179,6 +180,7 @@ def test_write_excel_uses_service_result(monkeypatch):
                 "preview_row": {
                     "model": "L36",
                     "version": "V1.0.0",
+                    "attachment": "可通用",
                     "remark": "待确认",
                 },
             },
@@ -257,6 +259,7 @@ def test_save_review_uses_preview_editing_key(monkeypatch):
         "logo": "旧",
         "salesman": "旧",
         "language": "旧",
+        "attachment": "可通用",
         "date": "2026.03.21",
         "remark": "待确认",
         "serial": "2",
@@ -264,6 +267,7 @@ def test_save_review_uses_preview_editing_key(monkeypatch):
     app.field_logo.set("新品牌")
     app.field_salesman.set("新业务")
     app.field_language.set("中、英")
+    app.field_attachment.set("定制")
     app.review_status.set("测试通过")
     app.remark_text.value = ""
 
@@ -280,6 +284,7 @@ def test_save_review_uses_preview_editing_key(monkeypatch):
                     "logo": "新品牌",
                     "salesman": "新业务",
                     "language": "中、英",
+                    "attachment": "定制",
                     "remark": "测试通过",
                     "date": "",
                     "serial": "",
@@ -300,8 +305,8 @@ def test_save_review_uses_preview_editing_key(monkeypatch):
 def test_delete_selected_preview_row_reindexes_cache(monkeypatch):
     app = _mk_app_stub()
     app._preview_rows = [
-        {"serial": "1", "model": "L36", "version": "V1.0.0", "logo": "", "salesman": "", "language": "", "date": "", "remark": "待确认"},
-        {"serial": "2", "model": "L50S", "version": "V2.0.0", "logo": "", "salesman": "", "language": "", "date": "", "remark": "待确认"},
+        {"serial": "1", "model": "L36", "version": "V1.0.0", "logo": "", "salesman": "", "language": "", "attachment": "", "date": "", "remark": "待确认"},
+        {"serial": "2", "model": "L50S", "version": "V2.0.0", "logo": "", "salesman": "", "language": "", "attachment": "", "date": "", "remark": "待确认"},
     ]
     app._preview_by_key = {
         app._preview_key("L36", "V1.0.0"): app._preview_rows[0],
@@ -324,3 +329,5 @@ def test_delete_selected_preview_row_reindexes_cache(monkeypatch):
     assert len(app._preview_rows) == 1
     assert app._preview_rows[0]["model"] == "L50S"
     assert app._preview_rows[0]["serial"] == "1"
+
+

@@ -61,6 +61,7 @@ def test_upsert_preview_row_insert_then_update():
             "salesman": "张三",
             "language": "中、英",
             "date": "2026.03.21",
+            "attachment": "可通用",
             "remark": "待确认",
         }
     )
@@ -78,6 +79,7 @@ def test_upsert_preview_row_insert_then_update():
             "salesman": "李四",
             "language": "英文",
             "date": "2026.03.22",
+            "attachment": "定制",
             "remark": "测试通过",
         }
     )
@@ -87,14 +89,14 @@ def test_upsert_preview_row_insert_then_update():
     assert item["values"][2] == "品牌B"
     assert item["values"][3] == "李四"
     assert item["values"][4] == "英文"
-    assert item["values"][7] == "测试通过"
+    assert item["values"][8] == "测试通过"
     assert item["tags"] == ("测试通过",)
 
 
 def test_row_to_preview_dict_maps_excel_columns():
     app = _build_app_stub()
 
-    row = ["1", "L50S", "logo", "sale", "lang", "V2.0.0", "2026.03.21", "", "待确认"]
+    row = ["1", "L50S", "logo", "sale", "lang", "V2.0.0", "2026.03.21", "可通用", "待确认"]
     parsed = app._row_to_preview_dict(row)
 
     assert parsed == {
@@ -105,7 +107,8 @@ def test_row_to_preview_dict_maps_excel_columns():
         "language": "lang",
         "version": "V2.0.0",
         "date": "2026.03.21",
-        "remark": "待确认",
+            "attachment": "可通用",
+            "remark": "待确认",
     }
 
 
@@ -120,6 +123,7 @@ def test_upsert_preview_row_no_duplicate_when_filtered_out():
             "salesman": "张三",
             "language": "中、英",
             "date": "2026.03.21",
+            "attachment": "可通用",
             "remark": "待确认",
         }
     )
@@ -137,6 +141,7 @@ def test_upsert_preview_row_no_duplicate_when_filtered_out():
             "salesman": "李四",
             "language": "英文",
             "date": "2026.03.22",
+            "attachment": "定制",
             "remark": "测试通过",
         }
     )
@@ -150,3 +155,5 @@ def test_upsert_preview_row_no_duplicate_when_filtered_out():
 def test_current_search_keyword_handles_missing_search_var():
     app = App.__new__(App)
     assert app._current_search_keyword() == ""
+
+

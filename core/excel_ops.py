@@ -64,6 +64,7 @@ def _do_write(
     logo: str = "",
     language: str = "",
     salesman: str = "",
+    attachment: str = "",
     is_tmp: bool = False,
 ) -> ExcelWriteResult:
     try:
@@ -96,6 +97,8 @@ def _do_write(
             ws.cell(row=row_num, column=4, value=salesman)
         if language:
             ws.cell(row=row_num, column=5, value=language)
+        if attachment:
+            ws.cell(row=row_num, column=8, value=attachment)
         ws.cell(row=row_num, column=6, value=version)
         ws.cell(row=row_num, column=7, value=date_str)
         ws.cell(row=row_num, column=9, value=remark)
@@ -118,6 +121,7 @@ def _do_write(
             "language": str(language or ""),
             "version": str(version or ""),
             "date": str(date_str or ""),
+            "attachment": str(attachment or ""),
             "remark": str(remark or ""),
         }
         return {
@@ -148,6 +152,7 @@ def write_excel_record(
     logo: str = "",
     language: str = "",
     salesman: str = "",
+    attachment: str = "",
     log_fn=print,
 ) -> ExcelWriteResult:
     """
@@ -182,6 +187,7 @@ def write_excel_record(
             logo=logo,
             language=language,
             salesman=salesman,
+            attachment=attachment,
             is_tmp=True,
         )
         return {
@@ -203,6 +209,7 @@ def write_excel_record(
         logo=logo,
         language=language,
         salesman=salesman,
+        attachment=attachment,
     )
 
 
@@ -261,6 +268,7 @@ def load_excel_row(excel_path: str, sheet_name: str, model: str, version: str) -
                     "logo": str(row[2] or ""),
                     "salesman": str(row[3] or ""),
                     "language": str(row[4] or ""),
+                    "attachment": str(row[7] or ""),
                     "remark": str(row[8] or ""),
                 }
         wb.close()
@@ -270,11 +278,12 @@ def load_excel_row(excel_path: str, sheet_name: str, model: str, version: str) -
 
 
 
-# ── 字段名到列号映射（B=2 型号, C=3 logo, D=4 业务员, E=5 语言, I=9 备注）────
+# ── 字段名到列号映射（B=2 型号, C=3 logo, D=4 业务员, E=5 语言, H=8 附图, I=9 备注）────
 _FIELD_COL: dict[str, int] = {
     "logo": 3,
     "salesman": 4,
     "language": 5,
+    "attachment": 8,
     "remark": 9,
 }
 
@@ -347,7 +356,7 @@ def update_excel_field(
     log_fn=print,
 ) -> dict:
     """
-    精确修改 model+version 行的单个字段（logo / salesman / language / remark）。
+    精确修改 model+version 行的单个字段（logo / salesman / language / attachment / remark）。
     返回 dict: ok, reason (ok / unknown_field / not_found / locked / write_failed), error
     """
     col = _FIELD_COL.get(field)
@@ -379,3 +388,5 @@ def update_excel_field(
     except Exception as e:
         log_fn(f"  更新字段失败: {e}")
         return {"ok": False, "reason": "write_failed", "error": str(e)}
+
+

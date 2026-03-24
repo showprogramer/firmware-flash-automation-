@@ -36,6 +36,7 @@ def _make_excel(tmp_path: Path, rows: list[dict]) -> Path:
             logo=row.get("logo", ""),
             language=row.get("language", ""),
             salesman=row.get("salesman", ""),
+            attachment=row.get("attachment", ""),
             log_fn=lambda _: None,
         )
     return excel
@@ -49,7 +50,7 @@ def _preview_row_matches(row: dict, keyword: str) -> bool:
     keyword = keyword.strip().lower()
     if not keyword:
         return True
-    fields = ("model", "version", "logo", "salesman", "language", "remark", "serial")
+    fields = ("model", "version", "logo", "salesman", "language", "attachment", "remark", "serial")
     return any(keyword in str(row.get(f, "")).lower() for f in fields)
 
 
@@ -61,9 +62,9 @@ class TestSearchFilter:
     """验证搜索关键词过滤逻辑覆盖各字段。"""
 
     ROWS = [
-        {"model": "L36",  "version": "V1.0.0", "logo": "中性",  "language": "中、英、越", "salesman": "张三", "remark": "测试通过",  "serial": "1"},
-        {"model": "L50S", "version": "V2.0.0", "logo": "通用",  "language": "英文",      "salesman": "李四", "remark": "待确认",    "serial": "2"},
-        {"model": "L66",  "version": "V3.1.0", "logo": "定制",  "language": "中、英",    "salesman": "王五", "remark": "测试失败",  "serial": "3"},
+        {"model": "L36",  "version": "V1.0.0", "logo": "中性",  "language": "中、英、越", "attachment": "可通用", "salesman": "张三", "remark": "测试通过",  "serial": "1"},
+        {"model": "L50S", "version": "V2.0.0", "logo": "通用",  "language": "英文",      "attachment": "定制",   "salesman": "李四", "remark": "待确认",    "serial": "2"},
+        {"model": "L66",  "version": "V3.1.0", "logo": "定制",  "language": "中、英",    "attachment": "可通用", "salesman": "王五", "remark": "测试失败",  "serial": "3"},
     ]
 
     def test_empty_keyword_matches_all(self):
@@ -82,8 +83,7 @@ class TestSearchFilter:
 
     def test_match_by_logo(self):
         result = [r for r in self.ROWS if _preview_row_matches(r, "定制")]
-        assert len(result) == 1
-        assert result[0]["logo"] == "定制"
+        assert any(r["logo"] == "定制" for r in result)
 
     def test_match_by_salesman(self):
         result = [r for r in self.ROWS if _preview_row_matches(r, "李四")]
@@ -368,3 +368,8 @@ class TestDeleteExcelRow:
         assert ws.cell(row=3, column=5).value == "英文"
         assert ws.cell(row=3, column=9).value == "待确认"
         wb.close()
+
+
+
+
+

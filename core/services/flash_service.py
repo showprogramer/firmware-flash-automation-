@@ -13,6 +13,7 @@ def run_one_click(
     logo: str = "",
     language: str = "",
     salesman: str = "",
+    attachment: str = "",
     log_fn=print,
 ) -> dict:
     try:
@@ -47,6 +48,7 @@ def run_one_click(
             logo=logo,
             language=language,
             salesman=salesman,
+            attachment=attachment,
             log_fn=log_fn,
         )
         preview_row = {}
@@ -58,6 +60,7 @@ def run_one_click(
                 "logo": str(wr.get("logo", "")),
                 "salesman": str(wr.get("salesman", "")),
                 "language": str(wr.get("language", "")),
+                "attachment": str(wr.get("attachment", "")),
                 "version": str(wr.get("version", "")),
                 "date": str(wr.get("date", "")),
                 "remark": str(wr.get("remark", "")),
@@ -86,3 +89,5 @@ def run_one_click(
                 "preview_row": {},
             },
         }
+
+
