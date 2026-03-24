@@ -2,6 +2,7 @@ import queue
 import threading
 import tkinter as tk
 import traceback
+import os
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
@@ -89,6 +90,7 @@ class App(tk.Tk):
         self.listbox.pack(side="left", fill="both", expand=True, padx=(4, 0), pady=2)
         sb.pack(side="right", fill="y", pady=2)
         self.listbox.bind("<<ListboxSelect>>", self._on_select)
+        self.listbox.bind("<Double-Button-1>", self._open_folder_from_listbox)
         legend = ttk.Frame(left)
         legend.pack(fill="x", padx=4, pady=2)
         for color, lbl in [('#FFFF99', '待确认'), ('#C6EFCE', '测试通过'), ('white', '未操作')]:
@@ -695,6 +697,58 @@ class App(tk.Tk):
         self.field_salesman.set(existing.get("salesman", ""))
         self.remark_text.delete("1.0", "end")
         self.remark_text.insert("1.0", existing.get("remark", ""))
+
+    def _open_folder_from_listbox(self, event=None):
+        idx = None
+        if event is not None and hasattr(event, "y"):
+            try:
+                idx = int(self.listbox.nearest(event.y))
+            except Exception:
+                idx = None
+        if idx is None:
+            sel = self.listbox.curselection()
+            if sel:
+                idx = int(sel[0])
+        if idx is None or idx < 0 or idx >= len(self.folders):
+            return
+
+        try:
+            self.listbox.selection_clear(0, "end")
+            self.listbox.selection_set(idx)
+        except Exception:
+            pass
+
+        self.current_idx.set(idx)
+        self._on_select()
+        info = self.folders[idx]
+        self._open_in_explorer(info.get("path", ""), info.get("model", ""), info.get("version", ""))
+
+    def _open_in_explorer(self, folder_path: str, model: str = "", version: str = ""):
+        path_str = str(folder_path or "").strip()
+        if not path_str:
+            messagebox.showwarning("提示", "该项缺少目录路径，无法快速定位")
+            return
+        path_obj = Path(path_str)
+        if not path_obj.exists() or not path_obj.is_dir():
+            messagebox.showwarning("路径不存在", f"目录不存在：\n{path_obj}")
+            self.log(f"快速定位失败，目录不存在: {path_obj}")
+            return
+
+        try:
+            if hasattr(os, "startfile"):
+                os.startfile(str(path_obj))  # type: ignore[attr-defined]
+            else:
+                raise RuntimeError("当前系统不支持 Explorer 快速定位")
+        except Exception as exc:
+            self.log(f"快速定位失败: {path_obj} ({exc})")
+            messagebox.showerror("打开失败", f"无法打开目录：\n{path_obj}\n\n{exc}")
+            return
+
+        label = f"{model} {version}".strip()
+        if label:
+            self.log(f"快速定位已打开: {label} -> {path_obj}")
+        else:
+            self.log(f"快速定位已打开: {path_obj}")
 
     def _current_info(self) -> dict | None:
         idx = self.current_idx.get()
