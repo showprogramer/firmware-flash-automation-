@@ -1,5 +1,9 @@
-# Internal docs
+# Internal docs & company-sensitive files
 massagechairproject.md
+specs/project-overview.md
+specs/code-review-*.md
+specs/archive/
+config.toml
 
 # Python environment and caches
 .venv/
@@ -8,6 +12,7 @@ __pycache__/
 *.pyo
 .coverage
 htmlcov/
+.pytest_cache/
 
 # Temp/system files
 *.tmp
@@ -15,10 +20,6 @@ htmlcov/
 Thumbs.db
 .DS_Store
 
-# Excel files are ignored by default
-*.xlsx
-~$*.xlsx
-
-# Keep one sanitized template in version control
-!data/
-!data/handcontrol_ui_template.xlsx
+# IDE
+.vscode/
+.idea/
