@@ -48,11 +48,9 @@ class App(tk.Tk):
 
         # 预览搜索关键词
         self.search_var = tk.StringVar()
-        # 左侧手控文件夹列表过滤关键词
+        # 左侧手控文件夹列表搜索关键词
         self.folder_search_var = tk.StringVar()
         self.folder_status_filter_var = tk.StringVar(value="全部状态")
-        self.folder_sort_key_var = tk.StringVar(value="文件夹名")
-        self.folder_sort_order_var = tk.StringVar(value="升序")
 
         self._task_queue: queue.Queue = queue.Queue()
         self._task_id = 0
@@ -64,6 +62,9 @@ class App(tk.Tk):
         self._editing_preview_key: tuple[str, str] | None = None
         self._known_usb_drives: set[str] = set()
         self._usb_diag_inflight: set[str] = set()
+        self._folder_sort_key = SortKey.PATH
+        self._folder_sort_ascending = True
+        self._folder_header_buttons: dict[SortKey, ttk.Button] = {}
 
         self._build_ui()
         self._refresh_usb(log_events=True, detect_insert=False)
@@ -95,50 +96,50 @@ class App(tk.Tk):
         ttk.Button(left, text="刷新预览", command=self._manual_refresh_preview).pack(fill="x", padx=4, pady=(0, 2))
         folder_search_bar = ttk.Frame(left)
         folder_search_bar.pack(fill="x", padx=4, pady=(0, 2))
-        ttk.Label(folder_search_bar, text="过滤:").pack(side="left")
+        ttk.Label(folder_search_bar, text="搜索:").pack(side="left")
         ttk.Entry(folder_search_bar, textvariable=self.folder_search_var, width=24).pack(
-            side="left", fill="x", expand=True, padx=(4, 6)
+            side="left", fill="x", expand=True, padx=(4, 4)
         )
-        ttk.Button(folder_search_bar, text="清除", command=lambda: self.folder_search_var.set("")).pack(side="left")
-        self.folder_search_var.trace_add("write", lambda *_: self._filter_folder_list())
-        folder_controls_bar = ttk.Frame(left)
-        folder_controls_bar.pack(fill="x", padx=4, pady=(0, 2))
-        ttk.Label(folder_controls_bar, text="状态:").pack(side="left")
+        ttk.Label(folder_search_bar, text="状态:").pack(side="left", padx=(8, 2))
         folder_status_combo = ttk.Combobox(
-            folder_controls_bar,
+            folder_search_bar,
             textvariable=self.folder_status_filter_var,
             values=["全部状态", "待确认", "测试通过", "未操作"],
             width=8,
             state="readonly",
         )
-        folder_status_combo.pack(side="left", padx=(2, 6))
+        folder_status_combo.pack(side="left", padx=(0, 6))
         folder_status_combo.bind("<<ComboboxSelected>>", lambda *_: self._filter_folder_list())
-        ttk.Label(folder_controls_bar, text="排序:").pack(side="left")
-        folder_sort_key_combo = ttk.Combobox(
-            folder_controls_bar,
-            textvariable=self.folder_sort_key_var,
-            values=["文件夹名", "型号", "版本号", "测试状态"],
-            width=8,
-            state="readonly",
-        )
-        folder_sort_key_combo.pack(side="left", padx=(2, 4))
-        folder_sort_key_combo.bind("<<ComboboxSelected>>", lambda *_: self._filter_folder_list())
-        folder_sort_order_combo = ttk.Combobox(
-            folder_controls_bar,
-            textvariable=self.folder_sort_order_var,
-            values=["升序", "降序"],
-            width=5,
-            state="readonly",
-        )
-        folder_sort_order_combo.pack(side="left")
-        folder_sort_order_combo.bind("<<ComboboxSelected>>", lambda *_: self._filter_folder_list())
-        self.listbox = tk.Listbox(left, selectmode="browse", font=("Consolas", 9), activestyle="dotbox")
-        sb = ttk.Scrollbar(left, orient="vertical", command=self.listbox.yview)
+        ttk.Button(folder_search_bar, text="清除", command=lambda: self.folder_search_var.set("")).pack(side="left")
+        self.folder_search_var.trace_add("write", lambda *_: self._filter_folder_list())
+        folder_header = ttk.Frame(left)
+        folder_header.pack(fill="x", padx=4, pady=(0, 1))
+        header_specs = [
+            (SortKey.PATH, "名称", 22),
+            (SortKey.MODEL, "型号", 8),
+            (SortKey.VERSION, "版本", 10),
+            (SortKey.STATUS, "状态", 10),
+        ]
+        for col, title, width in header_specs:
+            btn = ttk.Button(
+                folder_header,
+                text=title,
+                width=width,
+                command=lambda value=col: self._on_folder_header_click(value),
+            )
+            btn.pack(side="left", padx=(0, 2), fill="x", expand=(col == SortKey.PATH))
+            btn.configure(takefocus=False)
+            self._folder_header_buttons[col] = btn
+        list_frame = ttk.Frame(left)
+        list_frame.pack(fill="both", expand=True, padx=4, pady=2)
+        self.listbox = tk.Listbox(list_frame, selectmode="browse", font=("Consolas", 9), activestyle="dotbox")
+        sb = ttk.Scrollbar(list_frame, orient="vertical", command=self.listbox.yview)
         self.listbox.configure(yscrollcommand=sb.set)
-        self.listbox.pack(side="left", fill="both", expand=True, padx=(4, 0), pady=2)
-        sb.pack(side="right", fill="y", pady=2)
+        self.listbox.pack(side="left", fill="both", expand=True, padx=(0, 0), pady=0)
+        sb.pack(side="right", fill="y", pady=0)
         self.listbox.bind("<<ListboxSelect>>", self._on_select)
         self.listbox.bind("<Double-Button-1>", self._open_folder_from_listbox)
+        self._refresh_folder_header_buttons()
         legend = ttk.Frame(left)
         legend.pack(fill="x", padx=4, pady=2)
         for color, lbl in [('#FFFF99', '待确认'), ('#C6EFCE', '测试通过'), ('white', '未操作')]:
@@ -463,29 +464,72 @@ class App(tk.Tk):
         return value or "全部状态"
 
     def _current_folder_sort_key(self) -> SortKey:
-        sort_key_var = self.__dict__.get("folder_sort_key_var")
-        if sort_key_var is None:
-            return SortKey.PATH
+        value = self.__dict__.get("_folder_sort_key", SortKey.PATH)
+        if isinstance(value, SortKey):
+            return value
         try:
-            value = str(sort_key_var.get() or "").strip()
+            return SortKey(str(value))
         except Exception:
-            value = ""
-        if value == "型号":
-            return SortKey.MODEL
-        if value == "版本号":
-            return SortKey.VERSION
-        if value == "测试状态":
-            return SortKey.STATUS
-        return SortKey.PATH
+            return SortKey.PATH
 
     def _current_folder_sort_ascending(self) -> bool:
-        order_var = self.__dict__.get("folder_sort_order_var")
-        if order_var is None:
-            return True
-        try:
-            return str(order_var.get() or "").strip() != "降序"
-        except Exception:
-            return True
+        return bool(self.__dict__.get("_folder_sort_ascending", True))
+
+    def _folder_display_name(self, folder: dict) -> str:
+        path_text = str(folder.get("path", "") or "").strip()
+        if path_text:
+            return Path(path_text).name or path_text
+        return str(folder.get("label", "") or "").strip()
+
+    def _folder_display_status(self, folder: dict) -> str:
+        return self._normalize_folder_status(self._folder_status_value(folder)) or "未操作"
+
+    def _folder_row_text(self, index: int, folder: dict) -> str:
+        columns = [
+            f"{index:03d}.",
+            f"{self._folder_display_name(folder):<22.22}",
+            f"{str(folder.get('model', '') or ''):<8.8}",
+            f"{str(folder.get('version', '') or ''):<10.10}",
+            f"{self._folder_display_status(folder):<10.10}",
+        ]
+        return "  ".join(columns)
+
+    def _folder_header_text(self, sort_key: SortKey, label: str) -> str:
+        current_key = self._current_folder_sort_key()
+        if sort_key != current_key:
+            return label
+        arrow = "▲" if self._current_folder_sort_ascending() else "▼"
+        return f"{label} {arrow}"
+
+    def _refresh_folder_header_buttons(self):
+        header_map = self.__dict__.get("_folder_header_buttons", {})
+        if not isinstance(header_map, dict):
+            return
+        titles = {
+            SortKey.PATH: "名称",
+            SortKey.MODEL: "型号",
+            SortKey.VERSION: "版本",
+            SortKey.STATUS: "状态",
+        }
+        for sort_key, label in titles.items():
+            widget = header_map.get(sort_key)
+            if widget is None:
+                continue
+            try:
+                widget.configure(text=self._folder_header_text(sort_key, label))
+            except Exception:
+                continue
+
+    def _on_folder_header_click(self, sort_key: SortKey):
+        current_key = self._current_folder_sort_key()
+        current_ascending = self._current_folder_sort_ascending()
+        if sort_key == current_key:
+            self._folder_sort_ascending = not current_ascending
+        else:
+            self._folder_sort_key = sort_key
+            self._folder_sort_ascending = True
+        self._refresh_folder_header_buttons()
+        self._filter_folder_list()
 
     def _folder_status_value(self, folder: dict) -> str:
         key = self._preview_key(folder.get("model", ""), folder.get("version", ""))
@@ -514,7 +558,7 @@ class App(tk.Tk):
     def _render_folder_list(self):
         self.listbox.delete(0, "end")
         for i, item in enumerate(self.folders):
-            display_label = f"{i + 1:03d}. {item['label']}"
+            display_label = self._folder_row_text(i + 1, item)
             self.listbox.insert("end", display_label)
             status = self._normalize_folder_status(self._folder_status_value(item))
             if status == "待确认":
@@ -547,6 +591,7 @@ class App(tk.Tk):
             ascending=ascending,
             status_map=self._folder_status_map,
         )
+        self._refresh_folder_header_buttons()
         self._render_folder_list()
 
         self.current_idx.set(-1)

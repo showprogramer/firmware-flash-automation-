@@ -115,12 +115,13 @@ def _mk_app_stub():
     app.search_var = FakeVar("")
     app.folder_search_var = FakeVar("")
     app.folder_status_filter_var = FakeVar("全部状态")
-    app.folder_sort_key_var = FakeVar("文件夹名")
-    app.folder_sort_order_var = FakeVar("升序")
     app.usb_combo = FakeCombo()
     app.folders = []
     app._all_folders = []
     app._folder_status_map = {}
+    app._folder_sort_key = "path"
+    app._folder_sort_ascending = True
+    app._folder_header_buttons = {}
     app.current_idx = FakeVar(0)
     app.listbox = FakeListbox()
     app.preview = FakePreview()
@@ -149,6 +150,9 @@ def _mk_app_stub():
     return app
 
 
+def _folder_row(app, idx, folder):
+    return App._folder_row_text(app, idx, folder)
+
 def test_scan_uses_service_result(monkeypatch):
     app = _mk_app_stub()
 
@@ -175,7 +179,7 @@ def test_scan_uses_service_result(monkeypatch):
     App._scan(app)
 
     assert len(app.folders) == 1
-    assert app.listbox.items == ["001. L36 V1"]
+    assert app.listbox.items == [_folder_row(app, 1, app.folders[0])]
     assert any("共找到" in m for m in app.logs)
 
 
@@ -191,7 +195,7 @@ def test_filter_folder_list_by_keyword():
 
     assert len(app.folders) == 1
     assert app.folders[0]["model"] == "L50S"
-    assert app.listbox.items == ["001. L50S V2"]
+    assert app.listbox.items == [_folder_row(app, 1, app.folders[0])]
 
 
 def test_scan_applies_folder_filter_keyword(monkeypatch):
@@ -221,7 +225,7 @@ def test_scan_applies_folder_filter_keyword(monkeypatch):
     App._scan(app)
 
     assert len(app.folders) == 1
-    assert app.listbox.items == ["001. L50S V2"]
+    assert app.listbox.items == [_folder_row(app, 1, app.folders[0])]
     assert any("过滤后显示 1 个" in m for m in app.logs)
 
 def test_filter_folder_list_by_status():
@@ -240,7 +244,7 @@ def test_filter_folder_list_by_status():
 
     assert len(app.folders) == 1
     assert app.folders[0]["model"] == "L50S"
-    assert app.listbox.items == ["001. L50S V2"]
+    assert app.listbox.items == [_folder_row(app, 1, app.folders[0])]
 
 
 def test_filter_folder_list_sort_by_model_desc():
@@ -249,13 +253,13 @@ def test_filter_folder_list_sort_by_model_desc():
         {"model": "L36", "version": "V1.0.0", "label": "L36 V1", "path": "D:/a", "rom_file": "a.ROM", "pkg_file": "a.PKG"},
         {"model": "L50S", "version": "V2.0.0", "label": "L50S V2", "path": "D:/b", "rom_file": "b.ROM", "pkg_file": "b.PKG"},
     ]
-    app.folder_sort_key_var.set("型号")
-    app.folder_sort_order_var.set("降序")
+    App._on_folder_header_click(app, "model")
+    App._on_folder_header_click(app, "model")
 
     App._filter_folder_list(app)
 
     assert [item["model"] for item in app.folders] == ["L50S", "L36"]
-    assert app.listbox.items == ["001. L50S V2", "002. L36 V1"]
+    assert app.listbox.items == [_folder_row(app, 1, app.folders[0]), _folder_row(app, 2, app.folders[1])]
 
 
 def test_filter_folder_list_sort_by_status():
@@ -269,12 +273,26 @@ def test_filter_folder_list_sort_by_status():
         app._preview_key("L36", "V1.0.0"): "测试通过",
         app._preview_key("L50S", "V2.0.0"): "待确认",
     }
-    app.folder_sort_key_var.set("测试状态")
-    app.folder_sort_order_var.set("升序")
+    App._on_folder_header_click(app, "status")
 
     App._filter_folder_list(app)
 
     assert [item["model"] for item in app.folders] == ["L50S", "L36", "L66"]
+
+
+def test_folder_header_click_toggles_sort_direction():
+    app = _mk_app_stub()
+
+    assert App._current_folder_sort_key(app).value == "path"
+    assert App._current_folder_sort_ascending(app) is True
+
+    App._on_folder_header_click(app, "model")
+    assert App._current_folder_sort_key(app).value == "model"
+    assert App._current_folder_sort_ascending(app) is True
+
+    App._on_folder_header_click(app, "model")
+    assert App._current_folder_sort_key(app).value == "model"
+    assert App._current_folder_sort_ascending(app) is False
 
 def test_write_excel_uses_service_result(monkeypatch):
     app = _mk_app_stub()
@@ -439,5 +457,3 @@ def test_delete_selected_preview_row_reindexes_cache(monkeypatch):
     assert len(app._preview_rows) == 1
     assert app._preview_rows[0]["model"] == "L50S"
     assert app._preview_rows[0]["serial"] == "1"
-
-
