@@ -22,6 +22,7 @@
 - 扩展 `tests/test_excel_service.py`，覆盖 `update_record_fields` 与 `delete_record` 的成功/失败分支映射。
 - 新增 `tests/test_sort_config.py`，覆盖型号自然排序、版本号数值排序、测试状态排序与升/降序分支。
 - 扩展 `tests/test_app_service_smoke.py`，新增左侧手控列表按状态过滤、按型号排序、按测试状态排序场景。
+- 扩展 	ests/test_file_scan.py 与 	ests/test_settings.py，覆盖识别规则配置化、扩展名配置化、目录排除配置化与默认回退场景。
 
 ### chore
 - `pyproject.toml` 增加 `dev` 额外依赖组：`pytest>=8.0.0`，用于本地单元测试。
@@ -80,6 +81,7 @@
   - `usb_repair_service.py`：封装 U 盘健康检测与驱动修复返回转换。
   - `excel_service.py` 扩展：新增 `update_record_fields` 与 `delete_record` 封装，统一 CRUD 的 service 返回结构。
 - 新增 `core/sort_config.py`：封装列表排序纯函数与 `SortKey` 枚举（文件夹名/型号/版本号/测试状态）。
+- core/file_scan.py 改为规则驱动识别：ROM/PKG 扩展名、目录排除词、型号正则、版本正则、路径补偿正则均可通过 config.toml 的 [scan] 配置覆盖。
 
 ### data
 - 更新 `data/handcontrol_ui_template.xlsx` 模板内容（二进制文件变更）。
@@ -88,6 +90,7 @@
 - 新增 `config.toml`，用于集中配置扫描目录、Excel 参数和 USB 清理规则。
 - `config.toml` 示例 `paths.root_dir` 改为空字符串，避免模板携带特定机器绝对路径。
 - `config.toml` 新增 `usb.auto_diagnose_on_insert` 与 `usb.health_check_interval_sec` 配置项。
+- config.toml 新增 [scan] 配置段，支持扫描识别规则配置化。
 
 ### compat
 - `pyproject.toml` 增加 `tomli` 条件依赖（`python_version < 3.11`），确保 Python 3.8-3.10 可读取 TOML 配置。
@@ -104,4 +107,5 @@
 ### 789b8e6
 - `chore: initialize repo, uv setup, sanitize template, and module1 cleanup`
 - 完成仓库初始化与基础工程落地（含模板文件、项目配置与初始脚手架整理）。
+
 

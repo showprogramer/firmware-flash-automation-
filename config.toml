@@ -12,3 +12,29 @@ junk_filenames = ["autorun.inf"]
 auto_diagnose_on_insert = true
 health_check_interval_sec = 3
 
+[scan]
+rom_extensions = [".rom"]
+pkg_extensions = [".pkg"]
+exclude_dir_keywords = ["CH341SER", "主板程序"]
+model_patterns = [
+  "(?:^|[_\\-])((L\\d+[A-Za-z]*))(?![A-Za-z0-9])",
+]
+version_patterns = [
+  "[Vv](\\d+\\.\\d+(?:\\.\\d+)?(?:_\\d+)?)",
+  "_(\\d+\\.\\d+(?:\\.\\d+)?(?:_\\d+)?)$",
+  "_UI_(\\d+\\.\\d+(?:\\.\\d+)?(?:_\\d+)?)",
+  "_(\\d+\\.\\d+\\.\\d+(?:_\\d+))$",
+  "_(\\d+\\.\\d+\\.\\d+(?:_\\d+)?)$",
+]
+path_model_patterns = [
+  "(L\\d+[A-Za-z]*(?:max|pro|s)?)(?![A-Za-z0-9])",
+]
+path_version_patterns = [
+  "(?:^|[_\\-])([Vv]\\d+\\.\\d+(?:\\.\\d+)?(?:_\\d+)?)(?:[_\\-]|$)",
+  "\\b(\\d+\\.\\d+(?:\\.\\d+)?(?:_\\d+))\\b",
+  "\\b(\\d+\\.\\d+\\.\\d+(?:_\\d+))\\b",
+  "\\b(\\d+\\.\\d+\\.\\d+)\\b",
+]
+
+
+

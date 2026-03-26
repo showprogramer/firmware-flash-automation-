@@ -19,6 +19,26 @@ _DEFAULTS = {
         "auto_diagnose_on_insert": True,
         "health_check_interval_sec": 3,
     },
+    "scan": {
+        "rom_extensions": [".rom"],
+        "pkg_extensions": [".pkg"],
+        "exclude_dir_keywords": ["CH341SER", "主板程序"],
+        "model_patterns": [r"(?:^|[_\-])((L\d+[A-Za-z]*))(?![A-Za-z0-9])"],
+        "version_patterns": [
+            r"[Vv](\d+\.\d+(?:\.\d+)?(?:_\d+)?)",
+            r"_(\d+\.\d+(?:\.\d+)?(?:_\d+)?)$",
+            r"_UI_(\d+\.\d+(?:\.\d+)?(?:_\d+)?)",
+            r"_(\d+\.\d+\.\d+(?:_\d+))$",
+            r"_(\d+\.\d+\.\d+(?:_\d+)?)$",
+        ],
+        "path_model_patterns": [r"(L\d+[A-Za-z]*(?:max|pro|s)?)(?![A-Za-z0-9])"],
+        "path_version_patterns": [
+            r"(?:^|[_\-])([Vv]\d+\.\d+(?:\.\d+)?(?:_\d+)?)(?:[_\-]|$)",
+            r"\b(\d+\.\d+(?:\.\d+)?(?:_\d+))\b",
+            r"\b(\d+\.\d+\.\d+(?:_\d+))\b",
+            r"\b(\d+\.\d+\.\d+)\b",
+        ],
+    },
 }
 
 
@@ -31,7 +51,6 @@ def load_toml_config(path: Path) -> tuple[dict, str, str]:
     if not path.exists():
         return {}, "missing", ""
 
-    # Python 3.11+ uses tomllib; older Python can use optional tomli if installed.
     toml_loader = None
     try:
         import tomllib  # type: ignore
@@ -91,6 +110,16 @@ def _as_str_set(values, default: set[str], lower: bool = False) -> set[str]:
     return out or default
 
 
+def _as_str_list(values, default: list[str], lower: bool = False) -> list[str]:
+    if not isinstance(values, list):
+        return list(default)
+    out: list[str] = []
+    for item in values:
+        if isinstance(item, str):
+            out.append(item.lower() if lower else item)
+    return out or list(default)
+
+
 _cfg, CONFIG_LOAD_STATUS, CONFIG_LOAD_ERROR = load_toml_config(CONFIG_PATH)
 CONFIG_LOAD_SOURCE = str(CONFIG_PATH)
 
@@ -127,3 +156,37 @@ USB_HEALTH_CHECK_INTERVAL_SEC = max(
         3,
     ),
 )
+
+SCAN_ROM_EXTENSIONS = _as_str_list(
+    _cfg_get(_cfg, "scan", "rom_extensions", _DEFAULTS["scan"]["rom_extensions"]),
+    _DEFAULTS["scan"]["rom_extensions"],
+    lower=True,
+)
+SCAN_PKG_EXTENSIONS = _as_str_list(
+    _cfg_get(_cfg, "scan", "pkg_extensions", _DEFAULTS["scan"]["pkg_extensions"]),
+    _DEFAULTS["scan"]["pkg_extensions"],
+    lower=True,
+)
+SCAN_EXCLUDE_DIR_KEYWORDS = _as_str_list(
+    _cfg_get(_cfg, "scan", "exclude_dir_keywords", _DEFAULTS["scan"]["exclude_dir_keywords"]),
+    _DEFAULTS["scan"]["exclude_dir_keywords"],
+)
+SCAN_MODEL_PATTERNS = _as_str_list(
+    _cfg_get(_cfg, "scan", "model_patterns", _DEFAULTS["scan"]["model_patterns"]),
+    _DEFAULTS["scan"]["model_patterns"],
+)
+SCAN_VERSION_PATTERNS = _as_str_list(
+    _cfg_get(_cfg, "scan", "version_patterns", _DEFAULTS["scan"]["version_patterns"]),
+    _DEFAULTS["scan"]["version_patterns"],
+)
+SCAN_PATH_MODEL_PATTERNS = _as_str_list(
+    _cfg_get(_cfg, "scan", "path_model_patterns", _DEFAULTS["scan"]["path_model_patterns"]),
+    _DEFAULTS["scan"]["path_model_patterns"],
+)
+SCAN_PATH_VERSION_PATTERNS = _as_str_list(
+    _cfg_get(_cfg, "scan", "path_version_patterns", _DEFAULTS["scan"]["path_version_patterns"]),
+    _DEFAULTS["scan"]["path_version_patterns"],
+)
+
+
+
