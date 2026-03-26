@@ -1,6 +1,17 @@
 from core.sort_config import SortKey, apply_sort
 
 
+def test_apply_sort_by_default_path_order():
+    folders = [
+        {"model": "L36", "version": "V1.0.0", "path": "D:/x/aaa"},
+        {"model": "L50S", "version": "V2.0.0", "path": "D:/a/zzz"},
+    ]
+
+    result = apply_sort(folders, sort_key=SortKey.PATH, ascending=True)
+
+    assert [item["path"] for item in result] == ["D:/a/zzz", "D:/x/aaa"]
+
+
 def test_apply_sort_by_model_natural_order():
     folders = [
         {"model": "L50S", "version": "V1.0.0", "path": "D:/b"},

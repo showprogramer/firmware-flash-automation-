@@ -49,6 +49,10 @@ def _version_sort_value(version: str) -> tuple[int, tuple[int, ...], str]:
     return (0, parts, text)
 
 
+def _path_sort_value(folder: dict) -> str:
+    return str(folder.get("path", "") or "").lower()
+
+
 def _folder_name_sort_value(folder: dict) -> str:
     return Path(str(folder.get("path", "") or "")).name.lower()
 
@@ -90,7 +94,7 @@ def apply_sort(
                 _folder_name_sort_value(folder),
             )
         return (
-            _folder_name_sort_value(folder),
+            _path_sort_value(folder),
             _model_sort_value(model),
             _version_sort_value(version),
         )
