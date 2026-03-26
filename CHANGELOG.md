@@ -20,6 +20,8 @@
 - 扩展 `tests/test_app_preview_cache.py` 与 `tests/test_app_service_smoke.py`，补充过滤态 upsert 去重、离线历史保存、删除后序号重排等回归场景。
 - 新增 `tests/test_app_service_smoke.py` 场景：左侧手控列表关键字过滤与扫描后过滤生效。
 - 扩展 `tests/test_excel_service.py`，覆盖 `update_record_fields` 与 `delete_record` 的成功/失败分支映射。
+- 新增 `tests/test_sort_config.py`，覆盖型号自然排序、版本号数值排序、测试状态排序与升/降序分支。
+- 扩展 `tests/test_app_service_smoke.py`，新增左侧手控列表按状态过滤、按型号排序、按测试状态排序场景。
 
 ### chore
 - `pyproject.toml` 增加 `dev` 额外依赖组：`pytest>=8.0.0`，用于本地单元测试。
@@ -48,6 +50,8 @@
 - CRUD 修复：删除预览记录改为 service 调用，成功后仅内存增量移除并重排序号，避免全量读盘。
 - 快速定位：左侧手控文件夹列表支持双击直接打开对应目录（Explorer），并补充路径不存在/打开失败提示。
 - 左侧手控文件夹列表新增过滤框与基础过滤逻辑（内存过滤，支持按型号/版本/标签/路径关键字快速收敛结果）。
+- 左侧手控列表新增“状态筛选 + 排序”控件，支持按型号、版本号、测试状态排序及升/降序切换。
+- 状态回显改为基于 `(MODEL, VERSION)` 的状态映射更新，写表/审核/一键后会自动重算当前筛选与排序结果。
 - 表格新增列（附图）：在审核填写、Excel 写入/读取、预览缓存与搜索、一键执行与历史编辑链路中接入 `attachment` 字段。
 
 ### core
@@ -70,6 +74,7 @@
   - `flash_service.py`：封装一键流程编排（清理→复制→弹出→写表）。
   - `usb_repair_service.py`：封装 U 盘健康检测与驱动修复返回转换。
   - `excel_service.py` 扩展：新增 `update_record_fields` 与 `delete_record` 封装，统一 CRUD 的 service 返回结构。
+- 新增 `core/sort_config.py`：封装列表排序纯函数与 `SortKey` 枚举（文件夹名/型号/版本号/测试状态）。
 
 ### data
 - 更新 `data/handcontrol_ui_template.xlsx` 模板内容（二进制文件变更）。

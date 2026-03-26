@@ -114,6 +114,9 @@ def _mk_app_stub():
     app.status_text = FakeVar("就绪")
     app.search_var = FakeVar("")
     app.folder_search_var = FakeVar("")
+    app.folder_status_filter_var = FakeVar("全部状态")
+    app.folder_sort_key_var = FakeVar("文件夹名")
+    app.folder_sort_order_var = FakeVar("升序")
     app.usb_combo = FakeCombo()
     app.folders = []
     app._all_folders = []
@@ -220,6 +223,58 @@ def test_scan_applies_folder_filter_keyword(monkeypatch):
     assert len(app.folders) == 1
     assert app.listbox.items == ["001. L50S V2"]
     assert any("过滤后显示 1 个" in m for m in app.logs)
+
+def test_filter_folder_list_by_status():
+    app = _mk_app_stub()
+    app._all_folders = [
+        {"model": "L36", "version": "V1.0.0", "label": "L36 V1", "path": "D:/a", "rom_file": "a.ROM", "pkg_file": "a.PKG"},
+        {"model": "L50S", "version": "V2.0.0", "label": "L50S V2", "path": "D:/b", "rom_file": "b.ROM", "pkg_file": "b.PKG"},
+    ]
+    app._folder_status_map = {
+        app._preview_key("L36", "V1.0.0"): "测试通过",
+        app._preview_key("L50S", "V2.0.0"): "待确认",
+    }
+    app.folder_status_filter_var.set("待确认")
+
+    App._filter_folder_list(app)
+
+    assert len(app.folders) == 1
+    assert app.folders[0]["model"] == "L50S"
+    assert app.listbox.items == ["001. L50S V2"]
+
+
+def test_filter_folder_list_sort_by_model_desc():
+    app = _mk_app_stub()
+    app._all_folders = [
+        {"model": "L36", "version": "V1.0.0", "label": "L36 V1", "path": "D:/a", "rom_file": "a.ROM", "pkg_file": "a.PKG"},
+        {"model": "L50S", "version": "V2.0.0", "label": "L50S V2", "path": "D:/b", "rom_file": "b.ROM", "pkg_file": "b.PKG"},
+    ]
+    app.folder_sort_key_var.set("型号")
+    app.folder_sort_order_var.set("降序")
+
+    App._filter_folder_list(app)
+
+    assert [item["model"] for item in app.folders] == ["L50S", "L36"]
+    assert app.listbox.items == ["001. L50S V2", "002. L36 V1"]
+
+
+def test_filter_folder_list_sort_by_status():
+    app = _mk_app_stub()
+    app._all_folders = [
+        {"model": "L36", "version": "V1.0.0", "label": "L36 V1", "path": "D:/a", "rom_file": "a.ROM", "pkg_file": "a.PKG"},
+        {"model": "L50S", "version": "V2.0.0", "label": "L50S V2", "path": "D:/b", "rom_file": "b.ROM", "pkg_file": "b.PKG"},
+        {"model": "L66", "version": "V3.0.0", "label": "L66 V3", "path": "D:/c", "rom_file": "c.ROM", "pkg_file": "c.PKG"},
+    ]
+    app._folder_status_map = {
+        app._preview_key("L36", "V1.0.0"): "测试通过",
+        app._preview_key("L50S", "V2.0.0"): "待确认",
+    }
+    app.folder_sort_key_var.set("测试状态")
+    app.folder_sort_order_var.set("升序")
+
+    App._filter_folder_list(app)
+
+    assert [item["model"] for item in app.folders] == ["L50S", "L36", "L66"]
 
 def test_write_excel_uses_service_result(monkeypatch):
     app = _mk_app_stub()
@@ -384,3 +439,5 @@ def test_delete_selected_preview_row_reindexes_cache(monkeypatch):
     assert len(app._preview_rows) == 1
     assert app._preview_rows[0]["model"] == "L50S"
     assert app._preview_rows[0]["serial"] == "1"
+
+

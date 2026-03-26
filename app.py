@@ -11,6 +11,7 @@ from core.services.excel_service import delete_record, update_record_fields, wri
 from core.services.flash_service import run_one_click
 from core.services.scan_service import build_scan_result
 from core.services.usb_repair_service import diagnose_drive, repair_drive
+from core.sort_config import SortKey, apply_sort
 from core.settings import (
     CONFIG_LOAD_ERROR,
     CONFIG_LOAD_SOURCE,
@@ -49,6 +50,9 @@ class App(tk.Tk):
         self.search_var = tk.StringVar()
         # 左侧手控文件夹列表过滤关键词
         self.folder_search_var = tk.StringVar()
+        self.folder_status_filter_var = tk.StringVar(value="全部状态")
+        self.folder_sort_key_var = tk.StringVar(value="文件夹名")
+        self.folder_sort_order_var = tk.StringVar(value="升序")
 
         self._task_queue: queue.Queue = queue.Queue()
         self._task_id = 0
@@ -97,6 +101,37 @@ class App(tk.Tk):
         )
         ttk.Button(folder_search_bar, text="清除", command=lambda: self.folder_search_var.set("")).pack(side="left")
         self.folder_search_var.trace_add("write", lambda *_: self._filter_folder_list())
+        folder_controls_bar = ttk.Frame(left)
+        folder_controls_bar.pack(fill="x", padx=4, pady=(0, 2))
+        ttk.Label(folder_controls_bar, text="状态:").pack(side="left")
+        folder_status_combo = ttk.Combobox(
+            folder_controls_bar,
+            textvariable=self.folder_status_filter_var,
+            values=["全部状态", "待确认", "测试通过", "未操作"],
+            width=8,
+            state="readonly",
+        )
+        folder_status_combo.pack(side="left", padx=(2, 6))
+        folder_status_combo.bind("<<ComboboxSelected>>", lambda *_: self._filter_folder_list())
+        ttk.Label(folder_controls_bar, text="排序:").pack(side="left")
+        folder_sort_key_combo = ttk.Combobox(
+            folder_controls_bar,
+            textvariable=self.folder_sort_key_var,
+            values=["文件夹名", "型号", "版本号", "测试状态"],
+            width=8,
+            state="readonly",
+        )
+        folder_sort_key_combo.pack(side="left", padx=(2, 4))
+        folder_sort_key_combo.bind("<<ComboboxSelected>>", lambda *_: self._filter_folder_list())
+        folder_sort_order_combo = ttk.Combobox(
+            folder_controls_bar,
+            textvariable=self.folder_sort_order_var,
+            values=["升序", "降序"],
+            width=5,
+            state="readonly",
+        )
+        folder_sort_order_combo.pack(side="left")
+        folder_sort_order_combo.bind("<<ComboboxSelected>>", lambda *_: self._filter_folder_list())
         self.listbox = tk.Listbox(left, selectmode="browse", font=("Consolas", 9), activestyle="dotbox")
         sb = ttk.Scrollbar(left, orient="vertical", command=self.listbox.yview)
         self.listbox.configure(yscrollcommand=sb.set)
@@ -417,17 +452,71 @@ class App(tk.Tk):
         except Exception:
             return ""
 
+    def _current_folder_status_filter(self) -> str:
+        status_var = self.__dict__.get("folder_status_filter_var")
+        if status_var is None:
+            return "全部状态"
+        try:
+            value = str(status_var.get() or "").strip()
+        except Exception:
+            value = ""
+        return value or "全部状态"
+
+    def _current_folder_sort_key(self) -> SortKey:
+        sort_key_var = self.__dict__.get("folder_sort_key_var")
+        if sort_key_var is None:
+            return SortKey.PATH
+        try:
+            value = str(sort_key_var.get() or "").strip()
+        except Exception:
+            value = ""
+        if value == "型号":
+            return SortKey.MODEL
+        if value == "版本号":
+            return SortKey.VERSION
+        if value == "测试状态":
+            return SortKey.STATUS
+        return SortKey.PATH
+
+    def _current_folder_sort_ascending(self) -> bool:
+        order_var = self.__dict__.get("folder_sort_order_var")
+        if order_var is None:
+            return True
+        try:
+            return str(order_var.get() or "").strip() != "降序"
+        except Exception:
+            return True
+
+    def _folder_status_value(self, folder: dict) -> str:
+        key = self._preview_key(folder.get("model", ""), folder.get("version", ""))
+        return str(self._folder_status_map.get(key, "")).strip()
+
+    def _normalize_folder_status(self, status: str) -> str:
+        text = str(status or "").strip()
+        if text.startswith("待确认"):
+            return "待确认"
+        if text.startswith("测试通过"):
+            return "测试通过"
+        return ""
+
     def _folder_matches_keyword(self, folder: dict, keyword: str) -> bool:
         fields = ("label", "model", "version", "path", "rom_file", "pkg_file")
         return any(keyword in str(folder.get(field, "")).lower() for field in fields)
+
+    def _folder_matches_status(self, folder: dict, status_filter: str) -> bool:
+        if status_filter in ("", "全部状态"):
+            return True
+        status_value = self._normalize_folder_status(self._folder_status_value(folder))
+        if status_filter == "未操作":
+            return status_value == ""
+        return status_value == status_filter
 
     def _render_folder_list(self):
         self.listbox.delete(0, "end")
         for i, item in enumerate(self.folders):
             display_label = f"{i + 1:03d}. {item['label']}"
             self.listbox.insert("end", display_label)
-            key = self._preview_key(item.get("model", ""), item.get("version", ""))
-            status = self._folder_status_map.get(key, "")
+            status = self._normalize_folder_status(self._folder_status_value(item))
             if status == "待确认":
                 self.listbox.itemconfig(i, bg="#FFFF99", fg="black")
             elif status == "测试通过":
@@ -436,17 +525,28 @@ class App(tk.Tk):
     def _filter_folder_list(self):
         all_folders = list(getattr(self, "_all_folders", []))
         keyword = self._current_folder_keyword()
+        status_filter = self._current_folder_status_filter()
+        sort_key = self._current_folder_sort_key()
+        ascending = self._current_folder_sort_ascending()
         prev_idx = self.current_idx.get()
         prev_key: tuple[str, str] | None = None
         if 0 <= prev_idx < len(self.folders):
             prev = self.folders[prev_idx]
             prev_key = self._preview_key(prev.get("model", ""), prev.get("version", ""))
 
-        if keyword:
-            filtered = [item for item in all_folders if self._folder_matches_keyword(item, keyword)]
-        else:
-            filtered = all_folders
-        self.folders = filtered
+        filtered = []
+        for item in all_folders:
+            if keyword and not self._folder_matches_keyword(item, keyword):
+                continue
+            if not self._folder_matches_status(item, status_filter):
+                continue
+            filtered.append(item)
+        self.folders = apply_sort(
+            filtered,
+            sort_key=sort_key,
+            ascending=ascending,
+            status_map=self._folder_status_map,
+        )
         self._render_folder_list()
 
         self.current_idx.set(-1)
@@ -478,9 +578,8 @@ class App(tk.Tk):
 
     def _update_listbox_color_by_key(self, model: str, version: str, remark: str):
         target_key = self._preview_key(model, version)
-        for i, item in enumerate(self.folders):
-            if self._preview_key(item.get("model", ""), item.get("version", "")) == target_key:
-                self._update_listbox_color(i, remark)
+        self._folder_status_map[target_key] = remark
+        self._filter_folder_list()
 
     # ── 阶段2：双击预览行回填到审核 tab ──────────────────────────────────────
 
@@ -735,7 +834,8 @@ class App(tk.Tk):
             pending = int(payload.get("pending", 0))
             total = len(self._all_folders)
             shown = len(self.folders)
-            if self._current_folder_keyword():
+            has_filter = bool(self._current_folder_keyword()) or self._current_folder_status_filter() != "全部状态"
+            if has_filter:
                 self.log(f"共找到 {total} 个手控文件夹，过滤后显示 {shown} 个（已测: {tested}，待确认: {pending}）")
             else:
                 self.log(f"共找到 {shown} 个手控文件夹（已测: {tested}，待确认: {pending}）")
@@ -952,7 +1052,7 @@ class App(tk.Tk):
 
         def _done(result):
             if result.get("ok"):
-                self._update_listbox_color(self.current_idx.get(), remark)
+                self._update_listbox_color_by_key(info["model"], info["version"], remark)
                 written = (result.get("payload", {}) or {}).get("preview_row", {})
                 if written:
                     self._upsert_preview_row(written)
@@ -1008,7 +1108,7 @@ class App(tk.Tk):
                 return
             excel_result = payload.get("excel_result", {}) or {}
             if excel_result.get("ok"):
-                self._update_listbox_color(self.current_idx.get(), "待确认")
+                self._update_listbox_color_by_key(info["model"], info["version"], "待确认")
                 written = payload.get("preview_row", {})
                 if written:
                     self._upsert_preview_row(written)
@@ -1099,7 +1199,7 @@ class App(tk.Tk):
 
         def _done(result):
             if result.get("ok"):
-                self._update_listbox_color(self.current_idx.get(), status)
+                self._update_listbox_color_by_key(info["model"], info["version"], status)
                 written = (result.get("payload", {}) or {}).get("preview_row", {})
                 if written:
                     self._upsert_preview_row(written)
