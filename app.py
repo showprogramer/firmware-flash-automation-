@@ -24,6 +24,12 @@ from core.settings import (
 )
 from core.usb_ops import clean_usb, copy_to_usb, eject_usb, format_usb, get_usb_drives
 
+_FOLDER_LIST_FONT = ("Consolas", 9)
+_FOLDER_HEADER_FONT = ("Consolas", 9, "bold")
+_FOLDER_NAME_WIDTH = 28
+_FOLDER_MODEL_WIDTH = 8
+_FOLDER_VERSION_WIDTH = 10
+
 
 class App(tk.Tk):
     def __init__(self):
@@ -64,7 +70,7 @@ class App(tk.Tk):
         self._usb_diag_inflight: set[str] = set()
         self._folder_sort_key = SortKey.PATH
         self._folder_sort_ascending = True
-        self._folder_header_buttons: dict[SortKey, ttk.Button] = {}
+        self._folder_header_buttons: dict[SortKey, tk.Label] = {}
 
         self._build_ui()
         self._refresh_usb(log_events=True, detect_insert=False)
@@ -115,24 +121,33 @@ class App(tk.Tk):
         folder_header = ttk.Frame(left)
         folder_header.pack(fill="x", padx=4, pady=(0, 1))
         header_specs = [
-            (SortKey.PATH, "名称", 22),
-            (SortKey.MODEL, "型号", 8),
-            (SortKey.VERSION, "版本", 10),
-            (SortKey.STATUS, "状态", 10),
+            (None, "序号", 5),
+            (SortKey.MODEL, "型号", _FOLDER_MODEL_WIDTH),
+            (SortKey.VERSION, "版本", _FOLDER_VERSION_WIDTH),
+            (SortKey.PATH, "名称", _FOLDER_NAME_WIDTH),
         ]
         for col, title, width in header_specs:
-            btn = ttk.Button(
+            header = tk.Label(
                 folder_header,
                 text=title,
                 width=width,
-                command=lambda value=col: self._on_folder_header_click(value),
+                font=_FOLDER_HEADER_FONT,
+                anchor="w",
+                padx=4,
+                pady=2,
+                relief="groove",
+                bd=1,
+                bg="#F2F2F2",
             )
-            btn.pack(side="left", padx=(0, 2), fill="x", expand=(col == SortKey.PATH))
-            btn.configure(takefocus=False)
-            self._folder_header_buttons[col] = btn
+            header.pack(side="left", padx=(0, 2))
+            if col is not None:
+                header.bind("<Button-1>", lambda _event, value=col: self._on_folder_header_click(value))
+                header.bind("<Enter>", lambda _event, widget=header: widget.configure(bg="#E6E6E6"))
+                header.bind("<Leave>", lambda _event, widget=header: widget.configure(bg="#F2F2F2"))
+                self._folder_header_buttons[col] = header
         list_frame = ttk.Frame(left)
         list_frame.pack(fill="both", expand=True, padx=4, pady=2)
-        self.listbox = tk.Listbox(list_frame, selectmode="browse", font=("Consolas", 9), activestyle="dotbox")
+        self.listbox = tk.Listbox(list_frame, selectmode="browse", font=_FOLDER_LIST_FONT, activestyle="dotbox")
         sb = ttk.Scrollbar(list_frame, orient="vertical", command=self.listbox.yview)
         self.listbox.configure(yscrollcommand=sb.set)
         self.listbox.pack(side="left", fill="both", expand=True, padx=(0, 0), pady=0)
@@ -486,13 +501,12 @@ class App(tk.Tk):
 
     def _folder_row_text(self, index: int, folder: dict) -> str:
         columns = [
-            f"{index:03d}.",
-            f"{self._folder_display_name(folder):<22.22}",
-            f"{str(folder.get('model', '') or ''):<8.8}",
-            f"{str(folder.get('version', '') or ''):<10.10}",
-            f"{self._folder_display_status(folder):<10.10}",
+            f"{index:>3}. ",
+            f"{str(folder.get('model', '') or ''):<{_FOLDER_MODEL_WIDTH}.{_FOLDER_MODEL_WIDTH}}",
+            f"{str(folder.get('version', '') or ''):<{_FOLDER_VERSION_WIDTH}.{_FOLDER_VERSION_WIDTH}}",
+            f"{self._folder_display_name(folder):<{_FOLDER_NAME_WIDTH}.{_FOLDER_NAME_WIDTH}}",
         ]
-        return "  ".join(columns)
+        return "".join(columns)
 
     def _folder_header_text(self, sort_key: SortKey, label: str) -> str:
         current_key = self._current_folder_sort_key()
@@ -509,7 +523,6 @@ class App(tk.Tk):
             SortKey.PATH: "名称",
             SortKey.MODEL: "型号",
             SortKey.VERSION: "版本",
-            SortKey.STATUS: "状态",
         }
         for sort_key, label in titles.items():
             widget = header_map.get(sort_key)

@@ -294,6 +294,19 @@ def test_folder_header_click_toggles_sort_direction():
     assert App._current_folder_sort_key(app).value == "model"
     assert App._current_folder_sort_ascending(app) is False
 
+
+def test_folder_row_text_hides_status_text():
+    app = _mk_app_stub()
+    app._folder_status_map = {app._preview_key("L36", "V1.0.0"): "测试通过"}
+
+    row_text = App._folder_row_text(
+        app,
+        1,
+        {"model": "L36", "version": "V1.0.0", "label": "L36 V1", "path": "D:/a/L36 V1"},
+    )
+
+    assert "测试通过" not in row_text
+    assert "待确认" not in row_text
 def test_write_excel_uses_service_result(monkeypatch):
     app = _mk_app_stub()
 
@@ -457,3 +470,4 @@ def test_delete_selected_preview_row_reindexes_cache(monkeypatch):
     assert len(app._preview_rows) == 1
     assert app._preview_rows[0]["model"] == "L50S"
     assert app._preview_rows[0]["serial"] == "1"
+
