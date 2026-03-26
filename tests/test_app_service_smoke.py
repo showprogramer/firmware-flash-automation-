@@ -49,15 +49,22 @@ class FakeCombo:
 class FakeText:
     def __init__(self):
         self.value = ""
+        self.state = "normal"
+
+    def configure(self, **kwargs):
+        self.state = kwargs.get("state", self.state)
 
     def delete(self, _start, _end):
         self.value = ""
 
     def insert(self, _idx, text):
-        self.value = text
+        self.value += text
 
     def get(self, _start, _end):
         return self.value
+
+    def see(self, _idx):
+        return None
 
 
 class FakeLabel:
@@ -307,6 +314,35 @@ def test_folder_row_text_hides_status_text():
 
     assert "测试通过" not in row_text
     assert "待确认" not in row_text
+def test_report_callback_exception_logs_and_shows_error(monkeypatch):
+    app = _mk_app_stub()
+    app.log_text = FakeText()
+    app.log = App.log.__get__(app, App)
+
+    class FakeLogger:
+        def __init__(self):
+            self.events = []
+
+        def log(self, message, level="INFO"):
+            self.events.append((level, message))
+
+        def exception(self, context, exc_text):
+            self.events.append(("ERROR", context, exc_text))
+
+    app._file_logger = FakeLogger()
+    errors = []
+    monkeypatch.setattr("app.messagebox.showerror", lambda title, message: errors.append((title, message)))
+
+    try:
+        raise RuntimeError("boom")
+    except RuntimeError as exc:
+        App.report_callback_exception(app, RuntimeError, exc, exc.__traceback__)
+
+    assert any(event[0] == "ERROR" and event[1] == "UI回调异常" for event in app._file_logger.events)
+    assert "UI回调异常: boom" in app.log_text.value
+    assert errors and errors[0][0] == "程序异常"
+
+
 def test_write_excel_uses_service_result(monkeypatch):
     app = _mk_app_stub()
 
@@ -470,4 +506,6 @@ def test_delete_selected_preview_row_reindexes_cache(monkeypatch):
     assert len(app._preview_rows) == 1
     assert app._preview_rows[0]["model"] == "L50S"
     assert app._preview_rows[0]["serial"] == "1"
+
+
 

@@ -7,6 +7,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from core.excel_ops import load_excel_row, read_all_excel_rows
+from core.logging_utils import FileLogger
 from core.services.excel_service import delete_record, update_record_fields, write_record
 from core.services.flash_service import run_one_click
 from core.services.scan_service import build_scan_result
@@ -29,6 +30,7 @@ _FOLDER_HEADER_FONT = ("Consolas", 9, "bold")
 _FOLDER_NAME_WIDTH = 28
 _FOLDER_MODEL_WIDTH = 8
 _FOLDER_VERSION_WIDTH = 10
+_LOG_FILE_PATH = Path("logs") / "app.log"
 
 
 class App(tk.Tk):
@@ -71,6 +73,7 @@ class App(tk.Tk):
         self._folder_sort_key = SortKey.PATH
         self._folder_sort_ascending = True
         self._folder_header_buttons: dict[SortKey, tk.Label] = {}
+        self._file_logger = FileLogger(_LOG_FILE_PATH)
 
         self._build_ui()
         self._refresh_usb(log_events=True, detect_insert=False)
@@ -285,16 +288,41 @@ class App(tk.Tk):
         ttk.Button(parent, text="保存到 Excel", command=self._save_review).pack(fill="x", padx=8, pady=8)
         ttk.Label(parent, text="下拉框可直接输入自定义值", foreground="gray", font=("", 8)).pack(anchor="w", padx=8)
 
+    def _file_log(self, msg: str, level: str = "INFO"):
+        logger = self.__dict__.get("_file_logger")
+        if logger is None:
+            return
+        try:
+            logger.log(msg, level=level)
+        except Exception:
+            pass
+
+    def _file_log_exception(self, context: str, exc_text: str):
+        logger = self.__dict__.get("_file_logger")
+        if logger is None:
+            return
+        try:
+            logger.exception(context, exc_text)
+        except Exception:
+            pass
+
     def log(self, msg: str):
-        self.log_text.configure(state="normal")
-        self.log_text.insert("end", msg + "\n")
-        self.log_text.see("end")
-        self.log_text.configure(state="disabled")
+        self._file_log(msg)
+        log_text = self.__dict__.get("log_text")
+        if log_text is None:
+            return
+        log_text.configure(state="normal")
+        log_text.insert("end", msg + "\n")
+        log_text.see("end")
+        log_text.configure(state="disabled")
 
     def _clear_log(self):
-        self.log_text.configure(state="normal")
-        self.log_text.delete("1.0", "end")
-        self.log_text.configure(state="disabled")
+        log_text = self.__dict__.get("log_text")
+        if log_text is None:
+            return
+        log_text.configure(state="normal")
+        log_text.delete("1.0", "end")
+        log_text.configure(state="disabled")
 
     def _report_config_status(self):
         status = CONFIG_LOAD_STATUS
@@ -383,6 +411,7 @@ class App(tk.Tk):
                     self._set_busy(False, "就绪")
                     self.log(f"{name}失败: {err}")
                     self.log(tb)
+                    self._file_log_exception(f"{name}失败", tb)
                     messagebox.showerror(f"{name}失败", f"{err}\n\n详情见日志")
                 elif kind == "done_nb":
                     _, name, result, on_done = item
@@ -393,6 +422,7 @@ class App(tk.Tk):
                     _, name, err, tb = item
                     self.log(f"{name}失败: {err}")
                     self.log(tb)
+                    self._file_log_exception(f"{name}失败", tb)
         except queue.Empty:
             pass
         self.after(120, self._poll_task_queue)
@@ -401,6 +431,13 @@ class App(tk.Tk):
         if self.busy.get() and not messagebox.askyesno("确认退出", "后台任务仍在执行，确认退出吗？"):
             return
         self.destroy()
+
+    def report_callback_exception(self, exc, val, tb):
+        exc_text = "".join(traceback.format_exception(exc, val, tb))
+        self.log(f"UI回调异常: {val}")
+        self.log(exc_text)
+        self._file_log_exception("UI回调异常", exc_text)
+        messagebox.showerror("程序异常", f"{val}\n\n详情见日志")
 
     def _preview_key(self, model: str, version: str) -> tuple[str, str]:
         return (str(model or "").strip().upper(), str(version or "").strip().upper())
@@ -1293,5 +1330,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
 
 
