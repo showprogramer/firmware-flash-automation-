@@ -1,3 +1,4 @@
+from datetime import datetime
 import queue
 import threading
 import tkinter as tk
@@ -7,6 +8,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from handcontrol.core.excel_ops import load_excel_row, read_all_excel_rows
+from handcontrol.core.diagnostics import build_diagnostic_bundle
 from handcontrol.core.logging_utils import FileLogger
 from handcontrol.core.services.excel_service import delete_record, update_record_fields, write_record
 from handcontrol.core.services.flash_service import run_one_click
@@ -221,6 +223,7 @@ class App(tk.Tk):
         btn_bar = ttk.Frame(self)
         btn_bar.pack(fill="x", padx=6, pady=(0, 4))
         ttk.Button(btn_bar, text="刷新预览", command=self._manual_refresh_preview).pack(side="left")
+        ttk.Button(btn_bar, text="导出诊断包", command=self._export_diagnostics).pack(side="left", padx=(8, 0))
         ttk.Label(btn_bar, textvariable=self.status_text, foreground="gray").pack(side="left", padx=12)
         ttk.Button(btn_bar, text="清空日志", command=self._clear_log).pack(side="right")
 
@@ -323,6 +326,83 @@ class App(tk.Tk):
         log_text.configure(state="normal")
         log_text.delete("1.0", "end")
         log_text.configure(state="disabled")
+
+    def _collect_diagnostics_state(self) -> dict:
+        current_folder = None
+        idx = self.current_idx.get()
+        if 0 <= idx < len(self.folders):
+            current_folder = dict(self.folders[idx])
+
+        log_tail: list[str] = []
+        log_text = self.__dict__.get("log_text")
+        if log_text is not None:
+            try:
+                log_tail = str(log_text.get("1.0", "end")).strip().splitlines()[-200:]
+            except Exception:
+                log_tail = []
+
+        folder_statuses = [
+            {"model": model, "version": version, "status": status}
+            for (model, version), status in sorted(self._folder_status_map.items())
+        ]
+
+        return {
+            "summary": {
+                "busy": bool(self.busy.get()),
+                "status_text": self.status_text.get(),
+                "current_idx": idx,
+                "visible_folder_count": len(self.folders),
+                "all_folder_count": len(self._all_folders),
+                "preview_row_count": len(self._preview_rows),
+                "config_load_status": CONFIG_LOAD_STATUS,
+                "config_load_error": CONFIG_LOAD_ERROR,
+            },
+            "selection": {
+                "usb_drive": self.usb_drive.get(),
+                "editing_preview_key": list(self._editing_preview_key) if self._editing_preview_key else None,
+            },
+            "paths": {
+                "root_dir": self.root_dir.get(),
+                "excel_path": self.excel_path.get(),
+                "log_path": str(_LOG_FILE_PATH),
+                "config_path": str(CONFIG_LOAD_SOURCE),
+            },
+            "current_folder": current_folder,
+            "folders": [dict(item) for item in self.folders],
+            "preview_rows": [dict(row) for row in self._preview_rows],
+            "folder_statuses": folder_statuses,
+            "log_tail": log_tail,
+        }
+
+    def _export_diagnostics(self):
+        default_name = f"handcontrol_diagnostics_{datetime.now():%Y%m%d_%H%M%S}.zip"
+        output_path = filedialog.asksaveasfilename(
+            title="导出诊断包",
+            defaultextension=".zip",
+            filetypes=[("Zip 文件", "*.zip")],
+            initialdir=str((Path("logs")).resolve()),
+            initialfile=default_name,
+        )
+        if not output_path:
+            return
+
+        state = self._collect_diagnostics_state()
+
+        def _work(log_fn):
+            log_fn(f"导出诊断包: {output_path}")
+            return build_diagnostic_bundle(
+                output_path=output_path,
+                app_state=state,
+                config_path=CONFIG_LOAD_SOURCE,
+                log_path=_LOG_FILE_PATH,
+            )
+
+        def _done(result):
+            bundle_path = str(result.get("output_path", output_path))
+            self.log(f"诊断包已导出: {bundle_path}")
+            messagebox.showinfo("导出完成", f"诊断包已导出：\n{bundle_path}")
+
+        self._run_task("导出诊断包", _work, _done)
 
     def _report_config_status(self):
         status = CONFIG_LOAD_STATUS
@@ -1202,6 +1282,7 @@ class App(tk.Tk):
             if not payload.get("copy_ok", False):
                 return
             excel_result = payload.get("excel_result", {}) or {}
+            one_click_ok = bool(excel_result.get("ok"))
             if excel_result.get("ok"):
                 self._update_listbox_color_by_key(info["model"], info["version"], "待确认")
                 written = payload.get("preview_row", {})
@@ -1219,6 +1300,8 @@ class App(tk.Tk):
             elif not excel_result.get("ok"):
                 err = excel_result.get("error", "") or "未知错误"
                 messagebox.showerror("Excel 写入失败", f"U盘已准备好，但写入 Excel 失败。\n\n错误信息：\n{err}")
+            if one_click_ok:
+                self._next_folder()
             self.log("=" * 50)
 
         self._run_task("一键执行", _work, _done)

@@ -1,3 +1,4 @@
+from pathlib import Path
 from handcontrol.app import App
 
 
@@ -17,6 +18,7 @@ class FakeListbox:
         self.items = []
         self.colors = {}
         self.selected = None
+        self.selection_cleared = False
 
     def delete(self, _start, _end):
         self.items = []
@@ -29,6 +31,10 @@ class FakeListbox:
 
     def size(self):
         return len(self.items)
+
+    def selection_clear(self, _start, _end):
+        self.selection_cleared = True
+        self.selected = None
 
     def selection_set(self, idx):
         self.selected = idx
@@ -119,6 +125,7 @@ def _mk_app_stub():
     app.excel_path = FakeVar("a.xlsx")
     app.usb_drive = FakeVar("")
     app.status_text = FakeVar("就绪")
+    app.busy = FakeVar(False)
     app.search_var = FakeVar("")
     app.folder_search_var = FakeVar("")
     app.folder_status_filter_var = FakeVar("全部状态")
@@ -374,6 +381,114 @@ def test_write_excel_uses_service_result(monkeypatch):
     key = app._preview_key("L36", "V1.0.0")
     assert app._preview_by_key[key]["remark"] == "待确认"
 
+
+
+def test_one_click_advances_to_next_folder_on_success(monkeypatch):
+    app = _mk_app_stub()
+    app.usb_drive.set("E:\\")
+    app.folders = [
+        {"model": "L36", "version": "V1.0.0", "label": "L36 V1", "path": "D:/root/x", "rom_file": "a.ROM", "pkg_file": "a.PKG"},
+        {"model": "L50S", "version": "V2.0.0", "label": "L50S V2", "path": "D:/root/y", "rom_file": "b.ROM", "pkg_file": "b.PKG"},
+    ]
+    app.current_idx.set(0)
+    app._all_folders = list(app.folders)
+    on_select_calls = {"count": 0}
+    app._on_select = lambda _event=None: (app.current_idx.set(app.listbox.selected), on_select_calls.__setitem__("count", on_select_calls["count"] + 1))
+    app._current_info = lambda: app.folders[app.current_idx.get()]
+
+    monkeypatch.setattr(
+        "handcontrol.app.run_one_click",
+        lambda **kwargs: {
+            "ok": True,
+            "code": "ok",
+            "message": "ok",
+            "payload": {
+                "copy_ok": True,
+                "excel_result": {"ok": True},
+                "preview_row": {"model": "L36", "version": "V1.0.0", "remark": "待确认", "attachment": "可通用"},
+            },
+        },
+    )
+
+    app._run_task = lambda _name, fn, on_done: on_done(fn(lambda _m: None))
+
+    App._one_click(app)
+
+    assert app.current_idx.get() == 1
+    assert app.listbox.selection_cleared is True
+    assert app.listbox.selected == 1
+    assert on_select_calls["count"] == 1
+    assert any("切换到下一个" in msg for msg in app.logs)
+
+
+def test_one_click_does_not_advance_when_excel_write_fails(monkeypatch):
+    app = _mk_app_stub()
+    app.usb_drive.set("E:\\")
+    app.folders = [
+        {"model": "L36", "version": "V1.0.0", "label": "L36 V1", "path": "D:/root/x", "rom_file": "a.ROM", "pkg_file": "a.PKG"},
+        {"model": "L50S", "version": "V2.0.0", "label": "L50S V2", "path": "D:/root/y", "rom_file": "b.ROM", "pkg_file": "b.PKG"},
+    ]
+    app.current_idx.set(0)
+    app._all_folders = list(app.folders)
+    app._on_select = lambda _event=None: None
+    app._current_info = lambda: app.folders[app.current_idx.get()]
+    errors = []
+
+    monkeypatch.setattr(
+        "handcontrol.app.run_one_click",
+        lambda **kwargs: {
+            "ok": False,
+            "code": "write_failed",
+            "message": "boom",
+            "payload": {
+                "copy_ok": True,
+                "excel_result": {"ok": False, "error": "boom"},
+            },
+        },
+    )
+    monkeypatch.setattr("handcontrol.app.messagebox.showerror", lambda title, message: errors.append((title, message)))
+
+    app._run_task = lambda _name, fn, on_done: on_done(fn(lambda _m: None))
+
+    App._one_click(app)
+
+    assert app.current_idx.get() == 0
+    assert app.listbox.selected is None
+    assert errors
+
+
+def test_export_diagnostics_builds_bundle_and_shows_message(monkeypatch, tmp_path: Path):
+    app = _mk_app_stub()
+    app.current_idx.set(0)
+    app.folders = [{"model": "L36", "version": "V1.0.0", "label": "L36 V1", "path": "D:/root/x", "rom_file": "a.ROM", "pkg_file": "a.PKG"}]
+    app._all_folders = list(app.folders)
+    app._preview_rows = [{"model": "L36", "version": "V1.0.0", "remark": "待确认", "attachment": "可通用", "serial": "1"}]
+    app._folder_status_map = {app._preview_key("L36", "V1.0.0"): "待确认"}
+    app.log_text = FakeText()
+    app.log_text.value = "line1\nline2\n"
+    app._file_logger = type("Logger", (), {"path": tmp_path / "logs" / "app.log"})()
+    output = tmp_path / "diag.zip"
+    calls = {}
+    infos = []
+
+    monkeypatch.setattr("handcontrol.app.filedialog.asksaveasfilename", lambda **kwargs: str(output))
+
+    def fake_build_diagnostic_bundle(**kwargs):
+        calls.update(kwargs)
+        return {"ok": True, "output_path": str(output), "entries": ["meta.json"]}
+
+    monkeypatch.setattr("handcontrol.app.build_diagnostic_bundle", fake_build_diagnostic_bundle)
+    monkeypatch.setattr("handcontrol.app.messagebox.showinfo", lambda title, message: infos.append((title, message)))
+    app._run_task = lambda _name, fn, on_done: on_done(fn(lambda _m: None))
+
+    App._export_diagnostics(app)
+
+    assert calls["output_path"] == str(output)
+    assert calls["config_path"]
+    assert Path(calls["log_path"]).name == "app.log"
+    assert calls["app_state"]["summary"]["preview_row_count"] == 1
+    assert calls["app_state"]["current_folder"]["model"] == "L36"
+    assert infos and infos[0][0] == "导出完成"
 
 def test_refresh_usb_returns_inserted_and_updates_combo(monkeypatch):
     app = _mk_app_stub()

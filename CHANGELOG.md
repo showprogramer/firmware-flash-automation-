@@ -12,6 +12,8 @@
 - 新增 `tests/test_src_layout.py`，校验 `src/handcontrol/` 结构、启动入口、依赖配置、旧导入清理与 `PROJECT_ROOT` 解析。
 - 开发依赖新增 `hypothesis`，用于 `src layout` 迁移后的路径性质测试。
 - 迁移前基线：`python -m pytest -q --cov=core`，`127 passed`，总覆盖率 `86.60%`。
+- 新增 `tests/test_diagnostics.py`，覆盖诊断包内容生成、缺失日志回退与路径脱敏逻辑。
+- 扩展 `tests/test_app_service_smoke.py`，覆盖诊断包导出入口与一键执行成功后自动跳转到下一项。
 
 ### test
 - 新增 `pytest` 测试框架基础配置（`tests` 目录与 `tool.pytest.ini_options`）。
@@ -47,6 +49,8 @@
 - 更新 `README.md`：新增覆盖率门禁执行方式，阶段 5 状态改为已完成。
 
 ### app
+- 新增“导出诊断包”按钮：可一键导出日志、脱敏配置、当前列表状态、预览快照与环境摘要，便于远程排查。
+- 一键执行在复制与 Excel 写入成功后，会自动选中并跳转到下一个文件夹，减少人工点击。
 - 调整 Excel 写入调用逻辑：从布尔返回值改为读取结构化结果。
 - 根据写入结果区分提示：`locked` 显示“占用并给出备用文件路径”，其他失败显示具体错误信息。
 - 修复 `_write_excel` 与 `_one_click`：写表时补充传入 `logo/language/salesman` 字段，保持与审核保存一致。
@@ -72,6 +76,7 @@
 - 表格新增列（附图）：在审核填写、Excel 写入/读取、预览缓存与搜索、一键执行与历史编辑链路中接入 `attachment` 字段。
 
 ### core
+- 新增 `core/diagnostics.py`：生成最小化诊断 zip，包含元信息、脱敏配置、预览快照、列表状态和日志文件。
 - 为关键返回结构引入 TypedDict：`HandcontrolFolder`、`ExcelWrittenRow`、`ExcelWriteResult`，并在 `find_handcontrol_folders` 与 `write_excel_record` 上落地类型注解。
 - core/excel_ops.py：
   - `write_excel_record` 返回结构改为 `ok / reason / tmp_path / error`。

@@ -13,6 +13,7 @@ __pycache__/
 .coverage
 htmlcov/
 .pytest_cache/
+.hypothesis/
 
 # Temp/system files
 *.tmp

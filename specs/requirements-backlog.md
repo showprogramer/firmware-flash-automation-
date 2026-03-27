@@ -44,7 +44,7 @@
 - [x] **搜索/过滤框**：增加定制化搜索栏，支持快速过滤手控文件夹列表（目前先预留 UI 与基础过滤逻辑，具体深度需求待定）
 - [x] **覆盖率门禁提升**：当前门禁 70%，目标提升至 80%，补充边界场景用例
 - [x] **表格新增列**： 在 UI 和 Excel 中新增一个记录字段“附图”（内容可选“定制”或“可通用”），位于现有的“备注”列左侧。
-
+- [x] 自动执行完成且无异常后，文件夹列表应自动选中并跳转到下一个序号，无需手动点击“下一个”。
 
 ### 中优先级
 
@@ -55,62 +55,6 @@
 - [x] **错误日志落盘**：将运行时异常写入本地日志文件（如 `logs/app.log`），便于用户反馈问题时提供诊断信息
 - [x] **型号/版本识别规则可配置**：将 ROM/PKG 文件识别、目录排除、型号/版本正则与路径补偿规则移入 `config.toml`，支持不同命名规范的项目复用
 
-### 工程规范：迁移至 src 布局
-
-> 背景：src 布局是 2026 年 Python 社区（pypa / uv / hatch）的默认标准。将包隔离在 `src/` 下，
-> 可避免根目录被意外加入 `sys.path`，确保测试环境与安装后行为一致。
-> 本项目当前无打包发布需求，收益偏规范层面，分步渐进执行，每步独立可验证。
-
-- [ ] **Step 1 — 准备与验证基线**
-  - 确认当前 `python -m pytest -q` 全部通过，记录覆盖率基线
-  - 确认 `uv run python app.py` 可正常启动
-  - 在 git 创建独立分支 `refactor/src-layout`
-
-- [ ] **Step 2 — 移动包目录**
-  - 新建 `src/handcontrol/` 目录，添加 `src/handcontrol/__init__.py`
-  - 将 `core/` 整体移动到 `src/handcontrol/core/`
-  - 将 `app.py` 移动到 `src/handcontrol/app.py`
-  - 根目录保留一个轻量启动入口 `run.py`：
-    ```python
-    from handcontrol.app import main
-    if __name__ == "__main__":
-        main()
-    ```
-
-- [ ] **Step 3 — 修改 pyproject.toml**
-  - 启用打包模式，删除 `[tool.uv] package = false`（或改为 `package = true`）
-  - 声明包路径与入口：
-    ```toml
-    [tool.setuptools.packages.find]
-    where = ["src"]
-
-    [project.scripts]
-    handcontrol = "handcontrol.app:main"
-    ```
-  - 重新执行 `uv sync --extra dev` 以 editable 模式安装
-
-- [ ] **Step 4 — 修复所有内部导入路径**
-  - 全局替换 `from core.` → `from handcontrol.core.`
-  - 全局替换 `import core.` → `import handcontrol.core.`
-  - 检查 `core/settings.py` 中 `PROJECT_ROOT` 的计算逻辑（`__file__` 路径层级变化，需上移两级）：
-    ```python
-    # 修改前（core/settings.py 在 core/ 下，上移一级到项目根）
-    PROJECT_ROOT = Path(__file__).resolve().parent.parent
-    # 修改后（src/handcontrol/core/settings.py，需上移三级）
-    PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-    ```
-
-- [ ] **Step 5 — 修复测试导入路径**
-  - `tests/` 目录不移动，pytest 通过 editable install 自动找到 `handcontrol` 包
-  - 将 `tests/` 中所有 `from core.` 替换为 `from handcontrol.core.`
-  - 确认 `pyproject.toml` 的 `testpaths = ["tests"]` 配置不变
-
-- [ ] **Step 6 — 验证与收尾**
-  - 执行 `python -m pytest -q`，确认全部通过且覆盖率不低于基线
-  - 执行 `uv run python run.py`，确认 UI 正常启动
-  - 删除根目录遗留的旧 `core/` 目录和 `app.py`
-  - 更新 `README.md` 启动命令（`python run.py` 或 `uv run handcontrol`）
-  - 合并分支，在 CHANGELOG 记录此次重构
 
 ### UI 现代化：迁移至 CustomTkinter 深色主题
 
@@ -179,18 +123,13 @@
 ### 低优先级 / 长期规划
 
 - [ ] **最小化诊断信息导出**：提供"导出诊断包"功能，一键打包日志、配置（脱敏）、测试状态快照，便于远程排查
-- [ ] **Excel 模板版本管理**：在台账中记录工具版本号，便于后续格式升级时做兼容处理
-- [ ] **跨平台适配评估**：当前强依赖 Windows 盘符与 PowerShell，评估是否有 macOS/Linux 使用场景，若有则抽象 USB 操作接口
 - [ ] **备用文件合并辅助**：当 Excel 被占用、备用文件已生成时，提供"合并备用文件"按钮，自动将备用文件中的新行追加到主表
-- [ ] **UI 国际化**：界面文案目前硬编码中文，若有多语言需求可引入简单 i18n 机制
 - [ ] **自动化集成测试**：当前测试全部基于 mock，考虑增加使用真实临时文件的集成测试场景（Excel 读写端到端）
-- [ ] **多 U 盘并发支持**：当前只支持单 U 盘操作，考虑支持同时向多个 U 盘复制（批量刷机场景）
 
 ---
 
 ## 已知问题 / 技术债
 
-- [ ] `find_handcontrol_folders` 过滤规则（`CH341SER`、`主板程序`）硬编码在函数内，应移入配置
 - [ ] `copy_to_usb` 在复制大文件时无进度反馈，日志只有完成提示，用户体验较差
 - [ ] `format_usb` 使用 `shell=True`，存在命令注入风险，应改为参数列表形式
 - [ ] `eject_usb` 的 PowerShell 脚本依赖 WMI，在部分 Windows 精简版系统上可能失败，需增加备用弹出方案
