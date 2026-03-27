@@ -1,6 +1,13 @@
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+def _find_project_root(start: Path) -> Path:
+    for parent in [start, *start.parents]:
+        if (parent / "pyproject.toml").exists():
+            return parent
+    return start
+
+
+PROJECT_ROOT = _find_project_root(Path(__file__).resolve())
 CONFIG_PATH = PROJECT_ROOT / "config.toml"
 
 # Built-in defaults (used when config file is missing/invalid)
@@ -187,6 +194,7 @@ SCAN_PATH_VERSION_PATTERNS = _as_str_list(
     _cfg_get(_cfg, "scan", "path_version_patterns", _DEFAULTS["scan"]["path_version_patterns"]),
     _DEFAULTS["scan"]["path_version_patterns"],
 )
+
 
 
 

@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-import core.settings as settings
-from core.settings import _as_str_list, load_toml_config
+import handcontrol.core.settings as settings
+from handcontrol.core.settings import _as_str_list, load_toml_config
 
 
 def test_load_toml_config_missing_file(tmp_path: Path):
@@ -78,4 +78,5 @@ def test_scan_defaults_are_available():
     assert settings.SCAN_MODEL_PATTERNS
     assert settings.SCAN_VERSION_PATTERNS
     assert settings.SCAN_PATH_MODEL_PATTERNS
+
 

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from app import App
+from handcontrol.app import App
 
 
 class FakeVar:
@@ -56,7 +56,7 @@ def test_open_folder_from_listbox_opens_explorer(monkeypatch, tmp_path: Path):
         selection=[0],
     )
     opened = []
-    monkeypatch.setattr("app.os.startfile", lambda path: opened.append(path), raising=False)
+    monkeypatch.setattr("handcontrol.app.os.startfile", lambda path: opened.append(path), raising=False)
 
     App._open_folder_from_listbox(app)
 
@@ -74,8 +74,8 @@ def test_open_folder_from_listbox_warns_when_path_missing(monkeypatch, tmp_path:
     )
     opened = []
     warnings = []
-    monkeypatch.setattr("app.os.startfile", lambda path: opened.append(path), raising=False)
-    monkeypatch.setattr("app.messagebox.showwarning", lambda title, message: warnings.append((title, message)))
+    monkeypatch.setattr("handcontrol.app.os.startfile", lambda path: opened.append(path), raising=False)
+    monkeypatch.setattr("handcontrol.app.messagebox.showwarning", lambda title, message: warnings.append((title, message)))
 
     App._open_folder_from_listbox(app)
 
@@ -98,7 +98,7 @@ def test_open_folder_from_listbox_uses_double_click_position(monkeypatch, tmp_pa
         nearest_idx=1,
     )
     opened = []
-    monkeypatch.setattr("app.os.startfile", lambda path: opened.append(path), raising=False)
+    monkeypatch.setattr("handcontrol.app.os.startfile", lambda path: opened.append(path), raising=False)
     event = type("Evt", (), {"y": 42})()
 
     App._open_folder_from_listbox(app, event)
@@ -115,10 +115,11 @@ def test_open_in_explorer_shows_error_when_startfile_fails(monkeypatch, tmp_path
     def _raise(_path):
         raise OSError("boom")
 
-    monkeypatch.setattr("app.os.startfile", _raise, raising=False)
-    monkeypatch.setattr("app.messagebox.showerror", lambda title, message: errors.append((title, message)))
+    monkeypatch.setattr("handcontrol.app.os.startfile", _raise, raising=False)
+    monkeypatch.setattr("handcontrol.app.messagebox.showerror", lambda title, message: errors.append((title, message)))
 
     App._open_in_explorer(app, str(tmp_path), "L36", "V1.0.0")
 
     assert errors
     assert "boom" in errors[0][1]
+

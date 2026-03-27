@@ -1,4 +1,4 @@
-from core.sort_config import SortKey, apply_sort
+from handcontrol.core.sort_config import SortKey, apply_sort
 
 
 def test_apply_sort_by_default_path_order():
@@ -65,3 +65,4 @@ def test_apply_sort_descending():
     result = apply_sort(folders, sort_key=SortKey.MODEL, ascending=False)
 
     assert [item["model"] for item in result] == ["L50S", "L36"]
+

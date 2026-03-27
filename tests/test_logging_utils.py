@@ -1,8 +1,8 @@
-from core.logging_utils import FileLogger
+from handcontrol.core.logging_utils import FileLogger
 
 
 def test_file_logger_writes_info_and_error(tmp_path):
-    log_path = tmp_path / "logs" / "app.log"
+    log_path = tmp_path / "logs" / "handcontrol.app.log"
     logger = FileLogger(log_path)
 
     logger.log("hello")
@@ -14,3 +14,4 @@ def test_file_logger_writes_info_and_error(tmp_path):
     assert "[ERROR] worker failed" in content
     assert "[ERROR] trace line 1" in content
     assert "[ERROR] trace line 2" in content
+

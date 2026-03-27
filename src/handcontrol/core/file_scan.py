@@ -2,7 +2,7 @@ import os
 import re
 from pathlib import Path
 
-from core.settings import (
+from handcontrol.core.settings import (
     SCAN_EXCLUDE_DIR_KEYWORDS,
     SCAN_MODEL_PATTERNS,
     SCAN_PATH_MODEL_PATTERNS,
@@ -11,7 +11,7 @@ from core.settings import (
     SCAN_ROM_EXTENSIONS,
     SCAN_VERSION_PATTERNS,
 )
-from core.types import HandcontrolFolder
+from handcontrol.core.types import HandcontrolFolder
 
 
 def _match_first_group(text: str, patterns: list[str]) -> str:
@@ -108,3 +108,4 @@ def find_handcontrol_folders(root: str) -> list[HandcontrolFolder]:
 
     results.sort(key=lambda x: x["path"])
     return results
+

@@ -1,11 +1,11 @@
 import pytest
 
-from core.services.excel_service import delete_record, update_record_fields, write_record
+from handcontrol.core.services.excel_service import delete_record, update_record_fields, write_record
 
 
 def test_write_record_ok(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(
-        "core.services.excel_service.write_excel_record",
+        "handcontrol.core.services.excel_service.write_excel_record",
         lambda **kwargs: {
             "ok": True,
             "reason": "ok",
@@ -33,7 +33,7 @@ def test_write_record_ok(monkeypatch: pytest.MonkeyPatch):
 
 def test_write_record_locked(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(
-        "core.services.excel_service.write_excel_record",
+        "handcontrol.core.services.excel_service.write_excel_record",
         lambda **kwargs: {"ok": False, "reason": "locked", "tmp_path": "tmp.xlsx", "error": "", "written_row": None},
     )
 
@@ -48,7 +48,7 @@ def test_write_record_exception(monkeypatch: pytest.MonkeyPatch):
     def raise_write(**kwargs):
         raise RuntimeError("svc boom")
 
-    monkeypatch.setattr("core.services.excel_service.write_excel_record", raise_write)
+    monkeypatch.setattr("handcontrol.core.services.excel_service.write_excel_record", raise_write)
 
     result = write_record("a.xlsx", "Sheet1", "L36", "V1.0.0", "待确认", "r.ROM", log_fn=lambda _m: None)
 
@@ -63,7 +63,7 @@ def test_update_record_fields_ok(monkeypatch: pytest.MonkeyPatch):
         calls.append((kwargs["field"], kwargs["value"]))
         return {"ok": True, "reason": "ok", "error": ""}
 
-    monkeypatch.setattr("core.services.excel_service.update_excel_field", fake_update)
+    monkeypatch.setattr("handcontrol.core.services.excel_service.update_excel_field", fake_update)
 
     result = update_record_fields(
         excel_path="a.xlsx",
@@ -97,7 +97,7 @@ def test_update_record_fields_locked(monkeypatch: pytest.MonkeyPatch):
             return {"ok": False, "reason": "locked", "error": "文件占用"}
         return {"ok": True, "reason": "ok", "error": ""}
 
-    monkeypatch.setattr("core.services.excel_service.update_excel_field", fake_update)
+    monkeypatch.setattr("handcontrol.core.services.excel_service.update_excel_field", fake_update)
 
     result = update_record_fields(
         excel_path="a.xlsx",
@@ -117,7 +117,7 @@ def test_update_record_fields_locked(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_update_record_fields_exception(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr("core.services.excel_service.update_excel_field", lambda **kwargs: (_ for _ in ()).throw(RuntimeError("boom")))
+    monkeypatch.setattr("handcontrol.core.services.excel_service.update_excel_field", lambda **kwargs: (_ for _ in ()).throw(RuntimeError("boom")))
 
     result = update_record_fields(
         excel_path="a.xlsx",
@@ -138,7 +138,7 @@ def test_update_record_fields_exception(monkeypatch: pytest.MonkeyPatch):
 
 def test_delete_record_ok(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(
-        "core.services.excel_service.delete_excel_row",
+        "handcontrol.core.services.excel_service.delete_excel_row",
         lambda **kwargs: {"ok": True, "reason": "ok", "error": ""},
     )
 
@@ -150,7 +150,7 @@ def test_delete_record_ok(monkeypatch: pytest.MonkeyPatch):
 
 def test_delete_record_not_found(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(
-        "core.services.excel_service.delete_excel_row",
+        "handcontrol.core.services.excel_service.delete_excel_row",
         lambda **kwargs: {"ok": False, "reason": "not_found", "error": "未找到"},
     )
 
@@ -161,12 +161,13 @@ def test_delete_record_not_found(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_delete_record_exception(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr("core.services.excel_service.delete_excel_row", lambda **kwargs: (_ for _ in ()).throw(RuntimeError("boom")))
+    monkeypatch.setattr("handcontrol.core.services.excel_service.delete_excel_row", lambda **kwargs: (_ for _ in ()).throw(RuntimeError("boom")))
 
     result = delete_record("a.xlsx", "Sheet1", "L36", "V1.0.0", log_fn=lambda _m: None)
 
     assert result["ok"] is False
     assert result["code"] == "service_exception"
+
 
 
 

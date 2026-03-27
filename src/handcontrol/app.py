@@ -6,14 +6,14 @@ import os
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-from core.excel_ops import load_excel_row, read_all_excel_rows
-from core.logging_utils import FileLogger
-from core.services.excel_service import delete_record, update_record_fields, write_record
-from core.services.flash_service import run_one_click
-from core.services.scan_service import build_scan_result
-from core.services.usb_repair_service import diagnose_drive, repair_drive
-from core.sort_config import SortKey, apply_sort
-from core.settings import (
+from handcontrol.core.excel_ops import load_excel_row, read_all_excel_rows
+from handcontrol.core.logging_utils import FileLogger
+from handcontrol.core.services.excel_service import delete_record, update_record_fields, write_record
+from handcontrol.core.services.flash_service import run_one_click
+from handcontrol.core.services.scan_service import build_scan_result
+from handcontrol.core.services.usb_repair_service import diagnose_drive, repair_drive
+from handcontrol.core.sort_config import SortKey, apply_sort
+from handcontrol.core.settings import (
     CONFIG_LOAD_ERROR,
     CONFIG_LOAD_SOURCE,
     CONFIG_LOAD_STATUS,
@@ -23,7 +23,7 @@ from core.settings import (
     USB_AUTO_DIAGNOSE_ON_INSERT,
     USB_HEALTH_CHECK_INTERVAL_SEC,
 )
-from core.usb_ops import clean_usb, copy_to_usb, eject_usb, format_usb, get_usb_drives
+from handcontrol.core.usb_ops import clean_usb, copy_to_usb, eject_usb, format_usb, get_usb_drives
 
 _FOLDER_LIST_FONT = ("Consolas", 9)
 _FOLDER_HEADER_FONT = ("Consolas", 9, "bold")
@@ -1330,6 +1330,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 

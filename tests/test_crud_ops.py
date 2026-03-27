@@ -11,7 +11,7 @@ from pathlib import Path
 import openpyxl
 import pytest
 
-from core.excel_ops import delete_excel_row, update_excel_field, write_excel_record
+from handcontrol.core.excel_ops import delete_excel_row, update_excel_field, write_excel_record
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -217,7 +217,7 @@ class TestUpdateExcelField:
         def raise_load(*args, **kwargs):
             raise RuntimeError("mock failure")
 
-        monkeypatch.setattr("core.excel_ops.openpyxl.load_workbook", raise_load)
+        monkeypatch.setattr("handcontrol.core.excel_ops.openpyxl.load_workbook", raise_load)
         logs, log_fn = _logs()
 
         result = update_excel_field(str(excel), "Sheet1", "L36", "V1.0.0", "logo", "定制", log_fn)
@@ -334,7 +334,7 @@ class TestDeleteExcelRow:
         def raise_load(*args, **kwargs):
             raise RuntimeError("mock delete failure")
 
-        monkeypatch.setattr("core.excel_ops.openpyxl.load_workbook", raise_load)
+        monkeypatch.setattr("handcontrol.core.excel_ops.openpyxl.load_workbook", raise_load)
         logs, log_fn = _logs()
 
         result = delete_excel_row(str(excel), "Sheet1", "L36", "V1.0.0", log_fn)
@@ -368,6 +368,7 @@ class TestDeleteExcelRow:
         assert ws.cell(row=3, column=5).value == "英文"
         assert ws.cell(row=3, column=9).value == "待确认"
         wb.close()
+
 
 
 

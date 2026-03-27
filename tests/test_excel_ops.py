@@ -4,7 +4,7 @@ from pathlib import Path
 import openpyxl
 import pytest
 
-from core.excel_ops import load_excel_row, load_excel_status, read_all_excel_rows, write_excel_record
+from handcontrol.core.excel_ops import load_excel_row, load_excel_status, read_all_excel_rows, write_excel_record
 
 
 def _logs():
@@ -133,7 +133,7 @@ def test_write_excel_record_returns_write_failed_on_exception(tmp_path: Path, mo
     def raise_load(*args, **kwargs):
         raise RuntimeError("mock load failure")
 
-    monkeypatch.setattr("core.excel_ops.openpyxl.load_workbook", raise_load)
+    monkeypatch.setattr("handcontrol.core.excel_ops.openpyxl.load_workbook", raise_load)
     logs, log_fn = _logs()
 
     result = write_excel_record(
@@ -285,5 +285,6 @@ def test_serial_numbers_ignore_blank_rows(tmp_path: Path):
     assert ws.cell(row=4, column=1).value is None
     assert ws.cell(row=5, column=1).value == 2
     wb.close()
+
 
 

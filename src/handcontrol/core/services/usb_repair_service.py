@@ -1,4 +1,4 @@
-from core.usb_ops import diagnose_usb_health, repair_usb_driver
+from handcontrol.core.usb_ops import diagnose_usb_health, repair_usb_driver
 
 
 def diagnose_drive(drive: str, log_fn=print) -> dict:
@@ -49,3 +49,4 @@ def repair_drive(drive: str, log_fn=print) -> dict:
             "message": str(e),
             "payload": {"repair_result": None},
         }
+

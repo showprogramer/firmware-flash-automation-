@@ -4,8 +4,8 @@ from pathlib import Path
 import openpyxl
 from openpyxl.styles import PatternFill
 
-from core.settings import EXCEL_HEADER_ROW
-from core.types import ExcelWriteResult, ExcelWrittenRow
+from handcontrol.core.settings import EXCEL_HEADER_ROW
+from handcontrol.core.types import ExcelWriteResult, ExcelWrittenRow
 
 
 def load_excel(path: str):
@@ -388,5 +388,6 @@ def update_excel_field(
     except Exception as e:
         log_fn(f"  更新字段失败: {e}")
         return {"ok": False, "reason": "write_failed", "error": str(e)}
+
 
 

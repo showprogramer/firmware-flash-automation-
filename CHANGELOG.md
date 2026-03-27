@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### refactor
+- 完成 `src layout` 迁移：源码从根目录迁移到 `src/handcontrol/`，根目录新增 `run.py` 作为轻量启动入口。
+- 构建后端切换为 `hatchling`，新增 `project.scripts.handcontrol` 入口，项目改为可安装包结构。
+- 所有源码与测试导入统一改为 `handcontrol.*`，不再保留根目录 `app.py` 与 `core/` 兼容层。
+- `core.settings` 新增 `_find_project_root`，改为动态向上查找 `pyproject.toml` 以定位项目根目录。
+
+### test
+- 新增 `tests/test_src_layout.py`，校验 `src/handcontrol/` 结构、启动入口、依赖配置、旧导入清理与 `PROJECT_ROOT` 解析。
+- 开发依赖新增 `hypothesis`，用于 `src layout` 迁移后的路径性质测试。
+- 迁移前基线：`python -m pytest -q --cov=core`，`127 passed`，总覆盖率 `86.60%`。
+
 ### test
 - 新增 `pytest` 测试框架基础配置（`tests` 目录与 `tool.pytest.ini_options`）。
 - 新增 `tests/test_file_scan.py`，覆盖 `parse_rom_filename`、`guess_model_from_path`、`find_handcontrol_folders` 的核心场景（识别、过滤、排序）。
@@ -107,5 +118,6 @@
 ### 789b8e6
 - `chore: initialize repo, uv setup, sanitize template, and module1 cleanup`
 - 完成仓库初始化与基础工程落地（含模板文件、项目配置与初始脚手架整理）。
+
 
 

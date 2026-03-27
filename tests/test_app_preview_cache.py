@@ -1,4 +1,4 @@
-from app import App
+from handcontrol.app import App
 
 
 class FakeVar:
@@ -155,5 +155,6 @@ def test_upsert_preview_row_no_duplicate_when_filtered_out():
 def test_current_search_keyword_handles_missing_search_var():
     app = App.__new__(App)
     assert app._current_search_keyword() == ""
+
 
 

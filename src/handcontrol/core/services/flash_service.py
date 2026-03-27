@@ -1,5 +1,5 @@
-from core.excel_ops import write_excel_record
-from core.usb_ops import clean_usb, copy_to_usb, eject_usb
+from handcontrol.core.excel_ops import write_excel_record
+from handcontrol.core.usb_ops import clean_usb, copy_to_usb, eject_usb
 
 
 def run_one_click(
@@ -89,5 +89,6 @@ def run_one_click(
                 "preview_row": {},
             },
         }
+
 
 

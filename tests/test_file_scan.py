@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-import core.file_scan as file_scan
-from core.file_scan import (
+import handcontrol.core.file_scan as file_scan
+from handcontrol.core.file_scan import (
     find_handcontrol_folders,
     guess_model_from_path,
     guess_version_from_path,
@@ -164,3 +164,4 @@ def test_find_handcontrol_folders_uses_configurable_extensions_and_excludes(tmp_
     assert results[0]["version"] == "V3.7"
     assert results[0]["rom_file"].endswith(".bin")
     assert results[0]["pkg_file"].endswith(".pack")
+

@@ -1,4 +1,4 @@
-from app import App
+from handcontrol.app import App
 
 
 class FakeVar:
@@ -164,7 +164,7 @@ def test_scan_uses_service_result(monkeypatch):
     app = _mk_app_stub()
 
     monkeypatch.setattr(
-        "app.build_scan_result",
+        "handcontrol.app.build_scan_result",
         lambda root, excel, sheet, log_fn: {
             "ok": True,
             "code": "ok",
@@ -210,7 +210,7 @@ def test_scan_applies_folder_filter_keyword(monkeypatch):
     app.folder_search_var.set("L50")
 
     monkeypatch.setattr(
-        "app.build_scan_result",
+        "handcontrol.app.build_scan_result",
         lambda root, excel, sheet, log_fn: {
             "ok": True,
             "code": "ok",
@@ -331,7 +331,7 @@ def test_report_callback_exception_logs_and_shows_error(monkeypatch):
 
     app._file_logger = FakeLogger()
     errors = []
-    monkeypatch.setattr("app.messagebox.showerror", lambda title, message: errors.append((title, message)))
+    monkeypatch.setattr("handcontrol.app.messagebox.showerror", lambda title, message: errors.append((title, message)))
 
     try:
         raise RuntimeError("boom")
@@ -347,7 +347,7 @@ def test_write_excel_uses_service_result(monkeypatch):
     app = _mk_app_stub()
 
     monkeypatch.setattr(
-        "app.write_record",
+        "handcontrol.app.write_record",
         lambda **kwargs: {
             "ok": True,
             "code": "ok",
@@ -383,7 +383,7 @@ def test_refresh_usb_returns_inserted_and_updates_combo(monkeypatch):
     def fake_get_usb_drives():
         return seq.pop(0)
 
-    monkeypatch.setattr("app.get_usb_drives", fake_get_usb_drives)
+    monkeypatch.setattr("handcontrol.app.get_usb_drives", fake_get_usb_drives)
 
     first = App._refresh_usb(app, log_events=False, detect_insert=False)
     second = App._refresh_usb(app, log_events=False, detect_insert=True)
@@ -397,7 +397,7 @@ def test_diagnose_usb_inserted_sets_warning_status(monkeypatch):
     app = _mk_app_stub()
 
     monkeypatch.setattr(
-        "app.diagnose_drive",
+        "handcontrol.app.diagnose_drive",
         lambda drive, log_fn: {"ok": False, "code": "volume_check_failed", "message": "bad drive"},
     )
 
@@ -413,11 +413,11 @@ def test_repair_usb_driver_success(monkeypatch):
     app = _mk_app_stub()
     app.usb_drive.set("E:\\")
 
-    monkeypatch.setattr("app.repair_drive", lambda drive, log_fn: {"ok": True, "code": "ok", "message": "done"})
-    monkeypatch.setattr("app.messagebox.askyesno", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr("handcontrol.app.repair_drive", lambda drive, log_fn: {"ok": True, "code": "ok", "message": "done"})
+    monkeypatch.setattr("handcontrol.app.messagebox.askyesno", lambda *_args, **_kwargs: True)
 
     called = {"info": 0}
-    monkeypatch.setattr("app.messagebox.showinfo", lambda *_args, **_kwargs: called.__setitem__("info", called["info"] + 1))
+    monkeypatch.setattr("handcontrol.app.messagebox.showinfo", lambda *_args, **_kwargs: called.__setitem__("info", called["info"] + 1))
 
     app._run_task = lambda _name, fn, on_done: on_done(fn(lambda _m: None))
 
@@ -449,7 +449,7 @@ def test_save_review_uses_preview_editing_key(monkeypatch):
     app.remark_text.value = ""
 
     monkeypatch.setattr(
-        "app.update_record_fields",
+        "handcontrol.app.update_record_fields",
         lambda **kwargs: {
             "ok": True,
             "code": "ok",
@@ -493,9 +493,9 @@ def test_delete_selected_preview_row_reindexes_cache(monkeypatch):
     target_key = app._preview_key("L36", "V1.0.0")
     app.preview.selection_set(app._preview_item_by_key[target_key])
 
-    monkeypatch.setattr("app.messagebox.askyesno", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr("handcontrol.app.messagebox.askyesno", lambda *_args, **_kwargs: True)
     monkeypatch.setattr(
-        "app.delete_record",
+        "handcontrol.app.delete_record",
         lambda *args, **kwargs: {"ok": True, "code": "ok", "message": "删除成功", "payload": {}},
     )
 
@@ -506,6 +506,7 @@ def test_delete_selected_preview_row_reindexes_cache(monkeypatch):
     assert len(app._preview_rows) == 1
     assert app._preview_rows[0]["model"] == "L50S"
     assert app._preview_rows[0]["serial"] == "1"
+
 
 
 

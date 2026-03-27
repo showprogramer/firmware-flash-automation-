@@ -4,7 +4,7 @@ from pathlib import Path
 
 import psutil
 
-from core.settings import JUNK_EXTENSIONS, JUNK_FILENAMES
+from handcontrol.core.settings import JUNK_EXTENSIONS, JUNK_FILENAMES
 
 
 _PERMISSION_HINTS = [
@@ -257,3 +257,4 @@ def format_usb(drive: str, log_fn=print) -> bool:
     except Exception as e:
         log_fn(f"  格式化异常: {e}")
         return False
+
