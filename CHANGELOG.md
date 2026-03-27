@@ -14,6 +14,8 @@
 - 迁移前基线：`python -m pytest -q --cov=core`，`127 passed`，总覆盖率 `86.60%`。
 - 新增 `tests/test_diagnostics.py`，覆盖诊断包内容生成、缺失日志回退与路径脱敏逻辑。
 - 扩展 `tests/test_app_service_smoke.py`，覆盖诊断包导出入口与一键执行成功后自动跳转到下一项。
+- 新增 `tests/test_excel_integration.py`，使用真实临时 Excel 文件覆盖 service 级写入与备用文件合并链路。
+- 扩展 `tests/test_excel_ops.py` 与 `tests/test_app_service_smoke.py`，覆盖备用文件合并成功、无新行与 UI 刷新提示。
 
 ### test
 - 新增 `pytest` 测试框架基础配置（`tests` 目录与 `tool.pytest.ini_options`）。
@@ -51,6 +53,7 @@
 ### app
 - 新增“导出诊断包”按钮：可一键导出日志、脱敏配置、当前列表状态、预览快照与环境摘要，便于远程排查。
 - 一键执行在复制与 Excel 写入成功后，会自动选中并跳转到下一个文件夹，减少人工点击。
+- 新增“合并备用文件到主表”按钮：当主表曾被占用产生 `*_刷机记录_待导入.xlsx` 时，可直接把其中的新行合并回主表并刷新预览。
 - 调整 Excel 写入调用逻辑：从布尔返回值改为读取结构化结果。
 - 根据写入结果区分提示：`locked` 显示“占用并给出备用文件路径”，其他失败显示具体错误信息。
 - 修复 `_write_excel` 与 `_one_click`：写表时补充传入 `logo/language/salesman` 字段，保持与审核保存一致。
@@ -77,6 +80,7 @@
 
 ### core
 - 新增 `core/diagnostics.py`：生成最小化诊断 zip，包含元信息、脱敏配置、预览快照、列表状态和日志文件。
+- `core/excel_ops.py` 新增备用文件合并能力：按 `MODEL + VERSION` 去重，将 `*_刷机记录_待导入.xlsx` 中的新行回写主表并自动重排序号。
 - 为关键返回结构引入 TypedDict：`HandcontrolFolder`、`ExcelWrittenRow`、`ExcelWriteResult`，并在 `find_handcontrol_folders` 与 `write_excel_record` 上落地类型注解。
 - core/excel_ops.py：
   - `write_excel_record` 返回结构改为 `ok / reason / tmp_path / error`。

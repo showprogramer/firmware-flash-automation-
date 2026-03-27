@@ -10,7 +10,7 @@ from tkinter import filedialog, messagebox, ttk
 from handcontrol.core.excel_ops import load_excel_row, read_all_excel_rows
 from handcontrol.core.diagnostics import build_diagnostic_bundle
 from handcontrol.core.logging_utils import FileLogger
-from handcontrol.core.services.excel_service import delete_record, update_record_fields, write_record
+from handcontrol.core.services.excel_service import delete_record, merge_backup_records, update_record_fields, write_record
 from handcontrol.core.services.flash_service import run_one_click
 from handcontrol.core.services.scan_service import build_scan_result
 from handcontrol.core.services.usb_repair_service import diagnose_drive, repair_drive
@@ -252,6 +252,7 @@ class App(tk.Tk):
         ttk.Separator(parent).pack(fill="x", padx=4, pady=4)
         ttk.Button(parent, text="5  写入记录（待确认）", command=lambda: self._write_excel("待确认")).pack(**btn)
         ttk.Button(parent, text="   标记为【测试通过】", command=lambda: self._write_excel("测试通过")).pack(**btn)
+        ttk.Button(parent, text="   合并备用文件到主表", command=self._merge_backup_excel).pack(**btn)
         ttk.Separator(parent).pack(fill="x", padx=4, pady=4)
         ttk.Button(parent, text="★ 一键执行（清理→复制→弹出→写表）", command=self._one_click).pack(**btn)
         ttk.Separator(parent).pack(fill="x", padx=4, pady=4)
@@ -1245,6 +1246,57 @@ class App(tk.Tk):
                 messagebox.showerror("Excel 写入失败", f"未能写入 Excel。\n\n错误信息：\n{err}")
 
         self._run_task("写入Excel", _work, _done)
+
+    def _merge_backup_excel(self):
+        excel = self.excel_path.get().strip()
+        if not excel:
+            messagebox.showwarning("提示", "请先选择主 Excel 文件")
+            return
+
+        excel_path = Path(excel)
+        default_backup = excel_path.with_name(excel_path.stem + "_刷机记录_待导入.xlsx")
+        backup_path = filedialog.askopenfilename(
+            title="选择备用文件",
+            filetypes=[("Excel 文件", "*.xlsx")],
+            initialdir=str(default_backup.parent if default_backup.parent.exists() else Path.cwd()),
+            initialfile=default_backup.name,
+        )
+        if not backup_path:
+            return
+
+        def _work(log_fn):
+            log_fn(f"合并备用文件: {backup_path} -> {excel}")
+            return merge_backup_records(
+                excel_path=excel,
+                backup_excel_path=backup_path,
+                sheet_name=EXCEL_SHEET,
+                log_fn=log_fn,
+            )
+
+        def _done(result):
+            payload = result.get("payload", {}) or {}
+            merge_result = payload.get("merge_result", {}) or {}
+            if result.get("ok"):
+                merged_count = int(merge_result.get("merged_count", 0) or 0)
+                skipped_count = int(merge_result.get("skipped_count", 0) or 0)
+                self.log(f"备用文件合并完成: 新增 {merged_count} 行，跳过 {skipped_count} 行")
+                self._manual_refresh_preview()
+                messagebox.showinfo("合并完成", f"已合并 {merged_count} 行到主表。\n跳过重复/无效行 {skipped_count} 行。")
+                return
+
+            code = str(result.get("code", "write_failed"))
+            if code == "locked":
+                messagebox.showwarning("Excel 被占用", "请关闭主表或备用文件的 WPS/Excel 后重试。")
+            elif code == "source_missing":
+                messagebox.showerror("备用文件不存在", "未找到要合并的备用文件。")
+            elif code == "no_rows":
+                skipped_count = int(merge_result.get("skipped_count", 0) or 0)
+                messagebox.showinfo("无需合并", f"备用文件中没有可合并的新行。\n跳过 {skipped_count} 行。")
+            else:
+                err = result.get("message", "") or merge_result.get("error", "") or "未知错误"
+                messagebox.showerror("合并失败", f"未能合并备用文件。\n\n错误信息：\n{err}")
+
+        self._run_task("合并备用文件", _work, _done)
 
     def _one_click(self):
         info = self._current_info()

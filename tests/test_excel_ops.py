@@ -4,7 +4,7 @@ from pathlib import Path
 import openpyxl
 import pytest
 
-from handcontrol.core.excel_ops import load_excel_row, load_excel_status, read_all_excel_rows, write_excel_record
+from handcontrol.core.excel_ops import load_excel_row, load_excel_status, merge_backup_excel, read_all_excel_rows, write_excel_record
 
 
 def _logs():
@@ -288,3 +288,79 @@ def test_serial_numbers_ignore_blank_rows(tmp_path: Path):
 
 
 
+
+
+def test_merge_backup_excel_appends_only_new_rows_and_deletes_backup(tmp_path: Path):
+    main_excel = tmp_path / "records.xlsx"
+    backup_excel = tmp_path / "records_刷机记录_待导入.xlsx"
+
+    write_excel_record(
+        excel_path=str(main_excel),
+        sheet_name="Sheet1",
+        model="L36",
+        version="V1.0.0",
+        remark="待确认",
+        log_fn=lambda _: None,
+    )
+    write_excel_record(
+        excel_path=str(backup_excel),
+        sheet_name="Sheet1",
+        model="L36",
+        version="V1.0.0",
+        remark="待确认",
+        log_fn=lambda _: None,
+    )
+    write_excel_record(
+        excel_path=str(backup_excel),
+        sheet_name="Sheet1",
+        model="L50S",
+        version="V2.0.0",
+        remark="测试通过",
+        logo="品牌B",
+        attachment="定制",
+        log_fn=lambda _: None,
+    )
+
+    result = merge_backup_excel(str(main_excel), str(backup_excel), "Sheet1", log_fn=lambda _: None)
+
+    assert result["ok"] is True
+    assert result["merged_count"] == 1
+    assert result["skipped_count"] == 1
+    assert result["source_deleted"] is True
+    assert backup_excel.exists() is False
+
+    rows = read_all_excel_rows(str(main_excel), "Sheet1")
+    assert len(rows) == 2
+    assert rows[1][1] == "L50S"
+    assert rows[1][7] == "定制"
+    assert rows[1][8] == "测试通过"
+
+
+def test_merge_backup_excel_returns_no_rows_when_backup_has_no_new_data(tmp_path: Path):
+    main_excel = tmp_path / "records.xlsx"
+    backup_excel = tmp_path / "records_刷机记录_待导入.xlsx"
+
+    write_excel_record(
+        excel_path=str(main_excel),
+        sheet_name="Sheet1",
+        model="L36",
+        version="V1.0.0",
+        remark="待确认",
+        log_fn=lambda _: None,
+    )
+    write_excel_record(
+        excel_path=str(backup_excel),
+        sheet_name="Sheet1",
+        model="L36",
+        version="V1.0.0",
+        remark="测试通过",
+        log_fn=lambda _: None,
+    )
+
+    result = merge_backup_excel(str(main_excel), str(backup_excel), "Sheet1", log_fn=lambda _: None)
+
+    assert result["ok"] is False
+    assert result["reason"] == "no_rows"
+    assert result["merged_count"] == 0
+    assert result["skipped_count"] == 1
+    assert backup_excel.exists() is True

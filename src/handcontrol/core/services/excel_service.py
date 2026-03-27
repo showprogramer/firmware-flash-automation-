@@ -1,4 +1,4 @@
-from handcontrol.core.excel_ops import delete_excel_row, update_excel_field, write_excel_record
+from handcontrol.core.excel_ops import delete_excel_row, merge_backup_excel, update_excel_field, write_excel_record
 
 
 def _to_preview_row(written_row: dict | None) -> dict:
@@ -198,3 +198,51 @@ def delete_record(
 
 
 
+
+
+def merge_backup_records(
+    excel_path: str,
+    backup_excel_path: str,
+    sheet_name: str,
+    log_fn=print,
+) -> dict:
+    try:
+        result = merge_backup_excel(
+            main_excel_path=excel_path,
+            backup_excel_path=backup_excel_path,
+            sheet_name=sheet_name,
+            log_fn=log_fn,
+        )
+        if result.get("ok"):
+            return {
+                "ok": True,
+                "code": "ok",
+                "message": f"已合并 {result.get('merged_count', 0)} 行",
+                "payload": {
+                    "merge_result": result,
+                },
+            }
+
+        reason = str(result.get("reason", "write_failed"))
+        message_map = {
+            "locked": "Excel 被占用",
+            "source_missing": "备用文件不存在",
+            "no_rows": "没有可合并的新行",
+        }
+        return {
+            "ok": False,
+            "code": reason,
+            "message": message_map.get(reason, str(result.get("error", "")) or "合并失败"),
+            "payload": {
+                "merge_result": result,
+            },
+        }
+    except Exception as e:
+        return {
+            "ok": False,
+            "code": "service_exception",
+            "message": str(e),
+            "payload": {
+                "merge_result": None,
+            },
+        }

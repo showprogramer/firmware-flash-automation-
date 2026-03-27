@@ -1,3 +1,4 @@
+from copy import copy
 from datetime import datetime
 from pathlib import Path
 
@@ -5,7 +6,7 @@ import openpyxl
 from openpyxl.styles import PatternFill
 
 from handcontrol.core.settings import EXCEL_HEADER_ROW
-from handcontrol.core.types import ExcelWriteResult, ExcelWrittenRow
+from handcontrol.core.types import ExcelWriteResult, ExcelWrittenRow, MergeExcelResult
 
 
 def load_excel(path: str):
@@ -275,6 +276,170 @@ def load_excel_row(excel_path: str, sheet_name: str, model: str, version: str) -
     except Exception:
         pass
     return {}
+
+
+
+def _normalized_row_key(model: str, version: str) -> tuple[str, str]:
+    return str(model or "").strip().upper(), str(version or "").strip().upper()
+
+
+def _iter_effective_excel_rows(ws):
+    for row_num in range(EXCEL_HEADER_ROW + 1, ws.max_row + 1):
+        if not _is_effective_data_row(ws, row_num):
+            continue
+        yield row_num, [ws.cell(row=row_num, column=col).value for col in range(1, 10)]
+
+
+def merge_backup_excel(main_excel_path: str, backup_excel_path: str, sheet_name: str, log_fn=print) -> MergeExcelResult:
+    main_path = Path(main_excel_path)
+    backup_path = Path(backup_excel_path)
+
+    if not backup_path.exists():
+        log_fn(f"  备用文件不存在: {backup_excel_path}")
+        return {
+            "ok": False,
+            "reason": "source_missing",
+            "merged_count": 0,
+            "skipped_count": 0,
+            "source_deleted": False,
+            "error": "备用文件不存在",
+        }
+
+    if _is_locked(main_path):
+        log_fn("  ⚠ 主 Excel 文件被 WPS/Excel 占用，无法合并备用文件")
+        return {
+            "ok": False,
+            "reason": "locked",
+            "merged_count": 0,
+            "skipped_count": 0,
+            "source_deleted": False,
+            "error": "主表被占用",
+        }
+
+    if _is_locked(backup_path):
+        log_fn("  ⚠ 备用 Excel 文件被 WPS/Excel 占用，无法读取")
+        return {
+            "ok": False,
+            "reason": "locked",
+            "merged_count": 0,
+            "skipped_count": 0,
+            "source_deleted": False,
+            "error": "备用文件被占用",
+        }
+
+    main_wb = None
+    backup_wb = None
+    try:
+        if main_path.exists():
+            main_wb = openpyxl.load_workbook(main_path)
+            main_ws = main_wb[sheet_name] if sheet_name in main_wb.sheetnames else main_wb.active
+        else:
+            main_result = _do_write(
+                str(main_path),
+                sheet_name,
+                model="",
+                version="",
+                remark="",
+                rom_path="",
+                log_fn=lambda _msg: None,
+            )
+            if not main_result.get("ok"):
+                return {
+                    "ok": False,
+                    "reason": "write_failed",
+                    "merged_count": 0,
+                    "skipped_count": 0,
+                    "source_deleted": False,
+                    "error": str(main_result.get("error", "主表创建失败")),
+                }
+            main_wb = openpyxl.load_workbook(main_path)
+            main_ws = main_wb[sheet_name] if sheet_name in main_wb.sheetnames else main_wb.active
+            if _is_effective_data_row(main_ws, EXCEL_HEADER_ROW + 1):
+                main_ws.delete_rows(EXCEL_HEADER_ROW + 1)
+
+        backup_wb = openpyxl.load_workbook(backup_path, data_only=False)
+        backup_ws = backup_wb[sheet_name] if sheet_name in backup_wb.sheetnames else backup_wb.active
+
+        existing_keys = {
+            _normalized_row_key(str(row[1] or ""), str(row[5] or ""))
+            for _, row in _iter_effective_excel_rows(main_ws)
+            if _normalized_row_key(str(row[1] or ""), str(row[5] or "")) != ("", "")
+        }
+
+        merged_count = 0
+        skipped_count = 0
+        for source_row_num, row in _iter_effective_excel_rows(backup_ws):
+            model = str(row[1] or "").strip()
+            version = str(row[5] or "").strip()
+            key = _normalized_row_key(model, version)
+            if key == ("", ""):
+                skipped_count += 1
+                continue
+            if key in existing_keys:
+                skipped_count += 1
+                continue
+
+            row_num = main_ws.max_row + 1
+            for col in range(1, 10):
+                source_cell = backup_ws.cell(row=source_row_num, column=col)
+                target_cell = main_ws.cell(row=row_num, column=col, value=row[col - 1])
+                if source_cell.has_style:
+                    target_cell._style = copy(source_cell._style)
+                if source_cell.number_format:
+                    target_cell.number_format = source_cell.number_format
+                if source_cell.alignment:
+                    target_cell.alignment = copy(source_cell.alignment)
+                if source_cell.font:
+                    target_cell.font = copy(source_cell.font)
+                if source_cell.fill:
+                    target_cell.fill = copy(source_cell.fill)
+                if source_cell.border:
+                    target_cell.border = copy(source_cell.border)
+                if source_cell.protection:
+                    target_cell.protection = copy(source_cell.protection)
+            existing_keys.add(key)
+            merged_count += 1
+
+        if merged_count == 0:
+            log_fn("  备用文件中没有可合并的新行")
+            return {
+                "ok": False,
+                "reason": "no_rows",
+                "merged_count": 0,
+                "skipped_count": skipped_count,
+                "source_deleted": False,
+                "error": "没有可合并的新行",
+            }
+
+        _rebuild_serial_numbers(main_ws)
+        main_wb.save(main_path)
+        backup_wb.close()
+        backup_wb = None
+        backup_path.unlink(missing_ok=True)
+        log_fn(f"  已合并备用文件: 新增 {merged_count} 行，跳过 {skipped_count} 行")
+        return {
+            "ok": True,
+            "reason": "ok",
+            "merged_count": merged_count,
+            "skipped_count": skipped_count,
+            "source_deleted": True,
+            "error": "",
+        }
+    except Exception as e:
+        log_fn(f"  合并备用文件失败: {e}")
+        return {
+            "ok": False,
+            "reason": "write_failed",
+            "merged_count": 0,
+            "skipped_count": 0,
+            "source_deleted": False,
+            "error": str(e),
+        }
+    finally:
+        if main_wb is not None:
+            main_wb.close()
+        if backup_wb is not None:
+            backup_wb.close()
 
 
 

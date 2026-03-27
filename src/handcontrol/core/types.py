@@ -30,3 +30,15 @@ class ExcelWriteResult(TypedDict):
     tmp_path: str
     error: str
     written_row: Optional[ExcelWrittenRow]
+
+
+MergeExcelReason = Literal["ok", "locked", "source_missing", "no_rows", "write_failed"]
+
+
+class MergeExcelResult(TypedDict):
+    ok: bool
+    reason: MergeExcelReason
+    merged_count: int
+    skipped_count: int
+    source_deleted: bool
+    error: str

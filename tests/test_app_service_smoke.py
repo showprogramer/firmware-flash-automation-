@@ -625,3 +625,56 @@ def test_delete_selected_preview_row_reindexes_cache(monkeypatch):
 
 
 
+
+
+def test_merge_backup_excel_success_refreshes_preview(monkeypatch):
+    app = _mk_app_stub()
+    app.excel_path.set('D:/root/records.xlsx')
+    refreshed = {'count': 0}
+    infos = []
+
+    monkeypatch.setattr('handcontrol.app.filedialog.askopenfilename', lambda **kwargs: 'D:/root/records_刷机记录_待导入.xlsx')
+    monkeypatch.setattr(
+        'handcontrol.app.merge_backup_records',
+        lambda **kwargs: {
+            'ok': True,
+            'code': 'ok',
+            'message': '已合并 1 行',
+            'payload': {'merge_result': {'merged_count': 1, 'skipped_count': 2}},
+        },
+    )
+    monkeypatch.setattr('handcontrol.app.messagebox.showinfo', lambda title, message: infos.append((title, message)))
+
+    app._manual_refresh_preview = lambda: refreshed.__setitem__('count', refreshed['count'] + 1)
+    app._run_task = lambda _name, fn, on_done: on_done(fn(lambda _m: None))
+
+    App._merge_backup_excel(app)
+
+    assert refreshed['count'] == 1
+    assert infos and infos[0][0] == '合并完成'
+    assert any('备用文件合并完成' in msg for msg in app.logs)
+
+
+def test_merge_backup_excel_no_rows_shows_info(monkeypatch):
+    app = _mk_app_stub()
+    app.excel_path.set('D:/root/records.xlsx')
+    infos = []
+
+    monkeypatch.setattr('handcontrol.app.filedialog.askopenfilename', lambda **kwargs: 'D:/root/records_刷机记录_待导入.xlsx')
+    monkeypatch.setattr(
+        'handcontrol.app.merge_backup_records',
+        lambda **kwargs: {
+            'ok': False,
+            'code': 'no_rows',
+            'message': '没有可合并的新行',
+            'payload': {'merge_result': {'merged_count': 0, 'skipped_count': 3}},
+        },
+    )
+    monkeypatch.setattr('handcontrol.app.messagebox.showinfo', lambda title, message: infos.append((title, message)))
+
+    app._manual_refresh_preview = lambda: None
+    app._run_task = lambda _name, fn, on_done: on_done(fn(lambda _m: None))
+
+    App._merge_backup_excel(app)
+
+    assert infos and infos[0][0] == '无需合并'
