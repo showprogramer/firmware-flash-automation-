@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### core
+- 新增 `core/services/serial_service.py`：提供串口扫描、连接/断开、命令发送与波特率探测能力，统一返回 `ok/code/message/payload` 结构。
+- 新增 `core/services/at_command_service.py`：封装 AT 指令发送与 `AT+BD` 波特率切换验证流程（新波特率成功、旧波特率未切换、状态未知三类结果）。
+- 扩展 `core/types.py`：新增 `FirmwareType`、`ServiceResult`、`SerialPortInfo`、`SerialCommandResult`、`FlashJobResult` 等统一领域类型。
+- 更新 `core/services/__init__.py` 导出，补齐新增服务模块入口。
+
+### test
+- 新增 `tests/test_serial_service.py`，覆盖串口服务核心分支（依赖缺失、扫描成功、连接成功、命令发送、波特率探测未匹配）。
+- 新增 `tests/test_at_command_service.py`，覆盖 AT 服务分支（成功、拒绝、波特率切换成功/未改变/未知）。
+
 ### refactor
 - 完成 `src layout` 迁移：源码从根目录迁移到 `src/handcontrol/`，根目录新增 `run.py` 作为轻量启动入口。
 - 构建后端切换为 `hatchling`，新增 `project.scripts.handcontrol` 入口，项目改为可安装包结构。
