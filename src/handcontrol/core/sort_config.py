@@ -50,11 +50,23 @@ def _version_sort_value(version: str) -> tuple[int, tuple[int, ...], str]:
 
 
 def _path_sort_value(folder: dict) -> str:
-    return str(folder.get("path", "") or "").lower()
+    path = Path(str(folder.get("path", "") or ""))
+    parts = [str(part) for part in path.parts]
+    return tuple(_natural_text_sort_value(part) for part in parts)
 
 
 def _folder_name_sort_value(folder: dict) -> str:
-    return Path(str(folder.get("path", "") or "")).name.lower()
+    return _natural_text_sort_value(Path(str(folder.get("path", "") or "")).name)
+
+
+def _natural_text_sort_value(text: str) -> tuple:
+    parts = re.split(r"(\d+)", str(text or "").strip().lower())
+    normalized = []
+    for part in parts:
+        if not part:
+            continue
+        normalized.append((0, int(part)) if part.isdigit() else (1, part))
+    return tuple(normalized)
 
 
 def apply_sort(

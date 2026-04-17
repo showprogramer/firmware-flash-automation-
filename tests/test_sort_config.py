@@ -12,6 +12,18 @@ def test_apply_sort_by_default_path_order():
     assert [item["path"] for item in result] == ["D:/a/zzz", "D:/x/aaa"]
 
 
+def test_apply_sort_by_default_path_order_uses_natural_segment_sort():
+    folders = [
+        {"model": "L36", "version": "V1.0.0", "path": "D:/root/L100"},
+        {"model": "L50S", "version": "V2.0.0", "path": "D:/root/L20"},
+        {"model": "L66", "version": "V3.0.0", "path": "D:/root/L3"},
+    ]
+
+    result = apply_sort(folders, sort_key=SortKey.PATH, ascending=True)
+
+    assert [item["path"] for item in result] == ["D:/root/L3", "D:/root/L20", "D:/root/L100"]
+
+
 def test_apply_sort_by_model_natural_order():
     folders = [
         {"model": "L50S", "version": "V1.0.0", "path": "D:/b"},

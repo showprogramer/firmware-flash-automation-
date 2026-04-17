@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### app
+- 新增 `src/handcontrol/ui/` 现代化 CTk 界面层：拆分为 `shell / handcontrol_panel / music_panel / shared_widgets / design_tokens`，统一承载双模式 UI。
+- `src/handcontrol/app.py` 入口切换为加载 UI Reactor 壳层，保留 legacy import 兼容测试引用。
+- 手控模式完成卡片式左侧列表、右侧刷机/审核卡片、底部预览/日志面板迁移；保留扫描、写表、一键、预览搜索/删除/双击回填等能力。
+- 音乐模式完成串口扫描/连接、AT 发送、U 盘流程、日志区迁移，并继续通过 `core/services` 驱动业务。
+- 修复手控回归：根目录按钮恢复真实目录选择；预览双击回填补齐备注与审核状态；列表恢复单击选择、双击打开目录。
+- 修复列表体验：默认排序改为更接近 Win11 资源管理器的路径自然顺序；单击选中不再重建整列卡片；双击打开目录稳定恢复。
+- 修复模式切换体验：手控/音乐面板都补齐 `activate/deactivate` 生命周期；切换时同步侧边栏模式按钮；壳层从 `pack/pack_forget` 改为预挂载后 `tkraise()`，降低切回手控时的重布局卡顿。
+
+### compat
+- `pyproject.toml` 新增运行依赖 `customtkinter>=5.2.2`，并暂时将 `src/handcontrol/ui/*` 纳入 coverage omit，避免迁移阶段 UI 壳层拖低门禁。
+
+### test
+- 新增 `tests/test_ui_reactor_entry.py`，验证应用入口会路由到 UI Reactor 壳层。
+- 重写并扩展 `tests/test_app_service_smoke.py`，覆盖手控/音乐 CTk 面板的扫描、选择、回填、双击打开、轮询停启、懒创建与模式切换同步。
+- 扩展 `tests/test_sort_config.py`，补充默认路径自然排序场景。
+- 本轮验证通过：`python -m pytest -q` -> `150 passed, 8 skipped`，总覆盖率 `85.15%`。
+- 本轮验证通过：`.\scripts\test.ps1` 完成测试链路执行；本机 `uv` 缓存目录有权限告警噪音，但不影响 pytest 结果。
+
 ### core
 - 新增 `core/services/serial_service.py`：提供串口扫描、连接/断开、命令发送与波特率探测能力，统一返回 `ok/code/message/payload` 结构。
 - 新增 `core/services/at_command_service.py`：封装 AT 指令发送与 `AT+BD` 波特率切换验证流程（新波特率成功、旧波特率未切换、状态未知三类结果）。
