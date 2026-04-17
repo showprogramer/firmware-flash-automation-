@@ -46,6 +46,18 @@ _DEFAULTS = {
             r"\b(\d+\.\d+\.\d+)\b",
         ],
     },
+    "music": {
+        "default_source_dir": "",
+    },
+    "serial": {
+        "default_baudrate": 115200,
+        "at_presets": [
+            "AT+NM=Premium XZ8",
+            "AT+MP=8888",
+            "AT+FUN=PIN=EN",
+            "AT+BD=38400",
+        ],
+    },
 }
 
 
@@ -127,15 +139,22 @@ def _as_str_list(values, default: list[str], lower: bool = False) -> list[str]:
     return out or list(default)
 
 
+def _resolve_path(value, default: str = "") -> str:
+    text = str(value or "").strip()
+    if not text:
+        return str(default or "")
+    p = Path(text)
+    if not p.is_absolute():
+        return str((PROJECT_ROOT / p).resolve())
+    return str(p)
+
+
 _cfg, CONFIG_LOAD_STATUS, CONFIG_LOAD_ERROR = load_toml_config(CONFIG_PATH)
 CONFIG_LOAD_SOURCE = str(CONFIG_PATH)
 
 _root_dir = _cfg_get(_cfg, "paths", "root_dir", _DEFAULTS["paths"]["root_dir"])
 _excel_path_cfg = _cfg_get(_cfg, "paths", "excel_path", _DEFAULTS["paths"]["excel_path"])
-if isinstance(_excel_path_cfg, str) and not Path(_excel_path_cfg).is_absolute():
-    _excel_path = str((PROJECT_ROOT / _excel_path_cfg).resolve())
-else:
-    _excel_path = str(_excel_path_cfg)
+_excel_path = _resolve_path(_excel_path_cfg, _DEFAULTS["paths"]["excel_path"])
 
 DEFAULT_ROOT = str(_root_dir)
 DEFAULT_EXCEL = _excel_path
@@ -195,6 +214,18 @@ SCAN_PATH_VERSION_PATTERNS = _as_str_list(
     _DEFAULTS["scan"]["path_version_patterns"],
 )
 
+MUSIC_DEFAULT_SOURCE_DIR = _resolve_path(
+    _cfg_get(_cfg, "music", "default_source_dir", _DEFAULTS["music"]["default_source_dir"]),
+    _DEFAULTS["music"]["default_source_dir"],
+)
+SERIAL_DEFAULT_BAUDRATE = max(
+    1200,
+    _as_int(_cfg_get(_cfg, "serial", "default_baudrate", _DEFAULTS["serial"]["default_baudrate"]), 115200),
+)
+SERIAL_AT_PRESETS = _as_str_list(
+    _cfg_get(_cfg, "serial", "at_presets", _DEFAULTS["serial"]["at_presets"]),
+    _DEFAULTS["serial"]["at_presets"],
+)
 
 
 

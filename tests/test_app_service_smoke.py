@@ -81,6 +81,14 @@ class FakeLabel:
         self.text = kwargs.get("text", self.text)
 
 
+class FakeButton:
+    def __init__(self):
+        self.text = ""
+
+    def configure(self, **kwargs):
+        self.text = kwargs.get("text", self.text)
+
+
 class FakePreview:
     def __init__(self):
         self.items = {}
@@ -130,6 +138,18 @@ def _mk_app_stub():
     app.folder_search_var = FakeVar("")
     app.folder_status_filter_var = FakeVar("全部状态")
     app.usb_combo = FakeCombo()
+    app.music_usb_combo = FakeCombo()
+    app.music_serial_combo = FakeCombo()
+    app.music_usb_drive = FakeVar("")
+    app.music_source_dir = FakeVar("D:/music")
+    app.music_serial_port = FakeVar("")
+    app.music_baudrate = FakeVar("115200")
+    app.music_custom_cmd = FakeVar("AT+TEST")
+    app.music_connect_btn = FakeButton()
+    app.music_log_text = FakeText()
+    app._music_serial_connection = None
+    app._music_connected = False
+    app._music_at_presets = ["AT+NM=Premium XZ8", "AT+BD=38400"]
     app.folders = []
     app._all_folders = []
     app._folder_status_map = {}
@@ -506,6 +526,87 @@ def test_refresh_usb_returns_inserted_and_updates_combo(monkeypatch):
     assert first == []
     assert second == ["F:\\"]
     assert app.usb_combo.values == ["E:\\", "F:\\"]
+    assert app.music_usb_combo.values == ["E:\\", "F:\\"]
+
+
+def test_music_scan_ports_updates_combo(monkeypatch):
+    app = _mk_app_stub()
+    monkeypatch.setattr(
+        "handcontrol.app.scan_serial_ports",
+        lambda **kwargs: {
+            "ok": True,
+            "code": "ok",
+            "message": "ok",
+            "payload": {
+                "ports": [
+                    {"device": "COM5", "description": "USB Serial"},
+                    {"device": "COM7", "description": "CH340"},
+                ]
+            },
+        },
+    )
+
+    App._music_scan_ports(app)
+
+    assert app.music_serial_combo.values == ["COM5  USB Serial", "COM7  CH340"]
+    assert app.music_serial_port.get() == "COM5  USB Serial"
+
+
+def test_music_toggle_connect_connects_and_disconnects(monkeypatch):
+    app = _mk_app_stub()
+    app.music_serial_port.set("COM9  USB Serial")
+
+    monkeypatch.setattr(
+        "handcontrol.app.connect_port",
+        lambda *args, **kwargs: {
+            "ok": True,
+            "code": "ok",
+            "message": "ok",
+            "payload": {"connection": object()},
+        },
+    )
+    monkeypatch.setattr("handcontrol.app.disconnect_port", lambda *args, **kwargs: {"ok": True})
+
+    App._music_toggle_connect(app)
+    assert app._music_connected is True
+    assert app.music_connect_btn.text == "断开"
+
+    App._music_toggle_connect(app)
+    assert app._music_connected is False
+    assert app.music_connect_btn.text == "连接"
+
+
+def test_music_send_preset_calls_baud_service(monkeypatch):
+    app = _mk_app_stub()
+    app._music_connected = True
+    app._music_serial_connection = type("Conn", (), {"is_open": True, "port": "COM5", "baudrate": 115200})()
+
+    monkeypatch.setattr(
+        "handcontrol.app.apply_baudrate_command",
+        lambda *args, **kwargs: {"ok": True, "code": "ok", "message": "done", "payload": {}},
+    )
+    monkeypatch.setattr("handcontrol.app.disconnect_port", lambda *args, **kwargs: {"ok": True})
+
+    App._music_send_preset(app, "AT+BD=38400")
+
+    assert app._music_connected is False
+    assert any("AT+BD" in msg for msg in app.music_log_text.value.splitlines())
+
+
+def test_music_prepare_usb_runs_service(monkeypatch):
+    app = _mk_app_stub()
+    app.music_usb_drive.set("E:\\")
+    calls = {"count": 0}
+    monkeypatch.setattr(
+        "handcontrol.app.run_music_flash",
+        lambda **kwargs: (calls.__setitem__("count", calls["count"] + 1) or {"ok": True, "code": "ok", "message": "ok", "payload": {"ejected": True}}),
+    )
+    app._run_task = lambda _name, fn, on_done: on_done(fn(lambda _m: None))
+
+    App._music_prepare_usb(app)
+
+    assert calls["count"] == 1
+    assert any("音乐模式流程完成" in msg for msg in app.logs)
 
 
 def test_diagnose_usb_inserted_sets_warning_status(monkeypatch):

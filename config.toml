@@ -36,5 +36,17 @@ path_version_patterns = [
   "\\b(\\d+\\.\\d+\\.\\d+)\\b",
 ]
 
+[music]
+default_source_dir = ""
+
+[serial]
+default_baudrate = 115200
+at_presets = [
+  "AT+NM=Premium XZ8",
+  "AT+MP=8888",
+  "AT+FUN=PIN=EN",
+  "AT+BD=38400",
+]
+
 
 

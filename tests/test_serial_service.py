@@ -3,6 +3,7 @@ import pytest
 from handcontrol.core.services.serial_service import (
     connect_port,
     probe_device_baudrate,
+    read_serial_messages,
     scan_serial_ports,
     send_serial_command,
 )
@@ -34,6 +35,13 @@ class _FakeSerialConn:
 
     def read_all(self):
         return self.response
+
+    @property
+    def in_waiting(self):
+        return len(self.response)
+
+    def read(self, size: int):
+        return self.response[:size]
 
     def close(self):
         self.is_open = False
@@ -114,3 +122,12 @@ def test_probe_device_baudrate_no_match(monkeypatch: pytest.MonkeyPatch):
 
     assert result["ok"] is False
     assert result["code"] == "no_match"
+
+
+def test_read_serial_messages_ok():
+    conn = _FakeSerialConn(response=b"BT_OK\r\n123\r\n")
+
+    result = read_serial_messages(conn, log_fn=lambda _m: None)
+
+    assert result["ok"] is True
+    assert result["payload"]["lines"] == ["BT_OK", "123"]

@@ -12,7 +12,10 @@ from handcontrol.core.diagnostics import build_diagnostic_bundle
 from handcontrol.core.logging_utils import FileLogger
 from handcontrol.core.services.excel_service import delete_record, merge_backup_records, update_record_fields, write_record
 from handcontrol.core.services.flash_service import run_one_click
+from handcontrol.core.services.music_flash_service import run_music_flash
 from handcontrol.core.services.scan_service import build_scan_result
+from handcontrol.core.services.serial_service import connect_port, disconnect_port, scan_serial_ports, send_serial_command
+from handcontrol.core.services.at_command_service import apply_baudrate_command, send_at_command
 from handcontrol.core.services.usb_repair_service import diagnose_drive, repair_drive
 from handcontrol.core.sort_config import SortKey, apply_sort
 from handcontrol.core.settings import (
@@ -22,6 +25,9 @@ from handcontrol.core.settings import (
     DEFAULT_EXCEL,
     DEFAULT_ROOT,
     EXCEL_SHEET,
+    MUSIC_DEFAULT_SOURCE_DIR,
+    SERIAL_AT_PRESETS,
+    SERIAL_DEFAULT_BAUDRATE,
     USB_AUTO_DIAGNOSE_ON_INSERT,
     USB_HEALTH_CHECK_INTERVAL_SEC,
 )
@@ -55,6 +61,14 @@ class App(tk.Tk):
         self.field_remark = tk.StringVar()
         self.busy = tk.BooleanVar(value=False)
         self.status_text = tk.StringVar(value="就绪")
+        self.music_source_dir = tk.StringVar(value=MUSIC_DEFAULT_SOURCE_DIR)
+        self.music_usb_drive = tk.StringVar(value="")
+        self.music_serial_port = tk.StringVar(value="")
+        self.music_baudrate = tk.StringVar(value=str(SERIAL_DEFAULT_BAUDRATE))
+        self.music_custom_cmd = tk.StringVar(value="AT+")
+        self._music_serial_connection = None
+        self._music_connected = False
+        self._music_at_presets = [str(item or "").strip() for item in SERIAL_AT_PRESETS if str(item or "").strip()]
 
         # 预览搜索关键词
         self.search_var = tk.StringVar()
@@ -170,10 +184,13 @@ class App(tk.Tk):
         right_nb.pack(side="right", fill="both")
         tab_flash = ttk.Frame(right_nb)
         tab_review = ttk.Frame(right_nb)
+        tab_music = ttk.Frame(right_nb)
         right_nb.add(tab_flash, text="  刷机操作  ")
         right_nb.add(tab_review, text="  审核填写  ")
+        right_nb.add(tab_music, text="  音乐模式  ")
         self._build_flash_tab(tab_flash)
         self._build_review_tab(tab_review)
+        self._build_music_tab(tab_music)
 
         bottom = ttk.PanedWindow(self, orient="vertical")
         bottom.pack(fill="both", expand=False, padx=6, pady=(0, 4))
@@ -291,6 +308,198 @@ class App(tk.Tk):
         self.review_status.pack(side="left", padx=4)
         ttk.Button(parent, text="保存到 Excel", command=self._save_review).pack(fill="x", padx=8, pady=8)
         ttk.Label(parent, text="下拉框可直接输入自定义值", foreground="gray", font=("", 8)).pack(anchor="w", padx=8)
+
+    def _build_music_tab(self, parent):
+        pad = dict(padx=8, pady=4)
+        ttk.Label(parent, text="音乐版流程：U盘准备 + 串口AT配置（服务层复用）", foreground="gray").pack(anchor="w", **pad)
+
+        src_row = ttk.Frame(parent)
+        src_row.pack(fill="x", padx=8, pady=4)
+        ttk.Label(src_row, text="音乐目录:", width=8).pack(side="left")
+        ttk.Entry(src_row, textvariable=self.music_source_dir).pack(side="left", fill="x", expand=True, padx=(4, 4))
+        ttk.Button(src_row, text="浏览", command=self._music_browse_source).pack(side="left")
+
+        usb_row = ttk.Frame(parent)
+        usb_row.pack(fill="x", padx=8, pady=4)
+        ttk.Label(usb_row, text="U盘:", width=8).pack(side="left")
+        self.music_usb_combo = ttk.Combobox(usb_row, textvariable=self.music_usb_drive, width=8, state="readonly")
+        self.music_usb_combo.pack(side="left", padx=(4, 4))
+        ttk.Button(usb_row, text="刷新U盘", command=self._refresh_usb).pack(side="left")
+        ttk.Button(usb_row, text="执行音乐流程", command=self._music_prepare_usb).pack(side="left", padx=(6, 0))
+
+        serial_row = ttk.Frame(parent)
+        serial_row.pack(fill="x", padx=8, pady=4)
+        ttk.Label(serial_row, text="串口:", width=8).pack(side="left")
+        self.music_serial_combo = ttk.Combobox(serial_row, textvariable=self.music_serial_port, width=20, state="readonly")
+        self.music_serial_combo.pack(side="left", padx=(4, 4))
+        ttk.Button(serial_row, text="扫描串口", command=self._music_scan_ports).pack(side="left")
+        ttk.Label(serial_row, text="波特率:").pack(side="left", padx=(8, 2))
+        ttk.Combobox(
+            serial_row,
+            textvariable=self.music_baudrate,
+            values=["9600", "38400", "57600", "115200"],
+            width=8,
+            state="readonly",
+        ).pack(side="left", padx=(0, 4))
+        self.music_connect_btn = ttk.Button(serial_row, text="连接", command=self._music_toggle_connect)
+        self.music_connect_btn.pack(side="left")
+
+        preset_frame = ttk.LabelFrame(parent, text="AT预设")
+        preset_frame.pack(fill="x", padx=8, pady=6)
+        presets = self._music_at_presets or ["AT+NM=Premium XZ8", "AT+MP=8888", "AT+FUN=PIN=EN", "AT+BD=38400"]
+        for preset in presets:
+            ttk.Button(
+                preset_frame,
+                text=f"发送 {preset}",
+                command=lambda value=preset: self._music_send_preset(value),
+            ).pack(fill="x", padx=6, pady=2)
+
+        custom_row = ttk.Frame(parent)
+        custom_row.pack(fill="x", padx=8, pady=(4, 2))
+        ttk.Label(custom_row, text="自定义:", width=8).pack(side="left")
+        ttk.Entry(custom_row, textvariable=self.music_custom_cmd).pack(side="left", fill="x", expand=True, padx=(4, 4))
+        ttk.Button(custom_row, text="发送", command=self._music_send_custom).pack(side="left")
+
+        log_frame = ttk.LabelFrame(parent, text="音乐模式日志")
+        log_frame.pack(fill="both", expand=True, padx=8, pady=6)
+        self.music_log_text = tk.Text(log_frame, height=10, font=("Consolas", 9), state="disabled")
+        msb = ttk.Scrollbar(log_frame, orient="vertical", command=self.music_log_text.yview)
+        self.music_log_text.configure(yscrollcommand=msb.set)
+        self.music_log_text.pack(side="left", fill="both", expand=True)
+        msb.pack(side="right", fill="y")
+        self._music_scan_ports()
+
+    def _music_log(self, message: str):
+        self.log(f"[音乐] {message}")
+        if not hasattr(self, "music_log_text"):
+            return
+        self.music_log_text.configure(state="normal")
+        self.music_log_text.insert("end", message + "\n")
+        self.music_log_text.see("end")
+        self.music_log_text.configure(state="disabled")
+
+    def _music_browse_source(self):
+        start_dir = self.music_source_dir.get().strip() or str(Path.cwd())
+        folder = filedialog.askdirectory(initialdir=start_dir)
+        if folder:
+            self.music_source_dir.set(folder)
+
+    def _music_selected_port_device(self) -> str:
+        label = str(self.music_serial_port.get() or "").strip()
+        if not label:
+            return ""
+        return label.split()[0].strip()
+
+    def _music_scan_ports(self):
+        result = scan_serial_ports(log_fn=lambda _m: None)
+        if not result.get("ok"):
+            self._music_log(f"扫描串口失败: {result.get('message', '未知错误')}")
+            if hasattr(self, "music_serial_combo"):
+                self.music_serial_combo["values"] = []
+            self.music_serial_port.set("")
+            return
+        ports = (result.get("payload") or {}).get("ports", [])
+        labels = [f"{p.get('device', '')}  {p.get('description', '')}".strip() for p in ports if p.get("device")]
+        if hasattr(self, "music_serial_combo"):
+            self.music_serial_combo["values"] = labels
+        if labels:
+            self.music_serial_port.set(labels[0])
+        self._music_log(f"串口扫描完成: {len(labels)} 个")
+
+    def _music_set_connected(self, connected: bool):
+        self._music_connected = bool(connected)
+        if hasattr(self, "music_connect_btn"):
+            self.music_connect_btn.configure(text="断开" if connected else "连接")
+
+    def _music_disconnect(self):
+        connection = getattr(self, "_music_serial_connection", None)
+        disconnect_port(connection, log_fn=lambda _m: None)
+        self._music_serial_connection = None
+        self._music_set_connected(False)
+
+    def _music_toggle_connect(self):
+        if self._music_connected and self._music_serial_connection is not None:
+            self._music_disconnect()
+            self._music_log("串口已断开")
+            return
+        device = self._music_selected_port_device()
+        if not device:
+            messagebox.showwarning("提示", "请先选择串口")
+            return
+        try:
+            baud = int(str(self.music_baudrate.get() or "").strip())
+        except Exception:
+            messagebox.showwarning("提示", "波特率格式不正确")
+            return
+        result = connect_port(device, baudrate=baud, timeout_sec=1.0, log_fn=lambda _m: None)
+        if not result.get("ok"):
+            self._music_log(f"串口连接失败: {result.get('message', '')}")
+            messagebox.showerror("连接失败", str(result.get("message", "未知错误")))
+            return
+        self._music_serial_connection = (result.get("payload") or {}).get("connection")
+        self._music_set_connected(True)
+        self._music_log(f"串口已连接: {device} @ {baud}")
+
+    def _music_send_preset(self, preset: str):
+        if not self._music_connected or self._music_serial_connection is None:
+            messagebox.showwarning("提示", "请先连接串口")
+            return
+        text = str(preset or "").strip()
+        if not text:
+            return
+        if "=" in text:
+            prefix, value = text.split("=", 1)
+        else:
+            prefix, value = text, ""
+        prefix = prefix.strip().upper()
+        value = value.strip()
+        if prefix == "AT+BD":
+            try:
+                new_baud = int(value or str(self.music_baudrate.get() or ""))
+            except Exception:
+                messagebox.showwarning("提示", "波特率预设值无效")
+                return
+            result = apply_baudrate_command(self._music_serial_connection, new_baud=new_baud, log_fn=lambda _m: None)
+            self._music_disconnect()
+            self._music_log(f"{prefix} -> {result.get('code', '')}: {result.get('message', '')}")
+            return
+        result = send_at_command(self._music_serial_connection, prefix, value, success_tokens=("OK", "BT"), log_fn=lambda _m: None)
+        response = str((result.get("payload") or {}).get("response", "") or "")
+        self._music_log(f"{prefix} -> {result.get('code', '')}: {response or result.get('message', '')}")
+
+    def _music_send_custom(self):
+        if not self._music_connected or self._music_serial_connection is None:
+            messagebox.showwarning("提示", "请先连接串口")
+            return
+        command = str(self.music_custom_cmd.get() or "").strip()
+        if not command:
+            return
+        result = send_serial_command(self._music_serial_connection, command, wait_sec=0.8, log_fn=lambda _m: None)
+        response = str((result.get("payload") or {}).get("response", "") or "")
+        self._music_log(f"自定义 -> {result.get('code', '')}: {response or result.get('message', '')}")
+
+    def _music_prepare_usb(self):
+        source_dir = self.music_source_dir.get().strip()
+        drive = self.music_usb_drive.get().strip() or self.usb_drive.get().strip()
+        if not source_dir:
+            messagebox.showwarning("提示", "请先选择音乐目录")
+            return
+        if not drive:
+            messagebox.showwarning("提示", "请先选择 U 盘")
+            return
+
+        def _work(log_fn):
+            return run_music_flash(source_dir=source_dir, drive=drive, format_first=True, eject_after=True, log_fn=log_fn)
+
+        def _done(result):
+            if result.get("ok"):
+                self._music_log("音乐模式流程完成")
+                return
+            msg = str(result.get("message", "音乐模式流程失败"))
+            self._music_log(f"流程失败: {msg}")
+            messagebox.showerror("音乐流程失败", msg)
+
+        self._run_task("音乐模式流程", _work, _done)
 
     def _file_log(self, msg: str, level: str = "INFO"):
         logger = self.__dict__.get("_file_logger")
@@ -511,6 +720,10 @@ class App(tk.Tk):
     def _on_close(self):
         if self.busy.get() and not messagebox.askyesno("确认退出", "后台任务仍在执行，确认退出吗？"):
             return
+        try:
+            self._music_disconnect()
+        except Exception:
+            pass
         self.destroy()
 
     def report_callback_exception(self, exc, val, tb):
@@ -946,10 +1159,24 @@ class App(tk.Tk):
         if drives:
             if current_selected not in current:
                 self.usb_drive.set(drives[0])
+            music_usb_combo = self.__dict__.get("music_usb_combo")
+            if music_usb_combo is not None:
+                music_usb_combo["values"] = drives
+            music_usb_var = self.__dict__.get("music_usb_drive")
+            if music_usb_var is not None:
+                music_selected = str(music_usb_var.get() or "").strip()
+                if music_selected not in current:
+                    music_usb_var.set(drives[0])
             if log_events and inserted:
                 self.log(f"检测到 U 盘: {', '.join(inserted)}")
         else:
             self.usb_drive.set("")
+            music_usb_var = self.__dict__.get("music_usb_drive")
+            if music_usb_var is not None:
+                music_usb_var.set("")
+            music_usb_combo = self.__dict__.get("music_usb_combo")
+            if music_usb_combo is not None:
+                music_usb_combo["values"] = []
             if log_events and removed:
                 self.log("未检测到可用 U 盘")
         return inserted

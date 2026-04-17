@@ -5,6 +5,7 @@ import pytest
 
 from handcontrol.core.usb_ops import (
     clean_usb,
+    copy_directory_to_usb,
     copy_to_usb,
     diagnose_usb_health,
     eject_usb,
@@ -91,6 +92,26 @@ def test_copy_to_usb_returns_false_on_error(tmp_path: Path):
 
     assert ok is False
     assert any("复制失败" in msg for msg in logs)
+
+
+def test_copy_directory_to_usb_replace_existing(tmp_path: Path):
+    drive = tmp_path / "usb"
+    drive.mkdir()
+    src = tmp_path / "music_A"
+    src.mkdir()
+    (src / "a.mp3").write_text("new", encoding="utf-8")
+
+    old_target = drive / "music_A"
+    old_target.mkdir()
+    (old_target / "old.mp3").write_text("old", encoding="utf-8")
+
+    logs, log_fn = _logs()
+    ok = copy_directory_to_usb(str(src), str(drive), log_fn=log_fn)
+
+    assert ok is True
+    assert (drive / "music_A" / "a.mp3").exists()
+    assert not (drive / "music_A" / "old.mp3").exists()
+    assert any("已复制目录" in msg for msg in logs)
 
 
 def test_eject_usb_success(monkeypatch: pytest.MonkeyPatch):

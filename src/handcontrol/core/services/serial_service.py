@@ -166,6 +166,48 @@ def send_serial_command(
         }
 
 
+def read_serial_messages(
+    connection: Any,
+    *,
+    encoding: str = "utf-8",
+    log_fn=print,
+) -> dict:
+    if connection is None or not getattr(connection, "is_open", False):
+        return {
+            "ok": False,
+            "code": "not_connected",
+            "message": "串口未连接",
+            "payload": {"lines": []},
+        }
+
+    try:
+        waiting = int(getattr(connection, "in_waiting", 0) or 0)
+        if waiting <= 0:
+            return {
+                "ok": True,
+                "code": "ok",
+                "message": "无新消息",
+                "payload": {"lines": [], "raw": b""},
+            }
+        raw = connection.read(waiting) if hasattr(connection, "read") else b""
+        text = raw.decode(encoding, errors="ignore")
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        return {
+            "ok": True,
+            "code": "ok",
+            "message": "读取成功",
+            "payload": {"lines": lines, "raw": raw},
+        }
+    except Exception as exc:
+        log_fn(f"串口读取失败: {exc}")
+        return {
+            "ok": False,
+            "code": "read_failed",
+            "message": str(exc),
+            "payload": {"lines": []},
+        }
+
+
 def probe_device_baudrate(
     device: str,
     baudrate: int,

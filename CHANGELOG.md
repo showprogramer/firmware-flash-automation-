@@ -5,12 +5,20 @@
 ### core
 - 新增 `core/services/serial_service.py`：提供串口扫描、连接/断开、命令发送与波特率探测能力，统一返回 `ok/code/message/payload` 结构。
 - 新增 `core/services/at_command_service.py`：封装 AT 指令发送与 `AT+BD` 波特率切换验证流程（新波特率成功、旧波特率未切换、状态未知三类结果）。
+- `core/services/serial_service.py` 补充 `read_serial_messages`，将串口读循环基础能力下沉到服务层。
+- 新增 `core/services/music_flash_service.py`：封装音乐版 U 盘流程（格式化→复制目录→弹出）。
+- `core/usb_ops.py` 新增 `copy_directory_to_usb`，支持目录级复制并覆盖旧目标目录。
 - 扩展 `core/types.py`：新增 `FirmwareType`、`ServiceResult`、`SerialPortInfo`、`SerialCommandResult`、`FlashJobResult` 等统一领域类型。
 - 更新 `core/services/__init__.py` 导出，补齐新增服务模块入口。
+- `core/settings.py` 新增音乐/串口配置读取：`MUSIC_DEFAULT_SOURCE_DIR`、`SERIAL_DEFAULT_BAUDRATE`、`SERIAL_AT_PRESETS`。
 
 ### test
 - 新增 `tests/test_serial_service.py`，覆盖串口服务核心分支（依赖缺失、扫描成功、连接成功、命令发送、波特率探测未匹配）。
 - 新增 `tests/test_at_command_service.py`，覆盖 AT 服务分支（成功、拒绝、波特率切换成功/未改变/未知）。
+- 新增 `tests/test_music_flash_service.py`，覆盖音乐版流程服务的成功/失败路径。
+- 扩展 `tests/test_usb_ops.py`，覆盖 `copy_directory_to_usb` 行为。
+- 扩展 `tests/test_settings.py`，覆盖音乐/串口默认配置读取。
+- 扩展 `tests/test_app_service_smoke.py`，补充音乐模式场景（串口扫描、连接切换、AT 预设、音乐流程调用）。
 
 ### refactor
 - 完成 `src layout` 迁移：源码从根目录迁移到 `src/handcontrol/`，根目录新增 `run.py` 作为轻量启动入口。
@@ -61,6 +69,9 @@
 - 更新 `README.md`：新增覆盖率门禁执行方式，阶段 5 状态改为已完成。
 
 ### app
+- 主程序 `app.py` 新增“音乐模式”Tab，与手控模式并存，实现单程序双模式入口。
+- 音乐模式接入 service 层：串口扫描/连接/AT发送/波特率切换与 U 盘流程均通过 `core/services` 调用，UI 只保留交互与展示。
+- 关闭窗口时新增音乐串口自动断开，降低端口占用残留风险。
 - 新增“导出诊断包”按钮：可一键导出日志、脱敏配置、当前列表状态、预览快照与环境摘要，便于远程排查。
 - 一键执行在复制与 Excel 写入成功后，会自动选中并跳转到下一个文件夹，减少人工点击。
 - 新增“合并备用文件到主表”按钮：当主表曾被占用产生 `*_刷机记录_待导入.xlsx` 时，可直接把其中的新行合并回主表并刷新预览。
@@ -118,6 +129,7 @@
 
 ### config
 - 新增 `config.toml`，用于集中配置扫描目录、Excel 参数和 USB 清理规则。
+- `config.toml` 新增 `[music]` 与 `[serial]` 区块，支持音乐目录、默认波特率与 AT 预设配置化。
 - `config.toml` 示例 `paths.root_dir` 改为空字符串，避免模板携带特定机器绝对路径。
 - `config.toml` 新增 `usb.auto_diagnose_on_insert` 与 `usb.health_check_interval_sec` 配置项。
 - config.toml 新增 [scan] 配置段，支持扫描识别规则配置化。

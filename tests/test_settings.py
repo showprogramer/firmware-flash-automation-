@@ -80,3 +80,10 @@ def test_scan_defaults_are_available():
     assert settings.SCAN_PATH_MODEL_PATTERNS
 
 
+def test_music_and_serial_defaults_are_available():
+    assert isinstance(settings.MUSIC_DEFAULT_SOURCE_DIR, str)
+    assert settings.SERIAL_DEFAULT_BAUDRATE >= 1200
+    assert isinstance(settings.SERIAL_AT_PRESETS, list)
+    assert len(settings.SERIAL_AT_PRESETS) >= 1
+
+

@@ -77,6 +77,30 @@ def copy_to_usb(rom_path: str, pkg_path: str, drive: str, log_fn=print) -> bool:
         return False
 
 
+def copy_directory_to_usb(source_dir: str, drive: str, log_fn=print) -> bool:
+    """Copy one directory to USB root. If target exists, replace it."""
+    src = Path(source_dir)
+    root = Path(drive)
+    if not src.exists() or not src.is_dir():
+        log_fn(f"  复制失败: 源目录不存在 {source_dir}")
+        return False
+    if not root.exists() or not root.is_dir():
+        log_fn(f"  复制失败: U盘路径无效 {drive}")
+        return False
+
+    target = root / src.name
+    try:
+        if target.exists():
+            shutil.rmtree(target)
+            log_fn(f"  已移除旧目录: {target.name}")
+        shutil.copytree(src, target)
+        log_fn(f"  已复制目录: {src.name}")
+        return True
+    except Exception as e:
+        log_fn(f"  复制失败: {e}")
+        return False
+
+
 def diagnose_usb_health(drive: str, log_fn=print) -> dict:
     """Lightweight drive health check when USB is inserted."""
     root = Path(drive)
