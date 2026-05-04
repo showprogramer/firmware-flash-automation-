@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from handcontrol.core.services.serial_service import disconnect_port, probe_device_baudrate, send_serial_command
-from handcontrol.core.types import SerialCommandResult
+from fwasset.core.services.serial_service import disconnect_port, probe_device_baudrate, send_serial_command
+from fwasset.core.types import SerialCommandResult
 
 
 def send_at_command(

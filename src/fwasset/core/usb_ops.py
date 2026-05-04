@@ -4,7 +4,7 @@ from pathlib import Path
 
 import psutil
 
-from handcontrol.core.settings import JUNK_EXTENSIONS, JUNK_FILENAMES
+from fwasset.core.settings import JUNK_EXTENSIONS, JUNK_FILENAMES
 
 
 _PERMISSION_HINTS = [
@@ -268,17 +268,22 @@ $vol.Put()
 
 def format_usb(drive: str, log_fn=print) -> bool:
     """Format USB to FAT32 (dangerous operation, call after explicit confirmation)."""
-    letter = drive.rstrip("\\:/")
-    script = f"format {letter}: /FS:FAT32 /Q /Y"
+    letter = _extract_drive_letter(drive)
+    if not letter:
+        log_fn("  格式化异常: 无效盘符")
+        return False
+    command = ["format", f"{letter}:", "/FS:FAT32", "/Q", "/Y"]
     try:
         log_fn(f"  正在格式化 {drive} ...")
-        result = subprocess.run(script, shell=True, capture_output=True, text=True, timeout=60)
+        result = subprocess.run(command, capture_output=True, text=True, timeout=60)
         if result.returncode == 0:
             log_fn("  格式化完成")
             return True
         log_fn(f"  格式化失败: {result.stderr}")
         return False
+    except (subprocess.TimeoutExpired, TimeoutError):
+        log_fn("  格式化超时")
+        return False
     except Exception as e:
         log_fn(f"  格式化异常: {e}")
         return False
-

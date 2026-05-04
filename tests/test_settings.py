@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-import handcontrol.core.settings as settings
-from handcontrol.core.settings import _as_str_list, load_toml_config
+import fwasset.core.settings as settings
+from fwasset.core.settings import _as_str_list, load_toml_config
 
 
 def test_load_toml_config_missing_file(tmp_path: Path):

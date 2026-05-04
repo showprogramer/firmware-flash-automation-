@@ -1,4 +1,4 @@
-from handcontrol.core.usb_ops import copy_directory_to_usb, eject_usb, format_usb
+from fwasset.core.usb_ops import copy_directory_to_usb, eject_usb, format_usb
 
 
 def run_music_flash(

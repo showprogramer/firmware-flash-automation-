@@ -1,4 +1,4 @@
-from handcontrol.core.usb_ops import clean_usb, copy_to_usb, eject_usb
+from fwasset.core.usb_ops import clean_usb, copy_to_usb, eject_usb
 
 
 def run_one_click(

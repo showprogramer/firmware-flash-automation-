@@ -3,8 +3,8 @@ import tkinter as tk
 
 import customtkinter as ctk
 
-from handcontrol.ui.handcontrol_panel import HandcontrolPanel
-from handcontrol.ui.music_panel import MusicPanel
+from fwasset.ui.handcontrol_panel import HandcontrolPanel
+from fwasset.ui.music_panel import MusicPanel
 
 
 class FakeVar:
@@ -139,7 +139,7 @@ def _mk_hand_stub(monkeypatch):
 def test_hand_scan_uses_service_result(monkeypatch):
     panel = _mk_hand_stub(monkeypatch)
     monkeypatch.setattr(
-        "handcontrol.ui.handcontrol_panel.build_scan_result",
+        "fwasset.ui.handcontrol_panel.build_scan_result",
         lambda *args, **kwargs: {"ok": True, "payload": {"folders": [{"model": "L36", "version": "V1.0.0", "path": "D:/a"}]}},
     )
     panel._run_task = lambda _name, fn, on_done: on_done(fn(panel._log))
@@ -154,7 +154,7 @@ def test_choose_root_and_scan_always_opens_directory_picker(monkeypatch):
     panel = _mk_hand_stub(monkeypatch)
     called = {"scan": 0}
 
-    monkeypatch.setattr("handcontrol.ui.handcontrol_panel.filedialog.askdirectory", lambda **kwargs: "D:/new-root")
+    monkeypatch.setattr("fwasset.ui.handcontrol_panel.filedialog.askdirectory", lambda **kwargs: "D:/new-root")
     panel._scan = lambda: called.__setitem__("scan", called["scan"] + 1)
 
     panel._choose_root_and_scan()
@@ -221,8 +221,8 @@ def test_hand_double_click_opens_selected_folder(monkeypatch):
     panel._render_folder_cards()
     opened = []
 
-    monkeypatch.setattr("handcontrol.ui.handcontrol_panel.Path.exists", lambda _self: True)
-    monkeypatch.setattr("handcontrol.ui.handcontrol_panel.os.startfile", lambda path: opened.append(path), raising=False)
+    monkeypatch.setattr("fwasset.ui.handcontrol_panel.Path.exists", lambda _self: True)
+    monkeypatch.setattr("fwasset.ui.handcontrol_panel.os.startfile", lambda path: opened.append(path), raising=False)
 
     handler = panel._folder_card_widgets[0]["card"].bindings["<Double-Button-1>"]
     handler(None)
@@ -253,7 +253,7 @@ def test_one_click_runs_service(monkeypatch):
         called["one_click"] = True
         return {"ok": True, "payload": {"copy_ok": True}}
 
-    monkeypatch.setattr("handcontrol.ui.handcontrol_panel.run_one_click", mock_one_click)
+    monkeypatch.setattr("fwasset.ui.handcontrol_panel.run_one_click", mock_one_click)
     panel._run_task = lambda _name, fn, on_done=None: fn(panel._log)
 
     panel._one_click()
@@ -275,7 +275,7 @@ def test_music_scan_ports_updates_ui(monkeypatch):
     panel._log = lambda msg: None
 
     monkeypatch.setattr(
-        "handcontrol.ui.music_panel.scan_serial_ports",
+        "fwasset.ui.music_panel.scan_serial_ports",
         lambda **kwargs: {"ok": True, "payload": {"ports": [{"device": "COM1", "description": "X"}]}},
     )
 
@@ -294,7 +294,7 @@ def test_music_pollers_skip_when_deactivated(monkeypatch):
 
     called = {"serial": 0}
     monkeypatch.setattr(
-        "handcontrol.ui.music_panel.read_serial_messages",
+        "fwasset.ui.music_panel.read_serial_messages",
         lambda *args, **kwargs: called.__setitem__("serial", called["serial"] + 1),
     )
 
@@ -305,7 +305,7 @@ def test_music_pollers_skip_when_deactivated(monkeypatch):
 
 
 def test_shell_lazy_creates_music_panel_and_activates_visible_panel(monkeypatch):
-    import handcontrol.ui.shell as shell_module
+    import fwasset.ui.shell as shell_module
 
     monkeypatch.setattr(ctk, "CTk", FakeAppBase)
     monkeypatch.setattr(ctk, "CTkFrame", FakeWidget)

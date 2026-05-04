@@ -1,8 +1,8 @@
-from handcontrol.core.logging_utils import FileLogger
+from fwasset.core.logging_utils import FileLogger
 
 
 def test_file_logger_writes_info_and_error(tmp_path):
-    log_path = tmp_path / "logs" / "handcontrol.app.log"
+    log_path = tmp_path / "logs" / "fwasset.app.log"
     logger = FileLogger(log_path)
 
     logger.log("hello")

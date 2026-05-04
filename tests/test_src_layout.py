@@ -8,12 +8,12 @@ from tempfile import TemporaryDirectory
 from hypothesis import given
 from hypothesis import strategies as st
 
-from handcontrol.core.settings import _find_project_root
+from fwasset.core.settings import _find_project_root
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = REPO_ROOT / "src"
-PACKAGE_ROOT = SRC_ROOT / "handcontrol"
+PACKAGE_ROOT = SRC_ROOT / "fwasset"
 
 
 def test_src_package_layout_exists():
@@ -29,23 +29,23 @@ def test_legacy_root_entries_removed():
     assert not (REPO_ROOT / "tests" / "__init__.py").exists()
 
 
-def test_import_handcontrol_package():
-    module = importlib.import_module("handcontrol")
+def test_import_fwasset_package():
+    module = importlib.import_module("fwasset")
     assert module is not None
 
 
-def test_run_py_uses_handcontrol_main():
+def test_run_py_uses_fwasset_main():
     content = (REPO_ROOT / "run.py").read_text(encoding="utf-8")
-    assert "from handcontrol.app import main" in content
+    assert "from fwasset.app import main" in content
     assert 'if __name__ == "__main__":' in content
 
 
 def test_pyproject_has_src_layout_settings():
     content = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     assert 'build-backend = "hatchling.build"' in content
-    assert 'packages = ["src/handcontrol"]' in content
-    assert 'handcontrol = "handcontrol.app:main"' in content
-    assert '--cov=src/handcontrol' in content
+    assert 'packages = ["src/fwasset"]' in content
+    assert 'fwasset = "fwasset.app:main"' in content
+    assert '--cov=src/fwasset' in content
     assert 'hypothesis>=6.0.0' in content
 
 

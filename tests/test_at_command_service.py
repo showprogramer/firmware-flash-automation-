@@ -1,6 +1,6 @@
 import pytest
 
-from handcontrol.core.services.at_command_service import apply_baudrate_command, send_at_command
+from fwasset.core.services.at_command_service import apply_baudrate_command, send_at_command
 
 
 class _FakeConn:
@@ -15,7 +15,7 @@ class _FakeConn:
 
 def test_send_at_command_ok(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(
-        "handcontrol.core.services.at_command_service.send_serial_command",
+        "fwasset.core.services.at_command_service.send_serial_command",
         lambda *args, **kwargs: {"ok": True, "code": "ok", "message": "ok", "payload": {"response": "OK"}},
     )
 
@@ -27,7 +27,7 @@ def test_send_at_command_ok(monkeypatch: pytest.MonkeyPatch):
 
 def test_send_at_command_rejected(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(
-        "handcontrol.core.services.at_command_service.send_serial_command",
+        "fwasset.core.services.at_command_service.send_serial_command",
         lambda *args, **kwargs: {"ok": True, "code": "ok", "message": "ok", "payload": {"response": "ERROR"}},
     )
 
@@ -39,11 +39,11 @@ def test_send_at_command_rejected(monkeypatch: pytest.MonkeyPatch):
 
 def test_apply_baudrate_command_success(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(
-        "handcontrol.core.services.at_command_service.send_serial_command",
+        "fwasset.core.services.at_command_service.send_serial_command",
         lambda *args, **kwargs: {"ok": True, "code": "ok", "message": "ok", "payload": {"response": "OK"}},
     )
     monkeypatch.setattr(
-        "handcontrol.core.services.at_command_service.probe_device_baudrate",
+        "fwasset.core.services.at_command_service.probe_device_baudrate",
         lambda device, baudrate, **kwargs: {
             "ok": True,
             "code": "ok",
@@ -60,7 +60,7 @@ def test_apply_baudrate_command_success(monkeypatch: pytest.MonkeyPatch):
 
 def test_apply_baudrate_command_unchanged(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(
-        "handcontrol.core.services.at_command_service.send_serial_command",
+        "fwasset.core.services.at_command_service.send_serial_command",
         lambda *args, **kwargs: {"ok": True, "code": "ok", "message": "ok", "payload": {"response": "OK"}},
     )
 
@@ -69,7 +69,7 @@ def test_apply_baudrate_command_unchanged(monkeypatch: pytest.MonkeyPatch):
             return {"ok": False, "code": "no_match", "message": "fail", "payload": {"response": ""}}
         return {"ok": True, "code": "ok", "message": "match", "payload": {"response": "OK"}}
 
-    monkeypatch.setattr("handcontrol.core.services.at_command_service.probe_device_baudrate", _probe)
+    monkeypatch.setattr("fwasset.core.services.at_command_service.probe_device_baudrate", _probe)
 
     result = apply_baudrate_command(_FakeConn(), new_baud=38400, log_fn=lambda _m: None)
 
@@ -79,11 +79,11 @@ def test_apply_baudrate_command_unchanged(monkeypatch: pytest.MonkeyPatch):
 
 def test_apply_baudrate_command_unknown(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(
-        "handcontrol.core.services.at_command_service.send_serial_command",
+        "fwasset.core.services.at_command_service.send_serial_command",
         lambda *args, **kwargs: {"ok": True, "code": "ok", "message": "ok", "payload": {"response": "OK"}},
     )
     monkeypatch.setattr(
-        "handcontrol.core.services.at_command_service.probe_device_baudrate",
+        "fwasset.core.services.at_command_service.probe_device_baudrate",
         lambda *args, **kwargs: {"ok": False, "code": "no_match", "message": "fail", "payload": {"response": ""}},
     )
 

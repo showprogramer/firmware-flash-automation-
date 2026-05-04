@@ -1,4 +1,4 @@
-from handcontrol.core.usb_ops import diagnose_usb_health, repair_usb_driver
+from fwasset.core.usb_ops import diagnose_usb_health, repair_usb_driver
 
 
 def diagnose_drive(drive: str, log_fn=print) -> dict:

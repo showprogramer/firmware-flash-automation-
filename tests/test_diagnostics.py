@@ -1,7 +1,7 @@
 from pathlib import Path
 import zipfile
 
-from handcontrol.core.diagnostics import build_diagnostic_bundle, sanitize_snapshot
+from fwasset.core.diagnostics import build_diagnostic_bundle, sanitize_snapshot
 
 
 def test_sanitize_snapshot_masks_path_fields():

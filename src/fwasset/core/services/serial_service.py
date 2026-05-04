@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from handcontrol.core.types import SerialCommandResult, SerialPortInfo
+from fwasset.core.types import SerialCommandResult, SerialPortInfo
 
 
 def _import_serial_modules():

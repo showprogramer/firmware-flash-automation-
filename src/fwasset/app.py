@@ -2,18 +2,18 @@ import os
 from pathlib import Path
 from tkinter import messagebox
 
-from handcontrol.ui.handcontrol_panel import HandcontrolPanel as App
-from handcontrol.ui import shell
-from handcontrol.ui.shell import UnifiedFlashPlatform
+from fwasset.ui.handcontrol_panel import HandcontrolPanel as App
+from fwasset.ui import shell
+from fwasset.ui.shell import UnifiedFlashPlatform
 
-from handcontrol.core.diagnostics import build_diagnostic_bundle
-from handcontrol.core.services.at_command_service import apply_baudrate_command
-from handcontrol.core.services.flash_service import run_one_click
-from handcontrol.core.services.music_flash_service import run_music_flash
-from handcontrol.core.services.scan_service import build_scan_result
-from handcontrol.core.services.serial_service import connect_port, disconnect_port, scan_serial_ports
-from handcontrol.core.services.usb_repair_service import diagnose_drive, repair_drive
-from handcontrol.core.usb_ops import get_usb_drives
+from fwasset.core.diagnostics import build_diagnostic_bundle
+from fwasset.core.services.at_command_service import apply_baudrate_command
+from fwasset.core.services.flash_service import run_one_click
+from fwasset.core.services.music_flash_service import run_music_flash
+from fwasset.core.services.scan_service import build_scan_result
+from fwasset.core.services.serial_service import connect_port, disconnect_port, scan_serial_ports
+from fwasset.core.services.usb_repair_service import diagnose_drive, repair_drive
+from fwasset.core.usb_ops import get_usb_drives
 
 
 def _open_in_explorer(self, folder_path: str, model: str = "", version: str = ""):

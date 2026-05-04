@@ -2,12 +2,13 @@ from pathlib import Path
 
 import pytest
 
-import handcontrol.core.file_scan as file_scan
-from handcontrol.core.file_scan import (
+import fwasset.core.file_scan as file_scan
+from fwasset.core.file_scan import (
     find_handcontrol_folders,
     guess_model_from_path,
     guess_version_from_path,
     parse_rom_filename,
+    scan_firmware_assets,
 )
 
 
@@ -165,3 +166,21 @@ def test_find_handcontrol_folders_uses_configurable_extensions_and_excludes(tmp_
     assert results[0]["rom_file"].endswith(".bin")
     assert results[0]["pkg_file"].endswith(".pack")
 
+
+def test_scan_firmware_assets_uses_catalog_types(tmp_path: Path):
+    handcontrol_dir = tmp_path / "L35A手控UI" / "release"
+    handcontrol_dir.mkdir(parents=True)
+    (handcontrol_dir / "YJ-L35A_UI_1.2.3.ROM").write_text("rom", encoding="utf-8")
+    (handcontrol_dir / "firmware.pkg").write_text("pkg", encoding="utf-8")
+
+    voice_dir = tmp_path / "语音板"
+    voice_dir.mkdir()
+    (voice_dir / "voice_v2.0.0.bin").write_text("voice", encoding="utf-8")
+
+    assets, errors = scan_firmware_assets(str(tmp_path))
+
+    assert errors == []
+    assert len(assets) == 2
+    assert [item["firmware_type"] for item in assets] == ["handcontrol_ui", "voice"]
+    assert assets[0]["flash_mode"] == "auto_usb"
+    assert assets[1]["firmware_label"] == "语音程序"

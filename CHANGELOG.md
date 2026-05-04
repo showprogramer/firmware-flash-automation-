@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### refactor
+- 包名与源码根目录从 `handcontrol` 统一迁移到 `fwasset`，同步更新启动入口、测试导入与打包脚本，收敛为“固件资源管理平台”命名。
+
+### core
+- 新增 `firmware_catalog.toml` 运行时目录，并将固件类型扩展为 19 类，统一定义 `FirmwareType`、`FlashMode`、`FirmwareAsset` 等核心类型。
+- `core/file_scan.py` 新增 catalog 驱动的通用扫描 `scan_firmware_assets()`：按目录关键字与文件扩展名识别固件类型，返回统一资产结构，并显式汇报目录读取错误。
+- `core/services/scan_service.py` 扩展扫描返回结构，同时提供统一 `assets`、兼容用 `folders` 与 `errors`，为后续单列表 UI 合并提供稳定输入。
+- `core/usb_ops.py` 修复 `format_usb` 的命令注入风险：移除 `shell=True`，改用参数列表调用，并补齐超时处理。
+
+### docs
+- 新增 `specs/newtasks.md`，把当前需求整理为分阶段 todo，并与 `requirements-spec.md`、`firmware-types-catalog.md` 对齐。
+
+### test
+- 新增 `tests/test_firmware_catalog.py`，覆盖 catalog 缺失、规范化与启用过滤行为。
+- 扩展 `tests/test_file_scan.py`、`tests/test_scan_service.py`、`tests/test_usb_ops.py`，覆盖 19 类 catalog 基线、通用扫描返回结构与 `format_usb` 超时分支。
+- 本轮验证通过：`uv sync --extra dev; .\\.venv\\Scripts\\python.exe -m pytest -q` -> `107 passed`，总覆盖率 `82.98%`。
+
 ### app
 - 手控面板删除 Excel 台账入口与预览，收敛为“刷机操作 + 资源详情 + 运行日志”界面。
 - 手控资源详情区域改为展示型号、版本、目录、原始路径、ROM/PKG 文件与可执行操作说明；保留双击打开目录与下一项切换。

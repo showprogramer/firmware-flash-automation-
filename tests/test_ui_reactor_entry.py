@@ -1,5 +1,5 @@
-import handcontrol.app as app_module
-import handcontrol.ui.shell as shell_module
+import fwasset.app as app_module
+import fwasset.ui.shell as shell_module
 
 
 def test_main_routes_to_ui_reactor_when_env_enabled(monkeypatch):

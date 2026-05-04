@@ -6,24 +6,24 @@ from tkinter import filedialog
 
 import customtkinter as ctk
 
-from handcontrol.core.services.at_command_service import apply_baudrate_command, send_at_command
-from handcontrol.core.services.music_flash_service import run_music_flash
-from handcontrol.core.services.serial_service import (
+from fwasset.core.services.at_command_service import apply_baudrate_command, send_at_command
+from fwasset.core.services.music_flash_service import run_music_flash
+from fwasset.core.services.serial_service import (
     connect_port,
     disconnect_port,
     read_serial_messages,
     scan_serial_ports,
     send_serial_command,
 )
-from handcontrol.core.settings import MUSIC_DEFAULT_SOURCE_DIR, SERIAL_AT_PRESETS, SERIAL_DEFAULT_BAUDRATE
-from handcontrol.ui.base_panel import BaseFlashPanel
-from handcontrol.ui.design_tokens import (
+from fwasset.core.settings import MUSIC_DEFAULT_SOURCE_DIR, SERIAL_AT_PRESETS, SERIAL_DEFAULT_BAUDRATE
+from fwasset.ui.base_panel import BaseFlashPanel
+from fwasset.ui.design_tokens import (
     BG_CARD, BG_HOVER, BG_INPUT, BORDER_COLOR,
     COLOR_DANGER, COLOR_PRIMARY, COLOR_PRIMARY_HOVER, COLOR_SUCCESS,
     FONT_FAMILY, FONT_SIZE_LG, FONT_SIZE_MD, FONT_SIZE_SM, FONT_SIZE_XL,
     TEXT_PRIMARY, TEXT_SECONDARY
 )
-from handcontrol.ui.shared_widgets import section_title
+from fwasset.ui.shared_widgets import section_title
 
 
 class MusicPanel(BaseFlashPanel):

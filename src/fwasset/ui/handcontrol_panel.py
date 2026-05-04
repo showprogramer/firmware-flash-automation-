@@ -7,13 +7,13 @@ from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
 
-from handcontrol.core.services.flash_service import run_one_click
-from handcontrol.core.services.scan_service import build_scan_result
-from handcontrol.core.settings import DEFAULT_ROOT
-from handcontrol.core.sort_config import SortKey, apply_sort
-from handcontrol.core.usb_ops import clean_usb, copy_to_usb, eject_usb, format_usb
-from handcontrol.ui.base_panel import BaseFlashPanel
-from handcontrol.ui.design_tokens import (
+from fwasset.core.services.flash_service import run_one_click
+from fwasset.core.services.scan_service import build_scan_result
+from fwasset.core.settings import DEFAULT_ROOT
+from fwasset.core.sort_config import SortKey, apply_sort
+from fwasset.core.usb_ops import clean_usb, copy_to_usb, eject_usb, format_usb
+from fwasset.ui.base_panel import BaseFlashPanel
+from fwasset.ui.design_tokens import (
     BG_CARD,
     BG_HOVER,
     BG_INPUT,
@@ -28,7 +28,7 @@ from handcontrol.ui.design_tokens import (
     FONT_SIZE_SM,
     FONT_SIZE_XL,
 )
-from handcontrol.ui.shared_widgets import section_title
+from fwasset.ui.shared_widgets import section_title
 
 
 class HandcontrolPanel(BaseFlashPanel):

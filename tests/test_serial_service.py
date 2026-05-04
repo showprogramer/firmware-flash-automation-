@@ -1,6 +1,6 @@
 import pytest
 
-from handcontrol.core.services.serial_service import (
+from fwasset.core.services.serial_service import (
     connect_port,
     probe_device_baudrate,
     read_serial_messages,
@@ -49,7 +49,7 @@ class _FakeSerialConn:
 
 def test_scan_serial_ports_missing_dependency(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(
-        "handcontrol.core.services.serial_service._import_serial_modules",
+        "fwasset.core.services.serial_service._import_serial_modules",
         lambda: (None, None, "pyserial missing"),
     )
 
@@ -69,7 +69,7 @@ def test_scan_serial_ports_ok(monkeypatch: pytest.MonkeyPatch):
             ]
 
     monkeypatch.setattr(
-        "handcontrol.core.services.serial_service._import_serial_modules",
+        "fwasset.core.services.serial_service._import_serial_modules",
         lambda: (object(), _FakeListPorts, ""),
     )
 
@@ -91,7 +91,7 @@ def test_connect_port_ok(monkeypatch: pytest.MonkeyPatch):
             return conn
 
     monkeypatch.setattr(
-        "handcontrol.core.services.serial_service._import_serial_modules",
+        "fwasset.core.services.serial_service._import_serial_modules",
         lambda: (_FakeSerialModule, object(), ""),
     )
 
@@ -113,10 +113,10 @@ def test_send_serial_command_appends_crlf():
 
 def test_probe_device_baudrate_no_match(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(
-        "handcontrol.core.services.serial_service.connect_port",
+        "fwasset.core.services.serial_service.connect_port",
         lambda *args, **kwargs: {"ok": True, "code": "ok", "message": "ok", "payload": {"connection": _FakeSerialConn(b"??")}},
     )
-    monkeypatch.setattr("handcontrol.core.services.serial_service.disconnect_port", lambda *_args, **_kwargs: {"ok": True})
+    monkeypatch.setattr("fwasset.core.services.serial_service.disconnect_port", lambda *_args, **_kwargs: {"ok": True})
 
     result = probe_device_baudrate("COM3", 115200, log_fn=lambda _m: None)
 

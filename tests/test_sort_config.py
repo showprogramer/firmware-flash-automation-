@@ -1,4 +1,4 @@
-from handcontrol.core.sort_config import SortKey, apply_sort
+from fwasset.core.sort_config import SortKey, apply_sort
 
 
 def test_apply_sort_by_default_path_order():

@@ -7,7 +7,7 @@ import platform
 import sys
 import zipfile
 
-from handcontrol.core.settings import load_toml_config
+from fwasset.core.settings import load_toml_config
 
 
 _PATH_KEYS = {

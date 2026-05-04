@@ -3,9 +3,9 @@ requires = ["hatchling>=1.27.0"]
 build-backend = "hatchling.build"
 
 [project]
-name = "handcontrol-uitool"
+name = "fwasset"
 version = "0.1.0"
-description = "Massage Chair Firmware Asset Manager for firmware package search, tool launch, flashing workflows, and asset management"
+description = "Massage Chair Firmware Asset Manager"
 requires-python = ">=3.8"
 dependencies = [
     "customtkinter>=5.2.2",
@@ -22,17 +22,17 @@ dev = [
 ]
 
 [project.scripts]
-handcontrol = "handcontrol.app:main"
+fwasset = "fwasset.app:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/handcontrol"]
+packages = ["src/fwasset"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 pythonpath = ["src"]
-addopts = "--cov=src/handcontrol --cov-report=term-missing --cov-fail-under=80"
+addopts = "--cov=src/fwasset --cov-report=term-missing --cov-fail-under=80"
 
 [tool.coverage.run]
-source = ["src/handcontrol"]
-omit = ["src/handcontrol/app.py", "src/handcontrol/ui/*"]
+source = ["src/fwasset"]
+omit = ["src/fwasset/app.py", "src/fwasset/ui/*"]

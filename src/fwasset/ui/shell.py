@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import customtkinter as ctk
 
-from handcontrol.ui.design_tokens import BG_APP
-from handcontrol.ui.handcontrol_panel import HandcontrolPanel
-from handcontrol.ui.music_panel import MusicPanel
-from handcontrol.ui.shared_widgets import apply_treeview_modern_style
+from fwasset.ui.design_tokens import BG_APP
+from fwasset.ui.handcontrol_panel import HandcontrolPanel
+from fwasset.ui.music_panel import MusicPanel
+from fwasset.ui.shared_widgets import apply_treeview_modern_style
 
 
 class UnifiedFlashPlatform(ctk.CTk):

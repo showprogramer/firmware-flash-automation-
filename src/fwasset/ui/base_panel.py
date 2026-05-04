@@ -8,8 +8,8 @@ from tkinter import messagebox
 
 import customtkinter as ctk
 
-from handcontrol.core.usb_ops import get_usb_drives
-from handcontrol.ui.design_tokens import (
+from fwasset.core.usb_ops import get_usb_drives
+from fwasset.ui.design_tokens import (
     BG_APP,
     BG_CARD,
     BG_HOVER,

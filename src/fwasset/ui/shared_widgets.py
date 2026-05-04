@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import customtkinter as ctk
 from tkinter import ttk
-from handcontrol.ui.design_tokens import (
+from fwasset.ui.design_tokens import (
     BG_CARD, BG_HOVER, BG_SIDEBAR, BORDER_COLOR, COLOR_PRIMARY,
     FONT_FAMILY, FONT_SIZE_LG, FONT_SIZE_MD, TEXT_PRIMARY, TEXT_SECONDARY
 )

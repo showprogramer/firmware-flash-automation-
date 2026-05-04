@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from handcontrol.core.usb_ops import (
+from fwasset.core.usb_ops import (
     clean_usb,
     copy_directory_to_usb,
     copy_to_usb,
@@ -26,7 +26,7 @@ def test_get_usb_drives_filters_expected_partitions(monkeypatch: pytest.MonkeyPa
         SimpleNamespace(opts="rw", fstype="FAT32", mountpoint="F:\\"),
         SimpleNamespace(opts="rw", fstype="NTFS", mountpoint="C:\\"),
     ]
-    monkeypatch.setattr("handcontrol.core.usb_ops.psutil.disk_partitions", lambda all=False: parts)
+    monkeypatch.setattr("fwasset.core.usb_ops.psutil.disk_partitions", lambda all=False: parts)
 
     drives = get_usb_drives()
 
@@ -121,7 +121,7 @@ def test_eject_usb_success(monkeypatch: pytest.MonkeyPatch):
         assert cmd[0] == "powershell"
         return SimpleNamespace(returncode=0, stderr="")
 
-    monkeypatch.setattr("handcontrol.core.usb_ops.subprocess.run", fake_run)
+    monkeypatch.setattr("fwasset.core.usb_ops.subprocess.run", fake_run)
 
     ok = eject_usb("E:\\", log_fn=log_fn)
 
@@ -132,7 +132,7 @@ def test_eject_usb_success(monkeypatch: pytest.MonkeyPatch):
 def test_eject_usb_failure_and_exception(monkeypatch: pytest.MonkeyPatch):
     logs1, log_fn1 = _logs()
     monkeypatch.setattr(
-        "handcontrol.core.usb_ops.subprocess.run",
+        "fwasset.core.usb_ops.subprocess.run",
         lambda *args, **kwargs: SimpleNamespace(returncode=1, stderr="denied"),
     )
     ok1 = eject_usb("E:\\", log_fn=log_fn1)
@@ -144,7 +144,7 @@ def test_eject_usb_failure_and_exception(monkeypatch: pytest.MonkeyPatch):
     def raise_run(*args, **kwargs):
         raise RuntimeError("boom")
 
-    monkeypatch.setattr("handcontrol.core.usb_ops.subprocess.run", raise_run)
+    monkeypatch.setattr("fwasset.core.usb_ops.subprocess.run", raise_run)
     ok2 = eject_usb("E:\\", log_fn=log_fn2)
     assert ok2 is False
     assert any("弹出异常" in msg for msg in logs2)
@@ -152,17 +152,25 @@ def test_eject_usb_failure_and_exception(monkeypatch: pytest.MonkeyPatch):
 
 def test_format_usb_success_failure_and_exception(monkeypatch: pytest.MonkeyPatch):
     logs1, log_fn1 = _logs()
+    calls = []
+
+    def run_success(*args, **kwargs):
+        calls.append((args, kwargs))
+        return SimpleNamespace(returncode=0, stderr="")
+
     monkeypatch.setattr(
-        "handcontrol.core.usb_ops.subprocess.run",
-        lambda *args, **kwargs: SimpleNamespace(returncode=0, stderr=""),
+        "fwasset.core.usb_ops.subprocess.run",
+        run_success,
     )
     ok1 = format_usb("E:\\", log_fn=log_fn1)
     assert ok1 is True
+    assert calls[0][0][0] == ["format", "E:", "/FS:FAT32", "/Q", "/Y"]
+    assert "shell" not in calls[0][1]
     assert any("格式化完成" in msg for msg in logs1)
 
     logs2, log_fn2 = _logs()
     monkeypatch.setattr(
-        "handcontrol.core.usb_ops.subprocess.run",
+        "fwasset.core.usb_ops.subprocess.run",
         lambda *args, **kwargs: SimpleNamespace(returncode=1, stderr="failed"),
     )
     ok2 = format_usb("E:\\", log_fn=log_fn2)
@@ -174,10 +182,24 @@ def test_format_usb_success_failure_and_exception(monkeypatch: pytest.MonkeyPatc
     def raise_run(*args, **kwargs):
         raise RuntimeError("boom")
 
-    monkeypatch.setattr("handcontrol.core.usb_ops.subprocess.run", raise_run)
+    monkeypatch.setattr("fwasset.core.usb_ops.subprocess.run", raise_run)
     ok3 = format_usb("E:\\", log_fn=log_fn3)
     assert ok3 is False
     assert any("格式化异常" in msg for msg in logs3)
+
+
+def test_format_usb_timeout(monkeypatch: pytest.MonkeyPatch):
+    logs, log_fn = _logs()
+
+    def raise_timeout(*args, **kwargs):
+        raise __import__("subprocess").TimeoutExpired(cmd="format", timeout=60)
+
+    monkeypatch.setattr("fwasset.core.usb_ops.subprocess.run", raise_timeout)
+
+    ok = format_usb("E:\\", log_fn=log_fn)
+
+    assert ok is False
+    assert any("格式化超时" in msg for msg in logs)
 
 
 def test_diagnose_usb_health_ok(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -187,7 +209,7 @@ def test_diagnose_usb_health_ok(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     (usb / "a.txt").write_text("x", encoding="utf-8")
 
     monkeypatch.setattr(
-        "handcontrol.core.usb_ops.subprocess.run",
+        "fwasset.core.usb_ops.subprocess.run",
         lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout="ok", stderr=""),
     )
 
@@ -214,7 +236,7 @@ def test_diagnose_usb_health_timeout(tmp_path: Path, monkeypatch: pytest.MonkeyP
     def raise_timeout(*args, **kwargs):
         raise TimeoutError("timeout")
 
-    monkeypatch.setattr("handcontrol.core.usb_ops.subprocess.run", raise_timeout)
+    monkeypatch.setattr("fwasset.core.usb_ops.subprocess.run", raise_timeout)
     result = diagnose_usb_health(str(usb), log_fn=log_fn)
 
     assert result["ok"] is False
@@ -229,7 +251,7 @@ def test_repair_usb_driver_ok(monkeypatch: pytest.MonkeyPatch):
         calls.append(cmd)
         return SimpleNamespace(returncode=0, stdout="ok", stderr="")
 
-    monkeypatch.setattr("handcontrol.core.usb_ops.subprocess.run", fake_run)
+    monkeypatch.setattr("fwasset.core.usb_ops.subprocess.run", fake_run)
     result = repair_usb_driver("E:\\", log_fn=log_fn)
 
     assert result["ok"] is True
@@ -246,7 +268,7 @@ def test_repair_usb_driver_permission_denied(monkeypatch: pytest.MonkeyPatch):
             return SimpleNamespace(returncode=1, stdout="", stderr="Access is denied.")
         return SimpleNamespace(returncode=0, stdout="ok", stderr="")
 
-    monkeypatch.setattr("handcontrol.core.usb_ops.subprocess.run", fake_run)
+    monkeypatch.setattr("fwasset.core.usb_ops.subprocess.run", fake_run)
     result = repair_usb_driver("E:\\", log_fn=log_fn)
 
     assert result["ok"] is False
@@ -262,11 +284,9 @@ def test_repair_usb_driver_scan_failed(monkeypatch: pytest.MonkeyPatch):
             return SimpleNamespace(returncode=0, stdout="ok", stderr="")
         return SimpleNamespace(returncode=1, stdout="", stderr="scan failed")
 
-    monkeypatch.setattr("handcontrol.core.usb_ops.subprocess.run", fake_run)
+    monkeypatch.setattr("fwasset.core.usb_ops.subprocess.run", fake_run)
     result = repair_usb_driver("E:\\", log_fn=log_fn)
 
     assert result["ok"] is True
     assert result["code"] == "ok"
     assert result["payload"]["scan_warning"] == "scan failed"
-
-
