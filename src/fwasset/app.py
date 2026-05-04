@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 from tkinter import messagebox
 
-from fwasset.ui.handcontrol_panel import HandcontrolPanel as App
+from fwasset.ui.firmware_list_panel import FirmwareListPanel as App
 from fwasset.ui import shell
 from fwasset.ui.shell import UnifiedFlashPlatform
 

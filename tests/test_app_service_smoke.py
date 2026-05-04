@@ -1,10 +1,9 @@
 import queue
-import tkinter as tk
 
 import customtkinter as ctk
 
-from fwasset.ui.handcontrol_panel import HandcontrolPanel
-from fwasset.ui.music_panel import MusicPanel
+from fwasset.ui.firmware_list_panel import FirmwareListPanel
+from fwasset.ui.serial_control import SerialControl
 
 
 class FakeVar:
@@ -25,8 +24,8 @@ class FakeWidget:
     def __init__(self, master=None, **kwargs):
         self.master = master
         self.text = kwargs.get("text", "")
+        self.values = kwargs.get("values", [])
         self.pack_count = 0
-        self.pack_forget_count = 0
         self.grid_count = 0
         self.raise_count = 0
         self.bindings = {}
@@ -36,14 +35,13 @@ class FakeWidget:
     def configure(self, **kwargs):
         if "text" in kwargs:
             self.text = kwargs["text"]
+        if "values" in kwargs:
+            self.values = kwargs["values"]
         for key, value in kwargs.items():
             setattr(self, key, value)
 
     def pack(self, **kwargs):
         self.pack_count += 1
-
-    def pack_forget(self):
-        self.pack_forget_count += 1
 
     def grid(self, **kwargs):
         self.grid_count += 1
@@ -52,6 +50,12 @@ class FakeWidget:
         pass
 
     def grid_columnconfigure(self, *args, **kwargs):
+        pass
+
+    def grid_propagate(self, *args, **kwargs):
+        pass
+
+    def pack_propagate(self, *args, **kwargs):
         pass
 
     def tkraise(self):
@@ -65,9 +69,6 @@ class FakeWidget:
 
     def bind(self, event, handler, *args, **kwargs):
         self.bindings[event] = handler
-
-    def pack_propagate(self, *args, **kwargs):
-        pass
 
 
 class FakeText:
@@ -98,63 +99,90 @@ class FakeAppBase(FakeWidget):
         pass
 
 
-def _mk_hand_stub(monkeypatch):
+def _patch_ctk(monkeypatch):
     monkeypatch.setattr(ctk, "CTkFrame", FakeWidget)
     monkeypatch.setattr(ctk, "CTkLabel", FakeWidget)
     monkeypatch.setattr(ctk, "CTkButton", FakeWidget)
     monkeypatch.setattr(ctk, "CTkEntry", FakeWidget)
     monkeypatch.setattr(ctk, "CTkComboBox", FakeWidget)
     monkeypatch.setattr(ctk, "CTkOptionMenu", FakeWidget)
-    monkeypatch.setattr(ctk, "CTkSegmentedButton", FakeWidget)
     monkeypatch.setattr(ctk, "CTkScrollableFrame", FakeWidget)
     monkeypatch.setattr(ctk, "CTkTextbox", FakeText)
+    monkeypatch.setattr(ctk, "CTkCheckBox", FakeWidget)
 
-    panel = HandcontrolPanel.__new__(HandcontrolPanel)
+
+def _mk_asset_stub(monkeypatch):
+    _patch_ctk(monkeypatch)
+    panel = FirmwareListPanel.__new__(FirmwareListPanel)
     panel.root_dir = FakeVar("D:/root")
     panel.usb_drive = FakeVar("")
     panel.search_var = FakeVar("")
     panel.sort_key_var = FakeVar("默认(名称)")
     panel.sort_asc_var = FakeVar(True)
+    panel.type_filter_vars = {
+        "handcontrol_ui": FakeVar(True),
+        "music_bt": FakeVar(True),
+    }
+    panel.assets = []
     panel.folders = []
-    panel._all_folders = []
+    panel._all_assets = []
     panel._selected_idx = -1
     panel._task_queue = queue.Queue()
     panel._busy = False
-    panel.manual_open = False
+    panel._polling_active = False
     panel.list_scroll = FakeWidget()
-    panel.header_model_label = FakeWidget(text="-")
-    panel.header_version_badge = FakeWidget(text="-")
-    panel.header_status_badge = FakeWidget(text="未选择")
+    panel.ops_body = FakeWidget()
     panel.usb_menu = FakeWidget()
-    panel.manual_btn = FakeWidget(text="")
-    panel.manual_frame = FakeWidget()
     panel.log_text = FakeText()
     panel.after = lambda _ms, _fn: None
-    panel._folder_card_widgets = []
-    panel.detail_values = {key: FakeWidget(text="-") for key in ["model", "version", "folder_name", "path", "rom_file", "pkg_file", "firmware_type", "actions"]}
+    panel._asset_card_widgets = []
+    panel.serial_control = None
+    panel.header_model_label = FakeWidget(text="-")
+    panel.header_version_badge = FakeWidget(text="-")
+    panel.header_type_badge = FakeWidget(text="未选择")
+    panel.detail_values = {
+        key: FakeWidget(text="-")
+        for key in ["model", "version", "firmware_type", "flash_mode", "directory_name", "path", "files", "modified_time"]
+    }
     panel._log = lambda msg: panel.log_text.insert("end", str(msg))
     return panel
 
 
-def test_hand_scan_uses_service_result(monkeypatch):
-    panel = _mk_hand_stub(monkeypatch)
+def test_asset_scan_uses_service_assets(monkeypatch):
+    panel = _mk_asset_stub(monkeypatch)
     monkeypatch.setattr(
-        "fwasset.ui.handcontrol_panel.build_scan_result",
-        lambda *args, **kwargs: {"ok": True, "payload": {"folders": [{"model": "L36", "version": "V1.0.0", "path": "D:/a"}]}},
+        "fwasset.ui.firmware_list_panel.build_scan_result",
+        lambda *args, **kwargs: {
+            "ok": True,
+            "payload": {
+                "assets": [
+                    {
+                        "model": "L36",
+                        "version": "V1.0.0",
+                        "path": "D:/a",
+                        "directory_name": "a",
+                        "firmware_type": "handcontrol_ui",
+                        "firmware_label": "手控UI",
+                        "flash_mode": "auto_usb",
+                        "files": ["ui.rom", "ui.pkg"],
+                        "modified_time": 0,
+                    }
+                ]
+            },
+        },
     )
     panel._run_task = lambda _name, fn, on_done: on_done(fn(panel._log))
 
     panel._scan()
 
-    assert len(panel.folders) == 1
-    assert panel.folders[0]["model"] == "L36"
+    assert len(panel.assets) == 1
+    assert panel.assets[0]["model"] == "L36"
 
 
 def test_choose_root_and_scan_always_opens_directory_picker(monkeypatch):
-    panel = _mk_hand_stub(monkeypatch)
+    panel = _mk_asset_stub(monkeypatch)
     called = {"scan": 0}
-
-    monkeypatch.setattr("fwasset.ui.handcontrol_panel.filedialog.askdirectory", lambda **kwargs: "D:/new-root")
+    monkeypatch.setattr("fwasset.ui.firmware_list_panel.filedialog.askdirectory", lambda **kwargs: "D:/new-root")
     panel._scan = lambda: called.__setitem__("scan", called["scan"] + 1)
 
     panel._choose_root_and_scan()
@@ -163,213 +191,215 @@ def test_choose_root_and_scan_always_opens_directory_picker(monkeypatch):
     assert called["scan"] == 1
 
 
-def test_hand_filter_folders_by_keyword(monkeypatch):
-    panel = _mk_hand_stub(monkeypatch)
-    panel._all_folders = [
-        {"model": "L36", "version": "V1.0.0", "path": "D:/a"},
-        {"model": "L50S", "version": "V2.0.0", "path": "D:/b"},
+def test_asset_filter_supports_keyword_and_type(monkeypatch):
+    panel = _mk_asset_stub(monkeypatch)
+    panel._all_assets = [
+        {
+            "model": "L36",
+            "version": "V1.0.0",
+            "path": "D:/a",
+            "directory_name": "手控目录",
+            "firmware_type": "handcontrol_ui",
+            "firmware_label": "手控UI",
+            "flash_mode": "auto_usb",
+            "files": ["ui.rom", "ui.pkg"],
+            "modified_time": 0,
+        },
+        {
+            "model": "L50S",
+            "version": "V2.0.0",
+            "path": "D:/b",
+            "directory_name": "蓝牙目录",
+            "firmware_type": "music_bt",
+            "firmware_label": "蓝牙程序",
+            "flash_mode": "auto_usb",
+            "files": ["song.mp3"],
+            "modified_time": 0,
+        },
     ]
     panel.search_var.set("L50")
+    panel.type_filter_vars["handcontrol_ui"].set(False)
 
-    panel._filter_folders()
+    panel._filter_assets()
 
-    assert len(panel.folders) == 1
-    assert panel.folders[0]["model"] == "L50S"
+    assert len(panel.assets) == 1
+    assert panel.assets[0]["firmware_type"] == "music_bt"
 
 
-def test_hand_default_sort_matches_natural_explorer_like_order(monkeypatch):
-    panel = _mk_hand_stub(monkeypatch)
-    panel._all_folders = [
-        {"model": "L100", "version": "V1.0.0", "path": "D:/root/L100"},
-        {"model": "L20", "version": "V1.0.0", "path": "D:/root/L20"},
-        {"model": "L3", "version": "V1.0.0", "path": "D:/root/L3"},
+def test_asset_default_sort_matches_natural_explorer_like_order(monkeypatch):
+    panel = _mk_asset_stub(monkeypatch)
+    panel._all_assets = [
+        {"model": "L100", "version": "V1.0.0", "path": "D:/root/L100", "directory_name": "L100", "firmware_type": "handcontrol_ui", "firmware_label": "手控UI", "flash_mode": "auto_usb", "files": [], "modified_time": 0},
+        {"model": "L20", "version": "V1.0.0", "path": "D:/root/L20", "directory_name": "L20", "firmware_type": "handcontrol_ui", "firmware_label": "手控UI", "flash_mode": "auto_usb", "files": [], "modified_time": 0},
+        {"model": "L3", "version": "V1.0.0", "path": "D:/root/L3", "directory_name": "L3", "firmware_type": "handcontrol_ui", "firmware_label": "手控UI", "flash_mode": "auto_usb", "files": [], "modified_time": 0},
     ]
 
-    panel._filter_folders()
+    panel._filter_assets()
 
-    assert [item["path"] for item in panel.folders] == ["D:/root/L3", "D:/root/L20", "D:/root/L100"]
+    assert [item["path"] for item in panel.assets] == ["D:/root/L3", "D:/root/L20", "D:/root/L100"]
 
 
-def test_hand_select_folder_updates_detail_panel(monkeypatch):
-    panel = _mk_hand_stub(monkeypatch)
-    panel.folders = [{"model": "L36", "version": "V1.0.0", "path": "D:/a", "rom_file": "ui.rom", "pkg_file": "ui.pkg"}]
+def test_asset_select_updates_detail_panel(monkeypatch):
+    panel = _mk_asset_stub(monkeypatch)
+    panel.assets = [
+        {
+            "model": "L36",
+            "version": "V1.0.0",
+            "path": "D:/a",
+            "directory_name": "a",
+            "firmware_type": "handcontrol_ui",
+            "firmware_label": "手控UI",
+            "flash_mode": "auto_usb",
+            "files": ["ui.rom", "ui.pkg"],
+            "modified_time": 0,
+        }
+    ]
 
-    panel._select_folder(0)
+    panel._select_asset(0)
 
     assert panel.header_model_label.text == "L36"
-    assert panel.detail_values["rom_file"].text == "ui.rom"
-    assert panel.header_status_badge.text == "资源详情"
+    assert panel.detail_values["firmware_type"].text == "手控UI"
+    assert panel.header_type_badge.text == "手控UI"
 
 
-def test_hand_select_folder_does_not_rebuild_full_card_list(monkeypatch):
-    panel = _mk_hand_stub(monkeypatch)
-    panel.folders = [
-        {"model": "L36", "version": "V1.0.0", "path": "D:/a"},
-        {"model": "L50S", "version": "V2.0.0", "path": "D:/b"},
+def test_asset_select_does_not_rebuild_full_card_list(monkeypatch):
+    panel = _mk_asset_stub(monkeypatch)
+    panel.assets = [
+        {"model": "L36", "version": "V1.0.0", "path": "D:/a", "directory_name": "a", "firmware_type": "handcontrol_ui", "firmware_label": "手控UI", "flash_mode": "auto_usb", "files": ["ui.rom", "ui.pkg"], "modified_time": 0},
+        {"model": "L50S", "version": "V2.0.0", "path": "D:/b", "directory_name": "b", "firmware_type": "music_bt", "firmware_label": "蓝牙程序", "flash_mode": "auto_usb", "files": ["song.mp3"], "modified_time": 0},
     ]
-    panel._render_folder_cards()
-    original_refs = [widgets["card"] for widgets in panel._folder_card_widgets]
+    panel._render_asset_cards()
+    original_refs = [widgets["card"] for widgets in panel._asset_card_widgets]
 
-    panel._select_folder(1)
+    panel._select_asset(1)
 
-    assert [widgets["card"] for widgets in panel._folder_card_widgets] == original_refs
+    assert [widgets["card"] for widgets in panel._asset_card_widgets] == original_refs
 
 
-def test_hand_double_click_opens_selected_folder(monkeypatch):
-    panel = _mk_hand_stub(monkeypatch)
-    panel.folders = [{"model": "L36", "version": "V1.0.0", "path": "D:/a"}]
-    panel._render_folder_cards()
+def test_asset_double_click_opens_selected_folder(monkeypatch):
+    panel = _mk_asset_stub(monkeypatch)
+    panel.assets = [
+        {"model": "L36", "version": "V1.0.0", "path": "D:/a", "directory_name": "a", "firmware_type": "handcontrol_ui", "firmware_label": "手控UI", "flash_mode": "auto_usb", "files": ["ui.rom", "ui.pkg"], "modified_time": 0}
+    ]
+    panel._render_asset_cards()
     opened = []
+    monkeypatch.setattr("fwasset.ui.firmware_list_panel.Path.exists", lambda _self: True)
+    monkeypatch.setattr("fwasset.ui.firmware_list_panel.os.startfile", lambda path: opened.append(path), raising=False)
 
-    monkeypatch.setattr("fwasset.ui.handcontrol_panel.Path.exists", lambda _self: True)
-    monkeypatch.setattr("fwasset.ui.handcontrol_panel.os.startfile", lambda path: opened.append(path), raising=False)
-
-    handler = panel._folder_card_widgets[0]["card"].bindings["<Double-Button-1>"]
+    handler = panel._asset_card_widgets[0]["card"].bindings["<Double-Button-1>"]
     handler(None)
 
     assert opened
 
 
-def test_hand_pollers_skip_when_deactivated(monkeypatch):
-    panel = _mk_hand_stub(monkeypatch)
+def test_panel_pollers_skip_when_deactivated(monkeypatch):
+    panel = _mk_asset_stub(monkeypatch)
     panel._polling_active = False
     panel._task_queue.put(("done", "任务", {}, None))
     panel.after = lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("should not schedule"))
 
-    HandcontrolPanel._poll_task_queue(panel)
+    FirmwareListPanel._poll_task_queue(panel)
 
     assert panel._busy is False
 
 
-def test_one_click_runs_service(monkeypatch):
-    panel = _mk_hand_stub(monkeypatch)
+def test_handcontrol_one_click_runs_service(monkeypatch):
+    panel = _mk_asset_stub(monkeypatch)
     panel._selected_idx = 0
-    panel.folders = [{"model": "L36", "version": "V1.0.0", "path": "D:/a", "rom_file": "r", "pkg_file": "p"}]
+    panel.assets = [
+        {"model": "L36", "version": "V1.0.0", "path": "D:/a", "directory_name": "a", "firmware_type": "handcontrol_ui", "firmware_label": "手控UI", "flash_mode": "auto_usb", "files": ["r.rom", "p.pkg"], "modified_time": 0}
+    ]
     panel.usb_drive.set("E:\\")
-
     called = {"one_click": False}
 
     def mock_one_click(*args, **kwargs):
         called["one_click"] = True
         return {"ok": True, "payload": {"copy_ok": True}}
 
-    monkeypatch.setattr("fwasset.ui.handcontrol_panel.run_one_click", mock_one_click)
+    monkeypatch.setattr("fwasset.ui.firmware_list_panel.run_one_click", mock_one_click)
     panel._run_task = lambda _name, fn, on_done=None: fn(panel._log)
 
-    panel._one_click()
+    panel._one_click_handcontrol()
 
     assert called["one_click"] is True
 
 
-def test_music_scan_ports_updates_ui(monkeypatch):
-    monkeypatch.setattr(ctk, "CTkFrame", FakeWidget)
-    monkeypatch.setattr(ctk, "CTkLabel", FakeWidget)
-    monkeypatch.setattr(ctk, "CTkScrollableFrame", FakeWidget)
-    monkeypatch.setattr(ctk, "CTkComboBox", FakeWidget)
+def test_directory_flash_runs_music_service(monkeypatch):
+    panel = _mk_asset_stub(monkeypatch)
+    panel._selected_idx = 0
+    panel.assets = [
+        {"model": "L50S", "version": "V2.0.0", "path": "D:/music", "directory_name": "music", "firmware_type": "music_bt", "firmware_label": "蓝牙程序", "flash_mode": "auto_usb", "files": ["song.mp3"], "modified_time": 0}
+    ]
+    panel.usb_drive.set("E:\\")
+    panel.format_first = FakeVar(True)
+    panel.eject_after = FakeVar(False)
+    called = {"music": False}
 
-    panel = MusicPanel.__new__(MusicPanel)
-    panel.serial_port = FakeVar("")
-    panel.serial_menu = FakeWidget()
-    panel.port_list_frame = FakeWidget()
-    panel.log_text = FakeText()
-    panel._log = lambda msg: None
+    def mock_music_flash(*args, **kwargs):
+        called["music"] = True
+        return {"ok": True, "message": "done"}
+
+    monkeypatch.setattr("fwasset.ui.firmware_list_panel.run_music_flash", mock_music_flash)
+    panel._run_task = lambda _name, fn, on_done=None: (on_done(fn(panel._log)) if on_done else fn(panel._log))
+
+    panel._run_directory_flash()
+
+    assert called["music"] is True
+
+
+def test_serial_control_scan_ports_updates_ui(monkeypatch):
+    _patch_ctk(monkeypatch)
+    control = SerialControl.__new__(SerialControl)
+    control.serial_port = FakeVar("")
+    control.serial_menu = FakeWidget()
+    control._log = lambda msg: None
 
     monkeypatch.setattr(
-        "fwasset.ui.music_panel.scan_serial_ports",
+        "fwasset.ui.serial_control.scan_serial_ports",
         lambda **kwargs: {"ok": True, "payload": {"ports": [{"device": "COM1", "description": "X"}]}},
     )
 
-    MusicPanel._scan_ports(panel)
-    assert panel.serial_port.get() == "COM1 X"
+    SerialControl._scan_ports(control)
+
+    assert control.serial_port.get() == "COM1 X"
 
 
-def test_music_pollers_skip_when_deactivated(monkeypatch):
-    panel = MusicPanel.__new__(MusicPanel)
-    panel._polling_active = False
-    panel._task_queue = queue.Queue()
-    panel._connected = True
-    panel._serial_conn = object()
-    panel.after = lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("should not schedule"))
-    panel._log = lambda msg: None
-
+def test_serial_control_pollers_skip_when_deactivated(monkeypatch):
+    control = SerialControl.__new__(SerialControl)
+    control._polling_active = False
+    control._connected = True
+    control._serial_conn = object()
+    control.after = lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("should not schedule"))
+    control._log = lambda msg: None
     called = {"serial": 0}
     monkeypatch.setattr(
-        "fwasset.ui.music_panel.read_serial_messages",
+        "fwasset.ui.serial_control.read_serial_messages",
         lambda *args, **kwargs: called.__setitem__("serial", called["serial"] + 1),
     )
 
-    MusicPanel._poll_task_queue(panel)
-    MusicPanel._poll_serial_messages(panel)
+    SerialControl._poll_serial_messages(control)
 
     assert called["serial"] == 0
 
 
-def test_shell_lazy_creates_music_panel_and_activates_visible_panel(monkeypatch):
+def test_shell_hosts_single_asset_panel(monkeypatch):
     import fwasset.ui.shell as shell_module
 
     monkeypatch.setattr(ctk, "CTk", FakeAppBase)
     monkeypatch.setattr(ctk, "CTkFrame", FakeWidget)
     monkeypatch.setattr(shell_module, "apply_treeview_modern_style", lambda: None)
 
-    class FakeHandPanel(FakeWidget):
-        def __init__(self, master, switch_view):
+    class FakeAssetPanel(FakeWidget):
+        def __init__(self, master):
             super().__init__(master)
-            self.switch_view = switch_view
             self.activate_count = 0
-            self.deactivate_count = 0
-            self.synced_modes = []
 
         def activate(self):
             self.activate_count += 1
 
-        def deactivate(self):
-            self.deactivate_count += 1
-
-        def sync_mode_switch(self, mode):
-            self.synced_modes.append(mode)
-
-    class FakeMusicPanel(FakeWidget):
-        instances = 0
-
-        def __init__(self, master, switch_view):
-            super().__init__(master)
-            self.switch_view = switch_view
-            self.activate_count = 0
-            self.deactivate_count = 0
-            self.synced_modes = []
-            FakeMusicPanel.instances += 1
-
-        def activate(self):
-            self.activate_count += 1
-
-        def deactivate(self):
-            self.deactivate_count += 1
-
-        def sync_mode_switch(self, mode):
-            self.synced_modes.append(mode)
-
-    monkeypatch.setattr(shell_module, "HandcontrolPanel", FakeHandPanel)
-    monkeypatch.setattr(shell_module, "MusicPanel", FakeMusicPanel)
+    monkeypatch.setattr(shell_module, "FirmwareListPanel", FakeAssetPanel)
 
     app = shell_module.UnifiedFlashPlatform()
 
-    assert app.music_panel is None
-    assert app.hand_panel.grid_count == 1
-    assert app.hand_panel.activate_count == 1
-    assert app.hand_panel.synced_modes[-1] == "handcontrol"
-    assert app.hand_panel.raise_count == 1
-    app.switch_view("music")
-    assert FakeMusicPanel.instances == 1
-    assert app.music_panel.grid_count == 1
-    assert app.music_panel.raise_count == 1
-    assert app.music_panel.activate_count == 1
-    assert app.hand_panel.deactivate_count == 1
-    assert app.hand_panel.synced_modes[-1] == "music"
-    assert app.music_panel.synced_modes[-1] == "music"
-
-    app.switch_view("handcontrol")
-    assert app.music_panel.deactivate_count == 1
-    assert app.hand_panel.activate_count == 2
-    assert app.hand_panel.raise_count == 2
-    assert app.hand_panel.synced_modes[-1] == "handcontrol"
-    assert app.music_panel.synced_modes[-1] == "handcontrol"
+    assert app.asset_panel.grid_count == 1
+    assert app.asset_panel.activate_count == 1

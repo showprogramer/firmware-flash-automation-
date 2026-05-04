@@ -25,15 +25,13 @@ from fwasset.ui.design_tokens import (
 
 
 class BaseFlashPanel(ctk.CTkFrame):
-    mode_key = ""
     mode_switch_values = ["手控模式", "音乐模式"]
     busy_message = "已有任务执行中，请稍后"
     task_done_suffix = "完成"
     task_error_title_suffix = "失败"
 
-    def __init__(self, master, switch_view_cb):
+    def __init__(self, master):
         super().__init__(master, fg_color=BG_APP)
-        self.switch_view_cb = switch_view_cb
         self.usb_drive = tk.StringVar(value="")
         self._task_queue: queue.Queue = queue.Queue()
         self._busy = False
@@ -44,7 +42,6 @@ class BaseFlashPanel(ctk.CTkFrame):
         self.grid_rowconfigure(0, weight=1)
 
     def activate(self):
-        self.sync_mode_switch(self.mode_key)
         if self._polling_active:
             return
         self._polling_active = True
@@ -53,18 +50,13 @@ class BaseFlashPanel(ctk.CTkFrame):
     def deactivate(self):
         self._polling_active = False
 
-    def sync_mode_switch(self, mode: str):
-        if hasattr(self, "mode_switch"):
-            label = "音乐模式" if mode == "music" else "手控模式"
-            self.mode_switch.set(label)
-
-    def _build_sidebar_frame(self) -> ctk.CTkFrame:
-        sidebar = ctk.CTkFrame(self, width=320, corner_radius=0, fg_color=BG_SIDEBAR)
+    def _build_sidebar_frame(self, width: int = 320) -> ctk.CTkFrame:
+        sidebar = ctk.CTkFrame(self, width=width, corner_radius=0, fg_color=BG_SIDEBAR)
         sidebar.grid(row=0, column=0, sticky="nsew")
         sidebar.grid_propagate(False)
         return sidebar
 
-    def _build_brand_header(self, parent):
+    def _build_brand_header(self, parent, title: str = "程序资产管理系统"):
         brand_frame = ctk.CTkFrame(parent, fg_color="transparent")
         brand_frame.pack(fill="x", padx=24, pady=(32, 16))
         ctk.CTkLabel(
@@ -75,23 +67,10 @@ class BaseFlashPanel(ctk.CTkFrame):
         ).pack(side="left", padx=(0, 10))
         ctk.CTkLabel(
             brand_frame,
-            text="程序资产管理系统",
+            text=title,
             font=(FONT_FAMILY, FONT_SIZE_LG, "bold"),
             text_color=TEXT_PRIMARY,
         ).pack(side="left")
-
-    def _build_mode_switch(self, parent):
-        mode_frame = ctk.CTkFrame(parent, fg_color="transparent")
-        mode_frame.pack(fill="x", padx=20, pady=(0, 20))
-        self.mode_switch = ctk.CTkSegmentedButton(
-            mode_frame,
-            values=self.mode_switch_values,
-            command=self._on_mode_change,
-            font=(FONT_FAMILY, FONT_SIZE_MD),
-        )
-        self.mode_switch.pack(fill="x")
-        default_label = "音乐模式" if self.mode_key == "music" else "手控模式"
-        self.mode_switch.set(default_label)
 
     def _build_main_container(self) -> ctk.CTkFrame:
         main = ctk.CTkFrame(self, fg_color="transparent", corner_radius=0)
@@ -167,13 +146,10 @@ class BaseFlashPanel(ctk.CTkFrame):
 
     def _refresh_usb(self):
         drives = get_usb_drives() or [""]
+        if not hasattr(self, "usb_menu"):
+            self._log(f"U盘刷新: {', '.join([d for d in drives if d]) or '未发现'}")
+            return
         self.usb_menu.configure(values=drives)
         if self.usb_drive.get() not in drives:
             self.usb_drive.set(drives[0])
         self._log(f"U盘刷新: {', '.join([d for d in drives if d]) or '未发现'}")
-
-    def _on_mode_change(self, mode):
-        if mode == "音乐模式":
-            self.switch_view_cb("music")
-        else:
-            self.switch_view_cb("handcontrol")

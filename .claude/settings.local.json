@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(for d:*)",
+      "Bash(do echo:*)",
+      "Read(//d/按摩椅相关文件汇总/firmware-flash-automation/**)",
+      "Bash(done)",
+      "Bash(cd:*)"
+    ]
+  }
+}
