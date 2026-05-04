@@ -1,80 +1,33 @@
-# Firmware Flash Automation
+# firmware-flash-automation
 
-用于固件刷机自动化与测试台账管理的 Python 工具集，当前已落地模块为手控 UI。
+用于按摩椅固件程序资产的搜索、定位、工具启动、刷机流程和运行日志管理。当前已落地模块包括手控 UI 与音乐固件流程。
 
-## 当前结构
+## 当前能力
 
-```text
-Firmware Flash Automation/
-├── run.py
-├── src/
-│   └── handcontrol/
-│       ├── __init__.py
-│       ├── app.py
-│       └── core/
-├── tests/
-├── config.toml
-└── pyproject.toml
-```
+- 统一资产搜索与目录定位
+- 手控 UI 目录扫描、资源详情展示、U 盘刷机流程
+- 音乐固件串口连接、AT 指令和刷机流程
+- 诊断包导出、日志收集与基础设备修复工具
 
-## 环境要求
-
-- Windows 10/11
-- Python >= 3.8
-- 推荐使用 `uv`
-
-## 安装
+## 运行
 
 ```powershell
-uv venv .venv
-.venv\Scripts\Activate.ps1
 uv sync --extra dev
-```
-
-## 启动
-
-项目支持两种启动方式：
-
-```powershell
-python run.py
-```
-
-```powershell
-uv run handcontrol
+.\.venv\Scripts\python.exe run.py
 ```
 
 ## 配置
 
-主要配置位于 `config.toml`：
+`config.toml` 当前保留以下配置段：
 
-- `paths.root_dir`：扫描根目录
-- `paths.excel_path`：Excel 台账路径，支持相对项目根目录
-- `excel.sheet` / `excel.header_row`：Excel 工作表配置
-- `usb.*`：U 盘清理和诊断配置
-- `scan.*`：文件识别规则、扩展名和排除目录规则
+- `paths.root_dir`
+- `usb.*`
+- `scan.*`
+- `music.*`
+- `serial.*`
 
 ## 测试
-
-运行全部测试：
-
-```powershell
-python -m pytest -q
-```
-
-当前覆盖率门禁：
-
-```text
---cov=src/handcontrol --cov-fail-under=80
-```
-
-统一脚本：
 
 ```powershell
 .\scripts\test.ps1
 ```
-
-## 说明
-
-- 源码已迁移到标准 `src layout`
-- 根目录不再保留旧 `app.py` 和 `core/` 兼容入口
-- 包入口为 `handcontrol`

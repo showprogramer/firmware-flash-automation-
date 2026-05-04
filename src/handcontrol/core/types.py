@@ -1,4 +1,4 @@
-from typing import Any, Literal, Optional, TypedDict
+from typing import Any, Literal, TypedDict
 
 
 FirmwareType = Literal["handcontrol_ui", "music_bt"]
@@ -40,9 +40,8 @@ class FlashJobPayload(TypedDict, total=False):
     firmware_type: FirmwareType
     drive: str
     removed_count: int
-    copied: bool
+    copy_ok: bool
     ejected: bool
-    excel_result: dict[str, Any]
 
 
 class FlashJobResult(TypedDict):
@@ -59,37 +58,3 @@ class HandcontrolFolder(TypedDict):
     model: str
     version: str
     label: str
-
-
-class ExcelWrittenRow(TypedDict):
-    model: str
-    logo: str
-    salesman: str
-    language: str
-    version: str
-    date: str
-    attachment: str
-    remark: str
-
-
-ExcelWriteReason = Literal["ok", "locked", "write_failed"]
-
-
-class ExcelWriteResult(TypedDict):
-    ok: bool
-    reason: ExcelWriteReason
-    tmp_path: str
-    error: str
-    written_row: Optional[ExcelWrittenRow]
-
-
-MergeExcelReason = Literal["ok", "locked", "source_missing", "no_rows", "write_failed"]
-
-
-class MergeExcelResult(TypedDict):
-    ok: bool
-    reason: MergeExcelReason
-    merged_count: int
-    skipped_count: int
-    source_deleted: bool
-    error: str

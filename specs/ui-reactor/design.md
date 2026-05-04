@@ -9,11 +9,11 @@
 - 本阶段边界：仅做 UI 壳重构，不改 `core/services` 对外契约。
 
 ## 2. 当前架构（已落地）
-- 主入口：[app.py](D:\按摩椅相关文件汇总\HandControlUITool\src\handcontrol\app.py)
+- 主入口：`src/handcontrol/app.py`
 - 核心服务：
-1. 手控：`scan_service / flash_service / excel_service / usb_repair_service`
+1. 手控：`scan_service / flash_service / usb_repair_service`
 2. 音乐：`serial_service / at_command_service / music_flash_service`
-- 配置入口：[config.toml](D:\按摩椅相关文件汇总\HandControlUITool\config.toml)
+- 配置入口：`config.toml`
 
 ## 3. 目标架构（下一阶段）
 - UI 技术栈：`customtkinter + ttk(Treeview)`
@@ -26,7 +26,7 @@
 
 ## 4. 信息架构
 - 模式容器：顶部 `Tab/Segmented`（手控 / 音乐）。
-- 手控面板：列表区 + 操作区 + 台账预览/日志。
+- 手控面板：列表区 + 操作区 + 资源详情/日志。
 - 音乐面板：U 盘流程区 + 串口/AT区 + 音乐日志区。
 
 ## 5. 交互约束

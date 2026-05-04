@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import queue
-import threading
 import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog, messagebox
+from tkinter import filedialog
 
 import customtkinter as ctk
 
@@ -18,24 +16,24 @@ from handcontrol.core.services.serial_service import (
     send_serial_command,
 )
 from handcontrol.core.settings import MUSIC_DEFAULT_SOURCE_DIR, SERIAL_AT_PRESETS, SERIAL_DEFAULT_BAUDRATE
-from handcontrol.core.usb_ops import get_usb_drives
+from handcontrol.ui.base_panel import BaseFlashPanel
 from handcontrol.ui.design_tokens import (
-    BG_APP, BG_CARD, BG_HOVER, BG_INPUT, BG_SIDEBAR, BORDER_COLOR,
+    BG_CARD, BG_HOVER, BG_INPUT, BORDER_COLOR,
     COLOR_DANGER, COLOR_PRIMARY, COLOR_PRIMARY_HOVER, COLOR_SUCCESS,
     FONT_FAMILY, FONT_SIZE_LG, FONT_SIZE_MD, FONT_SIZE_SM, FONT_SIZE_XL,
     TEXT_PRIMARY, TEXT_SECONDARY
 )
-from handcontrol.ui.shared_widgets import card, section_title
+from handcontrol.ui.shared_widgets import section_title
 
 
-class MusicPanel(ctk.CTkFrame):
+class MusicPanel(BaseFlashPanel):
+    mode_key = "music"
+
     def __init__(self, master, switch_view_cb):
-        super().__init__(master, fg_color=BG_APP)
-        self.switch_view_cb = switch_view_cb
+        super().__init__(master, switch_view_cb)
         
         # Observable Variables
         self.source_dir = tk.StringVar(value=MUSIC_DEFAULT_SOURCE_DIR or str(Path.cwd()))
-        self.usb_drive = tk.StringVar(value="")
         self.serial_port = tk.StringVar(value="")
         self.baudrate = tk.StringVar(value=str(SERIAL_DEFAULT_BAUDRATE))
         self.custom_cmd = tk.StringVar(value="AT+")
@@ -45,15 +43,7 @@ class MusicPanel(ctk.CTkFrame):
         # State
         self._serial_conn = None
         self._connected = False
-        self._busy = False
-        self._task_queue: queue.Queue = queue.Queue()
         self._presets = [str(x).strip() for x in SERIAL_AT_PRESETS if str(x).strip()] or ["AT+NM=Premium XZ8", "AT+BD=38400"]
-        self._polling_active = False
-
-        # UI Layout
-        self.grid_columnconfigure(0, weight=0, minsize=320)
-        self.grid_columnconfigure(1, weight=1)
-        self.grid_rowconfigure(0, weight=1)
 
         self._build_sidebar()
         self._build_main_view()
@@ -63,45 +53,16 @@ class MusicPanel(ctk.CTkFrame):
         self._scan_ports()
 
     def activate(self):
-        self.sync_mode_switch("music")
-        if self._polling_active:
-            return
-        self._polling_active = True
-        self._poll_task_queue()
+        super().activate()
         self._poll_serial_messages()
-
-    def deactivate(self):
-        self._polling_active = False
-
-    def sync_mode_switch(self, mode: str):
-        if hasattr(self, "mode_switch"):
-            self.mode_switch.set("音乐模式" if mode == "music" else "手控模式")
 
     # ==========================================
     # 🗂️ 左侧：全高侧边栏
     # ==========================================
     def _build_sidebar(self):
-        sidebar = ctk.CTkFrame(self, width=320, corner_radius=0, fg_color=BG_SIDEBAR)
-        sidebar.grid(row=0, column=0, sticky="nsew")
-        sidebar.grid_propagate(False)
-        
-        # Logo 与 标题
-        brand_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
-        brand_frame.pack(fill="x", padx=24, pady=(32, 16))
-        ctk.CTkLabel(brand_frame, text="⚡", font=(FONT_FAMILY, 24), text_color=COLOR_PRIMARY).pack(side="left", padx=(0, 10))
-        ctk.CTkLabel(brand_frame, text="设备管理终端", font=(FONT_FAMILY, FONT_SIZE_LG, "bold"), text_color=TEXT_PRIMARY).pack(side="left")
-
-        # 模式切换
-        mode_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
-        mode_frame.pack(fill="x", padx=20, pady=(0, 20))
-        self.mode_switch = ctk.CTkSegmentedButton(
-            mode_frame,
-            values=["手控模式", "音乐模式"],
-            command=self._on_mode_change,
-            font=(FONT_FAMILY, FONT_SIZE_MD)
-        )
-        self.mode_switch.pack(fill="x")
-        self.mode_switch.set("音乐模式")
+        sidebar = self._build_sidebar_frame()
+        self._build_brand_header(sidebar)
+        self._build_mode_switch(sidebar)
 
         # 串口摘要
         section_title(sidebar, "可用串口摘要")
@@ -119,11 +80,7 @@ class MusicPanel(ctk.CTkFrame):
     # 🖥️ 右侧：主视图区域
     # ==========================================
     def _build_main_view(self):
-        main = ctk.CTkFrame(self, fg_color="transparent", corner_radius=0)
-        main.grid(row=0, column=1, sticky="nsew", padx=32, pady=32)
-        main.grid_columnconfigure(0, weight=1)
-        main.grid_rowconfigure(2, weight=1) 
-        
+        main = self._build_main_container()
         self._build_header(main)
         self._build_dashboard_cards(main)
         self._build_data_panel(main)
@@ -156,12 +113,7 @@ class MusicPanel(ctk.CTkFrame):
         usb_card = ctk.CTkFrame(cards_container, fg_color=BG_CARD, corner_radius=12, border_width=1, border_color=BORDER_COLOR)
         usb_card.grid(row=0, column=0, sticky="nsew", padx=(0, 12))
         section_title(usb_card, "💿 音乐 U 盘刷机")
-        
-        usb_row = ctk.CTkFrame(usb_card, fg_color="transparent")
-        usb_row.pack(fill="x", padx=20, pady=10)
-        self.usb_menu = ctk.CTkComboBox(usb_row, variable=self.usb_drive, values=[""], width=120, height=36, corner_radius=6)
-        self.usb_menu.pack(side="left", padx=(0, 10))
-        ctk.CTkButton(usb_row, text="刷新", width=60, height=36, fg_color=BG_INPUT, text_color=TEXT_PRIMARY, hover_color=BG_HOVER, command=self._refresh_usb).pack(side="left", padx=4)
+        self._build_usb_selector_row(usb_card)
         
         options_row = ctk.CTkFrame(usb_card, fg_color="transparent")
         options_row.pack(fill="x", padx=20, pady=5)
@@ -209,42 +161,11 @@ class MusicPanel(ctk.CTkFrame):
     # ==========================================
     # 🔌 业务逻辑
     # ==========================================
-    def _on_mode_change(self, mode):
-        if mode == "手控模式":
-            self.switch_view_cb("handcontrol")
-        else:
-            self.switch_view_cb("music")
-
-    def _log(self, message: str):
-        if hasattr(self, "log_text"):
-            self.log_text.insert("end", f"[{Path(__file__).name}] {message or ''}\n")
-            self.log_text.see("end")
-
     def _clear_log(self):
         self.log_text.delete("1.0", "end")
 
-    def _run_task(self, name: str, fn, on_done=None):
-        if self._busy: return
-        self._busy = True
-        def worker():
-            try:
-                result = fn(self._log)
-                self._task_queue.put(("done", name, result, on_done))
-            except Exception as exc:
-                self._task_queue.put(("fail", name, str(exc), on_done))
-        threading.Thread(target=worker, daemon=True).start()
-
-    def _poll_task_queue(self):
-        if not self._polling_active:
-            return
-        try:
-            while True:
-                kind, name, payload, on_done = self._task_queue.get_nowait()
-                self._busy = False
-                if kind == "done" and callable(on_done): on_done(payload)
-                if kind == "fail": self._log(f"{name}失败: {payload}")
-        except queue.Empty: pass
-        self.after(120, self._poll_task_queue)
+    def _handle_task_failure(self, name: str, payload):
+        self._log(f"{name}失败: {payload}")
 
     def _poll_serial_messages(self):
         if not self._polling_active:
@@ -259,11 +180,6 @@ class MusicPanel(ctk.CTkFrame):
     def _browse_source(self):
         s = filedialog.askdirectory(initialdir=self.source_dir.get() or str(Path.cwd()))
         if s: self.source_dir.set(s)
-
-    def _refresh_usb(self):
-        drives = get_usb_drives() or [""]
-        self.usb_menu.configure(values=drives)
-        if self.usb_drive.get() not in drives: self.usb_drive.set(drives[0])
 
     def _scan_ports(self):
         for w in self.port_list_frame.winfo_children(): w.destroy()

@@ -12,7 +12,6 @@ from handcontrol.core.settings import load_toml_config
 
 _PATH_KEYS = {
     "config_path",
-    "excel_path",
     "log_path",
     "output_path",
     "path",
@@ -75,8 +74,6 @@ def build_diagnostic_bundle(output_path: str | Path, *, app_state: dict, config_
         _write_json("meta.json", meta)
         _write_json("state/app_state.json", sanitized_state)
         _write_json("state/folders.json", sanitized_state.get("folders", []))
-        _write_json("state/preview_rows.json", sanitized_state.get("preview_rows", []))
-        _write_json("state/folder_statuses.json", sanitized_state.get("folder_statuses", []))
         _write_json(
             "config/config.sanitized.json",
             {

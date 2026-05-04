@@ -11,7 +11,7 @@ from handcontrol.ui.shared_widgets import apply_treeview_modern_style
 class UnifiedFlashPlatform(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("手控 UI 刷机终端 | 现代版")
+        self.title("按摩椅程序资产管理系统 | Massage Chair Firmware Asset Manager")
         self.geometry("1400x850")
         self.minsize(1200, 750)
         self.configure(fg_color=BG_APP)

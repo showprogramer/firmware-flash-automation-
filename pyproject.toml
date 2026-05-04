@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "handcontrol-uitool"
 version = "0.1.0"
-description = "Hand control UI flashing helper for ROM/PKG copy and Excel tracking"
+description = "Massage Chair Firmware Asset Manager for firmware package search, tool launch, flashing workflows, and asset management"
 requires-python = ">=3.8"
 dependencies = [
     "customtkinter>=5.2.2",

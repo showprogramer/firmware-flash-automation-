@@ -3,6 +3,28 @@
 ## Unreleased
 
 ### app
+- 手控面板删除 Excel 台账入口与预览，收敛为“刷机操作 + 资源详情 + 运行日志”界面。
+- 手控资源详情区域改为展示型号、版本、目录、原始路径、ROM/PKG 文件与可执行操作说明；保留双击打开目录与下一项切换。
+- 一键刷机与手动 U 盘操作继续保留，但不再触发任何台账写入或历史回填逻辑。
+
+### core
+- 删除 Excel 运行时能力：移除 `core/excel_ops.py`、`core/services/excel_service.py` 以及相关导出、类型和配置项。
+- `scan_service.build_scan_result` 收敛为仅返回扫描目录结果；`flash_service.run_one_click` 收敛为清理、复制、弹出三段刷机流程。
+- 清理 `sort_config.py` 中已无调用方的状态排序分支，仅保留路径、型号、版本排序。
+
+### config
+- `config.toml` 删除 Excel 配置段，保留根目录、USB、扫描、音乐和串口配置。
+- 删除 `data/handcontrol_ui_template.xlsx` 模板文件，不再保留台账示例资源。
+
+### docs
+- `README.md`、`pyproject.toml` 与相关 specs 更新为统一资产管理、目录定位与刷机流程表述，不再描述 Excel 台账能力。
+
+### test
+- 删除全部 Excel/CRUD/预览缓存相关测试，重建手控扫描、刷机、诊断与面板 smoke tests 以匹配新接口。
+- 补充快速定位兼容测试所需入口，确保旧测试辅助路径仍可通过。
+- 本轮验证通过：`.\scripts\test.ps1` -> `105 passed`。
+
+### app
 - 新增 `src/handcontrol/ui/` 现代化 CTk 界面层：拆分为 `shell / handcontrol_panel / music_panel / shared_widgets / design_tokens`，统一承载双模式 UI。
 - `src/handcontrol/app.py` 入口切换为加载 UI Reactor 壳层，保留 legacy import 兼容测试引用。
 - 手控模式完成卡片式左侧列表、右侧刷机/审核卡片、底部预览/日志面板迁移；保留扫描、写表、一键、预览搜索/删除/双击回填等能力。
