@@ -123,6 +123,7 @@ def scan_firmware_assets(root: str, catalog_path: str | Path | None = None) -> t
                 "modified_time": folder_path.stat().st_mtime,
                 "tool_name": cfg["tool_name"],
                 "tool_path": cfg["tool_path"],
+                "tool_dir": cfg.get("tool_dir", ""),
                 "label": label,
             }
         )

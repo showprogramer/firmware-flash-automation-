@@ -8,7 +8,9 @@ from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
 
-from fwasset.core.firmware_catalog import enabled_firmware_types
+from fwasset.core.firmware_catalog import enabled_firmware_types, load_firmware_catalog
+from fwasset.core.tool_discovery import discover_tool_path, launch_tool
+from fwasset.ui.tool_center_panel import ToolCenterPanel
 from fwasset.core.services.flash_service import run_one_click
 from fwasset.core.services.music_flash_service import run_music_flash
 from fwasset.core.services.scan_service import build_scan_result
@@ -43,8 +45,13 @@ class FirmwareListPanel(BaseFlashPanel):
         self.search_var = tk.StringVar(value="")
         self.sort_key_var = tk.StringVar(value="默认(名称)")
         self.sort_asc_var = tk.BooleanVar(value=True)
+        self.type_quick_var = tk.StringVar(value="先选择固件类型")
+        self._type_label_to_key = {
+            item["label"]: item["key"]
+            for item in enabled_firmware_types()
+        }
         self.type_filter_vars = {
-            item["key"]: tk.BooleanVar(value=True)
+            item["key"]: tk.BooleanVar(value=False)
             for item in enabled_firmware_types()
         }
         self.assets: list[FirmwareAsset] = []
@@ -59,6 +66,46 @@ class FirmwareListPanel(BaseFlashPanel):
         self._build_main_view()
         self._refresh_usb()
         self.search_var.trace_add("write", lambda *_: self._filter_assets())
+
+    def _build_brand_header_with_tools(self, parent, title: str = "程序资产管理系统"):
+        """构建带工具中心按钮的品牌标题栏."""
+        from fwasset.ui.design_tokens import BG_SIDEBAR, BG_INPUT, BG_HOVER, COLOR_PRIMARY, FONT_FAMILY, FONT_SIZE_LG, TEXT_PRIMARY
+        
+        brand_frame = ctk.CTkFrame(parent, fg_color="transparent")
+        brand_frame.pack(fill="x", padx=24, pady=(24, 12))
+        
+        # 左侧图标和标题
+        left = ctk.CTkFrame(brand_frame, fg_color="transparent")
+        left.pack(side="left")
+        
+        ctk.CTkLabel(
+            left,
+            text="⚡",
+            font=(FONT_FAMILY, 24),
+            text_color=COLOR_PRIMARY,
+        ).pack(side="left", padx=(0, 10))
+        ctk.CTkLabel(
+            left,
+            text=title,
+            font=(FONT_FAMILY, FONT_SIZE_LG, "bold"),
+            text_color=TEXT_PRIMARY,
+        ).pack(side="left")
+        
+        # 右侧工具中心按钮
+        ctk.CTkButton(
+            brand_frame,
+            text="🔧 工具中心",
+            width=100,
+            height=32,
+            fg_color=BG_INPUT,
+            text_color=TEXT_PRIMARY,
+            hover_color=BG_HOVER,
+            command=self._open_tool_center,
+        ).pack(side="right")
+    
+    def _open_tool_center(self):
+        """打开工具中心窗口."""
+        ToolCenterPanel(self.winfo_toplevel(), log_fn=self._log)
 
     def _make_bool_var(self, value: bool):
         try:
@@ -88,7 +135,7 @@ class FirmwareListPanel(BaseFlashPanel):
 
     def _build_sidebar(self):
         sidebar = self._build_sidebar_frame(width=440)
-        self._build_brand_header(sidebar, title="固件资源列表")
+        self._build_brand_header_with_tools(sidebar, title="固件资源列表")
 
         search_sort_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
         search_sort_frame.pack(fill="x", padx=20, pady=(0, 12))
@@ -156,6 +203,30 @@ class FirmwareListPanel(BaseFlashPanel):
             hover_color=BG_HOVER,
             command=self._select_all_type_filters,
         ).pack(side="right", padx=(0, 8))
+
+        quick_values = ["先选择固件类型", "全部类型", *self._type_label_to_key.keys()]
+        self.type_quick_menu = ctk.CTkOptionMenu(
+            filter_card,
+            values=quick_values,
+            variable=self.type_quick_var,
+            height=34,
+            fg_color=BG_INPUT,
+            text_color=TEXT_PRIMARY,
+            button_color=BG_INPUT,
+            button_hover_color=BG_HOVER,
+            font=(FONT_FAMILY, FONT_SIZE_MD),
+            command=self._select_single_type_filter,
+        )
+        self.type_quick_menu.pack(fill="x", padx=20, pady=(0, 8))
+
+        ctk.CTkLabel(
+            filter_card,
+            text="默认不全选，先选一种固件类型再找程序，避免误操作。",
+            font=(FONT_FAMILY, FONT_SIZE_SM),
+            text_color=TEXT_SECONDARY,
+            wraplength=360,
+            justify="left",
+        ).pack(anchor="w", padx=20, pady=(0, 6))
         
         self.filter_frame = ctk.CTkScrollableFrame(filter_card, fg_color="transparent", height=180)
         self.filter_frame.pack(fill="x", padx=10, pady=(0, 12))
@@ -185,11 +256,24 @@ class FirmwareListPanel(BaseFlashPanel):
     def _select_all_type_filters(self):
         for var in self.type_filter_vars.values():
             var.set(True)
+        self.type_quick_var.set("全部类型")
         self._filter_assets()
 
     def _clear_type_filters(self):
         for var in self.type_filter_vars.values():
             var.set(False)
+        self.type_quick_var.set("先选择固件类型")
+        self._filter_assets()
+
+    def _select_single_type_filter(self, label: str):
+        if label == "全部类型":
+            self._select_all_type_filters()
+            return
+        if label not in self._type_label_to_key:
+            return
+        selected_key = self._type_label_to_key[label]
+        for key, var in self.type_filter_vars.items():
+            var.set(key == selected_key)
         self._filter_assets()
 
     def _build_main_view(self):
@@ -388,6 +472,20 @@ class FirmwareListPanel(BaseFlashPanel):
         else:
             self._selected_idx = -1
             self._clear_selection()
+            if self._all_assets and not self._selected_types():
+                self._render_empty_list_hint("请先在上方选择一种固件类型。")
+            elif self._all_assets:
+                self._render_empty_list_hint("当前筛选条件下没有匹配的程序。")
+
+    def _render_empty_list_hint(self, text: str):
+        ctk.CTkLabel(
+            self.list_scroll,
+            text=text,
+            font=(FONT_FAMILY, FONT_SIZE_MD),
+            text_color=TEXT_SECONDARY,
+            wraplength=360,
+            justify="left",
+        ).pack(anchor="w", padx=18, pady=18)
 
     def _selected_card_colors(self):
         return {
@@ -570,7 +668,7 @@ class FirmwareListPanel(BaseFlashPanel):
             if self._polling_active:
                 self.serial_control.activate()
         elif flash_mode == "tool_launch":
-            self._render_placeholder_ops("该类型当前为工具启动模式，后续接入工具中心。")
+            self._build_tool_launch_ops(asset)
         elif flash_mode == "manual_doc":
             self._render_placeholder_ops("该类型当前为说明模式，后续接入文档查看入口。")
         else:
@@ -585,6 +683,111 @@ class FirmwareListPanel(BaseFlashPanel):
             font=(FONT_FAMILY, FONT_SIZE_MD),
             text_color=TEXT_SECONDARY,
         ).pack(anchor="w", padx=20, pady=20)
+
+    def _build_tool_launch_ops(self, asset: FirmwareAsset):
+        """构建工具启动模式的操作面板."""
+        fw_type = str(asset.get("firmware_type", ""))
+        tool_name = str(asset.get("tool_name", "")) or "烧录工具"
+        tool_dir = str(asset.get("tool_dir", ""))
+        
+        # 获取当前工具路径
+        catalog = load_firmware_catalog()
+        tool_path = ""
+        dir_keywords: list[str] = []
+        for item in catalog.get("firmware_types", []):
+            if item.get("key") == fw_type:
+                tool_path = item.get("tool_path", "")
+                tool_dir = item.get("tool_dir", tool_dir)
+                dir_keywords = item.get("dir_keywords", [])
+                break
+        
+        # 如果没有配置路径，尝试自动发现
+        if not tool_path:
+            tool_path = discover_tool_path(
+                fw_type,
+                tool_name,
+                tool_dir=tool_dir,
+                dir_keywords=dir_keywords,
+            )
+        
+        # 保存工具路径到实例变量
+        self._current_tool_path = tool_path
+        
+        # 显示当前工具信息
+        info_frame = ctk.CTkFrame(self.ops_body, fg_color="transparent")
+        info_frame.pack(fill="x", padx=20, pady=(16, 8))
+        
+        ctk.CTkLabel(
+            info_frame,
+            text=f"工具类型: {tool_name}",
+            font=(FONT_FAMILY, FONT_SIZE_MD, "bold"),
+            text_color=TEXT_PRIMARY,
+        ).pack(anchor="w")
+        
+        path_text = tool_path if tool_path else "未配置工具路径"
+        path_color = TEXT_SECONDARY if tool_path else "#E74C3C"
+        self.tool_path_label = ctk.CTkLabel(
+            info_frame,
+            text=f"路径: {path_text}",
+            font=(FONT_FAMILY, FONT_SIZE_SM),
+            text_color=path_color,
+            wraplength=360,
+        )
+        self.tool_path_label.pack(anchor="w", pady=(4, 0))
+        
+        # 按钮区域
+        btn_frame = ctk.CTkFrame(self.ops_body, fg_color="transparent")
+        btn_frame.pack(fill="x", padx=20, pady=(8, 12))
+        
+        # 打开烧录工具按钮
+        ctk.CTkButton(
+            btn_frame,
+            text="🚀 打开烧录工具",
+            height=48,
+            corner_radius=8,
+            font=(FONT_FAMILY, FONT_SIZE_LG, "bold"),
+            fg_color=COLOR_PRIMARY,
+            hover_color=COLOR_PRIMARY_HOVER,
+            command=self._launch_current_tool,
+        ).pack(fill="x", pady=(0, 8))
+        
+        # 打开固件目录按钮
+        ctk.CTkButton(
+            btn_frame,
+            text="📁 打开固件所在目录",
+            height=40,
+            corner_radius=8,
+            font=(FONT_FAMILY, FONT_SIZE_MD),
+            fg_color=BG_INPUT,
+            text_color=TEXT_PRIMARY,
+            hover_color=BG_HOVER,
+            command=lambda: self._open_asset_path(self._selected_idx),
+        ).pack(fill="x", pady=(0, 8))
+        
+        if not tool_path:
+            # 显示配置提示
+            ctk.CTkLabel(
+                self.ops_body,
+                text="提示: 将烧录工具放在程序同目录的 tools 文件夹中，程序会自动发现。",
+                wraplength=360,
+                justify="left",
+                font=(FONT_FAMILY, FONT_SIZE_SM),
+                text_color=TEXT_SECONDARY,
+            ).pack(anchor="w", padx=20, pady=(0, 12))
+    
+    def _launch_current_tool(self):
+        """启动当前选中的工具."""
+        tool_path = getattr(self, "_current_tool_path", "")
+        if not tool_path:
+            messagebox.showwarning("提示", "工具路径未配置\n\n请将烧录工具放在程序同目录的 tools 文件夹中，或手动配置工具路径。")
+            return
+        
+        result = launch_tool(tool_path)
+        if result.get("ok"):
+            self._log(f"✓ {result.get('message')}")
+        else:
+            messagebox.showerror("启动失败", result.get("message", ""))
+            self._log(f"✗ {result.get('message')}")
 
     def _build_auto_usb_ops(self, asset: FirmwareAsset):
         self._build_usb_selector_row(self.ops_body)

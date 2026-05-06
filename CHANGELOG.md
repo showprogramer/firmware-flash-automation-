@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### app
+- 固件资源列表默认不再全选全部类型，改为提示先选择一种固件类型，降低操作员在混合列表中误选程序的风险。
+- 工具中心完善为“先打开工具再找程序”的工作流：支持搜索工具名/固件类型/目录关键词，打开后自动解析可启动工具，并提供常用工具与最近使用工具区。
+- 工具中心工具行新增星标收藏，启动成功后自动记录最近使用，状态持久化到应用目录 `tool_usage.json`。
+- `tool_launch` 类型操作区接入工具发现结果，选中外部工具型固件后可直接打开烧录工具和固件目录。
+
+### core
+- 新增 `core/tool_discovery.py`，按 `tool_path`、`tool_root + tool_dir`、`tool_root` 模糊搜索、`APP_ROOT/tools/` 兜底的优先级发现外部烧录工具，并缓存首次匹配结果。
+- 新增 `core/tool_usage.py`，管理工具中心收藏与最近使用状态。
+- 扩展 `FirmwareAsset` / catalog 类型结构，新增 `tool_dir` 字段用于按固件类型定位外部工具目录。
+
+### config
+- `config.toml` 新增 `[paths] tool_root`，用于配置外部刷程序工具库根目录。
+- `firmware_catalog.toml` 为工具启动类固件补充 `tool_dir`，并新增 `tools/` 兜底目录骨架模板。
+
+### test
+- 新增 `tests/test_tool_discovery.py` 与 `tests/test_tool_usage.py`，覆盖工具发现优先级、缓存、兜底目录、收藏和最近使用状态。
+- 本轮验证通过：`.\scripts\test.ps1` -> `117 passed`，总覆盖率 `80.87%`。
+
 ### refactor
 - 包名与源码根目录从 `handcontrol` 统一迁移到 `fwasset`，同步更新启动入口、测试导入与打包脚本，收敛为“固件资源管理平台”命名。
 

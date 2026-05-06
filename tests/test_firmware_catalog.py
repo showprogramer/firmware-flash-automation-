@@ -33,6 +33,7 @@ enabled = true
     assert result["ok"] is True
     assert result["status"] == "ok"
     assert result["firmware_types"][0]["file_extensions"] == [".rom", ".pkg"]
+    assert result["firmware_types"][0]["tool_dir"] == ""
 
 
 def test_enabled_firmware_types_filters_disabled_rows(tmp_path: Path):

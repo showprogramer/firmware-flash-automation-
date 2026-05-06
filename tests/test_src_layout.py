@@ -8,7 +8,7 @@ from tempfile import TemporaryDirectory
 from hypothesis import given
 from hypothesis import strategies as st
 
-from fwasset.core.settings import _find_project_root
+from fwasset.core.settings import _find_app_root as _find_project_root
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]

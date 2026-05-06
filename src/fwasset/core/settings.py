@@ -1,19 +1,39 @@
+import sys
 from pathlib import Path
 
 
 def _find_project_root(start: Path) -> Path:
-    for parent in [start, *start.parents]:
+    probe = Path(start).resolve()
+    for parent in [probe, *probe.parents]:
         if (parent / "pyproject.toml").exists():
             return parent
-    return start
+    return probe
 
 
-PROJECT_ROOT = _find_project_root(Path(__file__).resolve())
-CONFIG_PATH = PROJECT_ROOT / "config.toml"
+def _find_app_root(start: Path | None = None) -> Path:
+    """返回应用程序根目录（配置文件和 exe 所在目录）。
+
+    开发模式：pyproject.toml 所在目录。
+    打包模式（PyInstaller）：exe 所在目录。
+    """
+    if start is not None:
+        return _find_project_root(start)
+    if getattr(sys, "frozen", False):
+        # PyInstaller 打包后运行
+        return Path(sys.executable).resolve().parent
+    # 开发模式：向上查找 pyproject.toml
+    return _find_project_root(Path(__file__).resolve())
+
+
+APP_ROOT = _find_app_root()
+"""应用程序根目录。配置文件和可执行文件同目录。"""
+
+CONFIG_PATH = APP_ROOT / "config.toml"
 
 _DEFAULTS = {
     "paths": {
         "root_dir": "",
+        "tool_root": "",
     },
     "usb": {
         "junk_extensions": [".usu", ".tmp", ".bak"],
@@ -135,7 +155,7 @@ def _resolve_path(value, default: str = "") -> str:
         return str(default or "")
     path = Path(text)
     if not path.is_absolute():
-        return str((PROJECT_ROOT / path).resolve())
+        return str((APP_ROOT / path).resolve())
     return str(path)
 
 
@@ -143,6 +163,10 @@ _cfg, CONFIG_LOAD_STATUS, CONFIG_LOAD_ERROR = load_toml_config(CONFIG_PATH)
 CONFIG_LOAD_SOURCE = str(CONFIG_PATH)
 
 DEFAULT_ROOT = str(_cfg_get(_cfg, "paths", "root_dir", _DEFAULTS["paths"]["root_dir"]))
+TOOL_ROOT = _resolve_path(
+    _cfg_get(_cfg, "paths", "tool_root", _DEFAULTS["paths"]["tool_root"]),
+    _DEFAULTS["paths"]["tool_root"],
+)
 
 JUNK_EXTENSIONS = _as_str_set(
     _cfg_get(_cfg, "usb", "junk_extensions", _DEFAULTS["usb"]["junk_extensions"]),

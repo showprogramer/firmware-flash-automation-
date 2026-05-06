@@ -6,6 +6,7 @@ file_extensions = [".bin", ".hex"]
 flash_mode = "tool_launch"
 tool_name = "主板烧录工具"
 tool_path = ""
+tool_dir = "主板程序"
 enabled = true
 
 [[firmware_types]]
@@ -16,6 +17,7 @@ file_extensions = [".rom", ".pkg", ".zip", ".bin"]
 flash_mode = "auto_usb"
 tool_name = "手控刷机流程"
 tool_path = ""
+tool_dir = ""
 enabled = true
 
 [[firmware_types]]
@@ -26,6 +28,7 @@ file_extensions = [".bin", ".hex", ".mp3"]
 flash_mode = "auto_usb"
 tool_name = "蓝牙烧录流程"
 tool_path = ""
+tool_dir = ""
 enabled = true
 
 [[firmware_types]]
@@ -36,6 +39,7 @@ file_extensions = [".bin", ".hex"]
 flash_mode = "tool_launch"
 tool_name = "语音烧录工具"
 tool_path = ""
+tool_dir = "语音程序"
 enabled = true
 
 [[firmware_types]]
@@ -46,6 +50,7 @@ file_extensions = [".bin", ".hex"]
 flash_mode = "tool_launch"
 tool_name = "快捷键烧录工具"
 tool_path = ""
+tool_dir = "快捷键程序"
 enabled = true
 
 [[firmware_types]]
@@ -56,6 +61,7 @@ file_extensions = [".bin", ".hex"]
 flash_mode = "tool_launch"
 tool_name = "3D机芯烧录工具"
 tool_path = ""
+tool_dir = "3D机芯板程序"
 enabled = true
 
 [[firmware_types]]
@@ -66,6 +72,7 @@ file_extensions = [".bin", ".hex"]
 flash_mode = "tool_launch"
 tool_name = "2D机芯烧录工具"
 tool_path = ""
+tool_dir = "2D机芯板程序"
 enabled = true
 
 [[firmware_types]]
@@ -76,6 +83,7 @@ file_extensions = [".bin", ".hex"]
 flash_mode = "tool_launch"
 tool_name = "旋钮烧录工具"
 tool_path = ""
+tool_dir = "旋钮开关程序"
 enabled = true
 
 [[firmware_types]]
@@ -86,6 +94,7 @@ file_extensions = [".bin", ".hex"]
 flash_mode = "tool_launch"
 tool_name = "腿部烧录工具"
 tool_path = ""
+tool_dir = "腿部程序"
 enabled = true
 
 [[firmware_types]]
@@ -96,6 +105,7 @@ file_extensions = [".bin", ".hex"]
 flash_mode = "tool_launch"
 tool_name = "膝盖机烧录工具"
 tool_path = ""
+tool_dir = "膝盖机程序"
 enabled = true
 
 [[firmware_types]]
@@ -106,6 +116,7 @@ file_extensions = [".bin", ".hex"]
 flash_mode = "tool_launch"
 tool_name = "音波板烧录工具"
 tool_path = ""
+tool_dir = "音波板程序"
 enabled = true
 
 [[firmware_types]]
@@ -116,6 +127,7 @@ file_extensions = [".bin", ".hex"]
 flash_mode = "tool_launch"
 tool_name = "健康检测烧录工具"
 tool_path = ""
+tool_dir = "健康检测模块"
 enabled = true
 
 [[firmware_types]]
@@ -126,6 +138,7 @@ file_extensions = [".bin", ".hex"]
 flash_mode = "tool_launch"
 tool_name = "商用主板烧录工具"
 tool_path = ""
+tool_dir = "商用主板程序"
 enabled = true
 
 [[firmware_types]]
@@ -136,6 +149,7 @@ file_extensions = [".bin", ".hex"]
 flash_mode = "manual_doc"
 tool_name = "占座说明"
 tool_path = ""
+tool_dir = "占座提醒程序"
 enabled = true
 
 [[firmware_types]]
@@ -146,6 +160,7 @@ file_extensions = [".bin", ".hex"]
 flash_mode = "tool_launch"
 tool_name = "刷卡机烧录工具"
 tool_path = ""
+tool_dir = "刷卡机程序"
 enabled = true
 
 [[firmware_types]]
@@ -156,6 +171,7 @@ file_extensions = [".bin", ".hex"]
 flash_mode = "tool_launch"
 tool_name = "乐摇摇工具"
 tool_path = ""
+tool_dir = "乐摇摇程序"
 enabled = true
 
 [[firmware_types]]
@@ -166,6 +182,7 @@ file_extensions = [".bin", ".hex"]
 flash_mode = "tool_launch"
 tool_name = "三合一烧录工具"
 tool_path = ""
+tool_dir = "三合一模块"
 enabled = true
 
 [[firmware_types]]
@@ -176,6 +193,7 @@ file_extensions = [".bin", ".hex"]
 flash_mode = "disabled"
 tool_name = ""
 tool_path = ""
+tool_dir = ""
 enabled = true
 
 [[firmware_types]]
@@ -186,4 +204,5 @@ file_extensions = [".rom", ".pkg", ".zip", ".bin"]
 flash_mode = "auto_usb"
 tool_name = "断码屏手控流程"
 tool_path = ""
+tool_dir = ""
 enabled = true

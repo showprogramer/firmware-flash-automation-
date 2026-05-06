@@ -84,6 +84,7 @@ class HandcontrolFolder(TypedDict):
 class ToolRegistration(TypedDict):
     name: str
     path: str
+    directory: str
 
 
 class FirmwareAsset(TypedDict):
@@ -98,4 +99,5 @@ class FirmwareAsset(TypedDict):
     modified_time: float
     tool_name: str
     tool_path: str
+    tool_dir: str
     label: str

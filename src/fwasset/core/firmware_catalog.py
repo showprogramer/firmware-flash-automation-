@@ -3,11 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, TypedDict
 
-from fwasset.core.settings import PROJECT_ROOT, load_toml_config
+from fwasset.core.settings import APP_ROOT, load_toml_config
 from fwasset.core.types import FirmwareType
 
 
-DEFAULT_FIRMWARE_CATALOG_PATH = PROJECT_ROOT / "firmware_catalog.toml"
+DEFAULT_FIRMWARE_CATALOG_PATH = APP_ROOT / "firmware_catalog.toml"
 
 
 class FirmwareTypeConfig(TypedDict):
@@ -18,6 +18,7 @@ class FirmwareTypeConfig(TypedDict):
     flash_mode: str
     tool_name: str
     tool_path: str
+    tool_dir: str
     enabled: bool
 
 
@@ -41,6 +42,7 @@ def _normalize_type(node: Any) -> FirmwareTypeConfig | None:
         "flash_mode": str(node.get("flash_mode", "tool_launch")).strip() or "tool_launch",
         "tool_name": str(node.get("tool_name", "")).strip(),
         "tool_path": str(node.get("tool_path", "")).strip(),
+        "tool_dir": str(node.get("tool_dir", "")).strip(),
         "enabled": bool(node.get("enabled", True)),
     }
 

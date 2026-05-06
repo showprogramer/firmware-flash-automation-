@@ -184,3 +184,4 @@ def test_scan_firmware_assets_uses_catalog_types(tmp_path: Path):
     assert [item["firmware_type"] for item in assets] == ["handcontrol_ui", "voice"]
     assert assets[0]["flash_mode"] == "auto_usb"
     assert assets[1]["firmware_label"] == "语音程序"
+    assert "tool_dir" in assets[1]

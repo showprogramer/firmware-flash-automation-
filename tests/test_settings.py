@@ -72,6 +72,7 @@ def test_as_str_list_falls_back_to_default_on_empty_list():
 
 
 def test_scan_defaults_are_available():
+    assert isinstance(settings.TOOL_ROOT, str)
     assert settings.SCAN_ROM_EXTENSIONS == [".rom"]
     assert settings.SCAN_PKG_EXTENSIONS == [".pkg"]
     assert settings.SCAN_EXCLUDE_DIR_KEYWORDS
@@ -85,5 +86,4 @@ def test_music_and_serial_defaults_are_available():
     assert settings.SERIAL_DEFAULT_BAUDRATE >= 1200
     assert isinstance(settings.SERIAL_AT_PRESETS, list)
     assert len(settings.SERIAL_AT_PRESETS) >= 1
-
 
