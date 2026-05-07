@@ -62,3 +62,17 @@ def test_default_catalog_contains_19_types():
     assert len(rows) == 19
     assert "handcontrol_ui" in [item["key"] for item in rows]
     assert "aging" in [item["key"] for item in rows]
+
+
+def test_default_catalog_contains_expanded_real_world_keywords():
+    rows = {item["key"]: item for item in enabled_firmware_types()}
+
+    assert "断码屏亚克力手控" in rows["handcontrol_ui"]["dir_keywords"]
+    assert "蓝牙—语音" in rows["music_bt"]["dir_keywords"]
+    assert "语言板" in rows["voice"]["dir_keywords"]
+    assert "快捷键-旋钮" in rows["shortcut_key"]["dir_keywords"]
+    assert "机芯板上程序" in rows["movement_3d"]["dir_keywords"]
+    assert "机芯板下程序" in rows["movement_2d"]["dir_keywords"]
+    assert "旋钮开关程序" in rows["knob_switch"]["dir_keywords"]
+    assert "纸币机" in rows["card_reader"]["dir_keywords"]
+    assert "3合一" in rows["triple_combo"]["dir_keywords"]

@@ -13,14 +13,18 @@
 - 新增 `core/tool_discovery.py`，按 `tool_path`、`tool_root + tool_dir`、`tool_root` 模糊搜索、`APP_ROOT/tools/` 兜底的优先级发现外部烧录工具，并缓存首次匹配结果。
 - 新增 `core/tool_usage.py`，管理工具中心收藏与最近使用状态。
 - 扩展 `FirmwareAsset` / catalog 类型结构，新增 `tool_dir` 字段用于按固件类型定位外部工具目录。
+- 扩展 catalog 目录关键词，覆盖手控、主板、蓝牙、语音、快捷键、机芯板、旋钮、商用支付和三合一等实际目录别名。
+- 扫描目录排除规则补齐 `接线图`、`旧`、`新建文件夹`、`照片`，并改为大小写不敏感匹配。
 
 ### config
 - `config.toml` 新增 `[paths] tool_root`，用于配置外部刷程序工具库根目录。
 - `firmware_catalog.toml` 为工具启动类固件补充 `tool_dir`，并新增 `tools/` 兜底目录骨架模板。
+- `config.toml` 的扫描排除目录同步更新为实际非固件目录关键词。
 
 ### test
 - 新增 `tests/test_tool_discovery.py` 与 `tests/test_tool_usage.py`，覆盖工具发现优先级、缓存、兜底目录、收藏和最近使用状态。
 - 扩展 `tests/test_app_service_smoke.py`，覆盖 P1-10 程序交接动作和 `manual_doc` / `disabled` 操作区渲染。
+- 扩展 catalog 与文件扫描测试，覆盖实际目录别名识别和非固件目录过滤。
 - 本轮验证通过：`.\scripts\test.ps1` -> `120 passed`，总覆盖率 `80.87%`。
 
 ### refactor

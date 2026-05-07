@@ -44,7 +44,7 @@ _DEFAULTS = {
     "scan": {
         "rom_extensions": [".rom"],
         "pkg_extensions": [".pkg"],
-        "exclude_dir_keywords": ["CH341SER", "主板程序"],
+        "exclude_dir_keywords": ["CH341SER", "接线图", "旧", "新建文件夹", "照片"],
         "model_patterns": [r"(?:^|[_\-])((L\d+[A-Za-z]*))(?![A-Za-z0-9])"],
         "version_patterns": [
             r"[Vv](\d+\.\d+(?:\.\d+)?(?:_\d+)?)",

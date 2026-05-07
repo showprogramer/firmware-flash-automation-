@@ -39,7 +39,8 @@ def _has_allowed_extension(filename: str, extensions: list[str]) -> bool:
 
 
 def _is_excluded_dir(dirpath: str) -> bool:
-    return any(keyword and keyword in dirpath for keyword in SCAN_EXCLUDE_DIR_KEYWORDS)
+    lower_path = str(dirpath or "").lower()
+    return any(keyword and str(keyword).lower() in lower_path for keyword in SCAN_EXCLUDE_DIR_KEYWORDS)
 
 
 def _files_match_extensions(filenames: list[str], extensions: list[str]) -> bool:

@@ -74,7 +74,7 @@ def test_find_handcontrol_folders_filters_and_sorts(tmp_path: Path):
     (ignored1 / "L99_v1.0.0.ROM").write_text("rom", encoding="utf-8")
     (ignored1 / "x.pkg").write_text("pkg", encoding="utf-8")
 
-    ignored2 = tmp_path / "主板程序" / "skip2"
+    ignored2 = tmp_path / "接线图" / "skip2"
     ignored2.mkdir(parents=True)
     (ignored2 / "L100_v2.0.0.ROM").write_text("rom", encoding="utf-8")
     (ignored2 / "x.pkg").write_text("pkg", encoding="utf-8")
@@ -185,3 +185,26 @@ def test_scan_firmware_assets_uses_catalog_types(tmp_path: Path):
     assert assets[0]["flash_mode"] == "auto_usb"
     assert assets[1]["firmware_label"] == "语音程序"
     assert "tool_dir" in assets[1]
+
+
+def test_scan_firmware_assets_uses_expanded_catalog_keywords_and_excludes(tmp_path: Path):
+    mainboard_dir = tmp_path / "L36配置" / "L36主板"
+    mainboard_dir.mkdir(parents=True)
+    (mainboard_dir / "main_v1.0.0.bin").write_text("main", encoding="utf-8")
+
+    bluetooth_dir = tmp_path / "L36配置" / "蓝牙—语音"
+    bluetooth_dir.mkdir(parents=True)
+    (bluetooth_dir / "bt_v2.0.0.hex").write_text("bt", encoding="utf-8")
+
+    ignored_photo_dir = tmp_path / "L36配置" / "照片" / "语音板"
+    ignored_photo_dir.mkdir(parents=True)
+    (ignored_photo_dir / "voice_v3.0.0.bin").write_text("voice", encoding="utf-8")
+
+    ignored_old_dir = tmp_path / "L36配置" / "旧" / "快捷键程序"
+    ignored_old_dir.mkdir(parents=True)
+    (ignored_old_dir / "shortcut_v4.0.0.bin").write_text("shortcut", encoding="utf-8")
+
+    assets, errors = scan_firmware_assets(str(tmp_path))
+
+    assert errors == []
+    assert [item["firmware_type"] for item in assets] == ["mainboard", "music_bt"]

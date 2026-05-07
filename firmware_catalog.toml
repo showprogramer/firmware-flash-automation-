@@ -1,7 +1,7 @@
 [[firmware_types]]
 key = "mainboard"
 label = "主板程序"
-dir_keywords = ["主板", "主板程序"]
+dir_keywords = ["主板", "主板程序", "{型号}主板"]
 file_extensions = [".bin", ".hex"]
 flash_mode = "tool_launch"
 tool_name = "主板烧录工具"
@@ -12,7 +12,7 @@ enabled = true
 [[firmware_types]]
 key = "handcontrol_ui"
 label = "手控UI"
-dir_keywords = ["手控", "手控ui", "手控器"]
+dir_keywords = ["手控", "手控器", "手控ui", "断码屏", "断码屏亚克力手控"]
 file_extensions = [".rom", ".pkg", ".zip", ".bin"]
 flash_mode = "auto_usb"
 tool_name = "手控刷机流程"
@@ -23,7 +23,7 @@ enabled = true
 [[firmware_types]]
 key = "music_bt"
 label = "蓝牙程序"
-dir_keywords = ["蓝牙版", "蓝牙板", "蓝牙程序", "音乐"]
+dir_keywords = ["蓝牙", "蓝牙板", "蓝牙版", "蓝牙程序", "蓝牙—语音", "三合一蓝牙版", "音乐"]
 file_extensions = [".bin", ".hex", ".mp3"]
 flash_mode = "auto_usb"
 tool_name = "蓝牙烧录流程"
@@ -34,7 +34,7 @@ enabled = true
 [[firmware_types]]
 key = "voice"
 label = "语音程序"
-dir_keywords = ["语音", "语音版", "语音板"]
+dir_keywords = ["语音", "语音版", "语音程序", "语言板", "语音板", "语音版三合一"]
 file_extensions = [".bin", ".hex"]
 flash_mode = "tool_launch"
 tool_name = "语音烧录工具"
@@ -45,7 +45,7 @@ enabled = true
 [[firmware_types]]
 key = "shortcut_key"
 label = "快捷键程序"
-dir_keywords = ["快捷键", "快捷按键"]
+dir_keywords = ["快捷键", "快捷按键", "快捷键程序", "快捷键-旋钮"]
 file_extensions = [".bin", ".hex"]
 flash_mode = "tool_launch"
 tool_name = "快捷键烧录工具"
@@ -56,7 +56,7 @@ enabled = true
 [[firmware_types]]
 key = "movement_3d"
 label = "3D机芯板程序"
-dir_keywords = ["3d机芯", "3d机芯板", "3d机芯机芯板上程序"]
+dir_keywords = ["3d机芯", "3d机芯板", "3d机芯机芯板上程序", "机芯板", "机芯板程序", "机芯板上程序"]
 file_extensions = [".bin", ".hex"]
 flash_mode = "tool_launch"
 tool_name = "3D机芯烧录工具"
@@ -67,7 +67,7 @@ enabled = true
 [[firmware_types]]
 key = "movement_2d"
 label = "2D机芯板程序"
-dir_keywords = ["2d机芯", "2d机芯板", "2d机芯机芯板下程序"]
+dir_keywords = ["2d机芯", "2d机芯板", "2d机芯机芯板下程序", "机芯板", "机芯板程序", "机芯板下程序"]
 file_extensions = [".bin", ".hex"]
 flash_mode = "tool_launch"
 tool_name = "2D机芯烧录工具"
@@ -78,7 +78,7 @@ enabled = true
 [[firmware_types]]
 key = "knob_switch"
 label = "旋钮开关程序"
-dir_keywords = ["旋钮", "旋钮开关"]
+dir_keywords = ["旋钮", "旋钮开关", "旋钮开关程序"]
 file_extensions = [".bin", ".hex"]
 flash_mode = "tool_launch"
 tool_name = "旋钮烧录工具"
@@ -133,7 +133,7 @@ enabled = true
 [[firmware_types]]
 key = "commercial_mainboard"
 label = "商用主板程序"
-dir_keywords = ["商用主板", "商用一体机程序"]
+dir_keywords = ["商用主板", "商用一体机程序", "投币机", "纸币机", "云管家"]
 file_extensions = [".bin", ".hex"]
 flash_mode = "tool_launch"
 tool_name = "商用主板烧录工具"
@@ -155,7 +155,7 @@ enabled = true
 [[firmware_types]]
 key = "card_reader"
 label = "白卡/刷卡机程序"
-dir_keywords = ["白卡程序", "刷卡机程序", "刷卡"]
+dir_keywords = ["刷卡机", "刷卡机程序", "投币机", "纸币机", "白卡", "白卡程序", "刷卡"]
 file_extensions = [".bin", ".hex"]
 flash_mode = "tool_launch"
 tool_name = "刷卡机烧录工具"
@@ -177,7 +177,7 @@ enabled = true
 [[firmware_types]]
 key = "triple_combo"
 label = "三合一蓝牙版"
-dir_keywords = ["三合一蓝牙版", "三合一语音版", "三合一"]
+dir_keywords = ["三合一", "三合1", "3合一", "三合一蓝牙版", "三合一语音版"]
 file_extensions = [".bin", ".hex"]
 flash_mode = "tool_launch"
 tool_name = "三合一烧录工具"
