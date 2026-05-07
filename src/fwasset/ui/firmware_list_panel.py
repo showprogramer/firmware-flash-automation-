@@ -296,6 +296,7 @@ class FirmwareListPanel(BaseFlashPanel):
         section_title(self.detail_card, "资源详情")
         self.detail_values: dict[str, ctk.CTkLabel] = {}
         for label_text, key in [
+            ("系列", "series"),
             ("型号", "model"),
             ("版本", "version"),
             ("固件类型", "firmware_type"),
@@ -600,6 +601,7 @@ class FirmwareListPanel(BaseFlashPanel):
         if asset.get("modified_time"):
             modified_time = datetime.fromtimestamp(float(asset["modified_time"])).strftime("%Y-%m-%d %H:%M:%S")
         details = {
+            "series": str(asset.get("series", "") or "-"),
             "model": str(asset.get("model", "") or "-"),
             "version": str(asset.get("version", "") or "-"),
             "firmware_type": str(asset.get("firmware_label", "") or "-"),

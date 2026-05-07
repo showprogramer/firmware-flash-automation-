@@ -77,8 +77,10 @@
 | 商用支付类 | `刷卡机` `投币机` `纸币机` `白卡` `乐摇摇` `云管家` |
 
 - [x] 配置过滤规则：排除 `接线图`、`旧`、`新建文件夹`、`照片` 等非固件目录
-- [ ] 输出统一 `FirmwareAsset` 结构，至少包含：`series` / `model` / `firmware_type` / `version` / `path` / `files` / `flash_mode`
+- [x] 输出统一 `FirmwareAsset` 结构，至少包含：`series` / `model` / `firmware_type` / `version` / `path` / `files` / `flash_mode`
 
+> 当前状态：`FirmwareAsset` 已补齐 `series` / `model_directory_name` / `model_directory_path`，供后续树形导航使用；三级扫描和 UI 树渲染仍需继续完成。
+>
 > 验收：扫描逻辑不再硬编码为手控专用；运行时实际调用 catalog 配置；可识别现有 57 个型号目录中的固件类型。
 
 ---

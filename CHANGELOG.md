@@ -8,6 +8,7 @@
 - 工具中心工具行新增星标收藏，启动成功后自动记录最近使用，状态持久化到应用目录 `tool_usage.json`。
 - `tool_launch` 类型操作区接入工具发现结果，选中外部工具型固件后可直接打开烧录工具和固件目录。
 - 操作区按 `flash_mode` 渲染补齐：外部工具型条目支持打开程序目录、复制目录路径、复制主文件路径、打开工具并同步打开程序目录；说明型和禁用型条目显示对应操作状态。
+- 资源详情面板新增“系列”字段，为后续系列优先的树形导航提供可见校验点。
 
 ### core
 - 新增 `core/tool_discovery.py`，按 `tool_path`、`tool_root + tool_dir`、`tool_root` 模糊搜索、`APP_ROOT/tools/` 兜底的优先级发现外部烧录工具，并缓存首次匹配结果。
@@ -15,6 +16,8 @@
 - 扩展 `FirmwareAsset` / catalog 类型结构，新增 `tool_dir` 字段用于按固件类型定位外部工具目录。
 - 扩展 catalog 目录关键词，覆盖手控、主板、蓝牙、语音、快捷键、机芯板、旋钮、商用支付和三合一等实际目录别名。
 - 扫描目录排除规则补齐 `接线图`、`旧`、`新建文件夹`、`照片`，并改为大小写不敏感匹配。
+- `scan_firmware_assets()` 输出新增 `series`，按型号或目录中的 `[A-Z]+[0-9]+` 前缀推断系列归属。
+- `scan_firmware_assets()` 输出新增 `model_directory_name` / `model_directory_path`，为“系列 → 型号配置目录 → 固件类型”树形导航提供稳定中间层数据。
 
 ### config
 - `config.toml` 新增 `[paths] tool_root`，用于配置外部刷程序工具库根目录。
@@ -25,6 +28,7 @@
 - 新增 `tests/test_tool_discovery.py` 与 `tests/test_tool_usage.py`，覆盖工具发现优先级、缓存、兜底目录、收藏和最近使用状态。
 - 扩展 `tests/test_app_service_smoke.py`，覆盖 P1-10 程序交接动作和 `manual_doc` / `disabled` 操作区渲染。
 - 扩展 catalog 与文件扫描测试，覆盖实际目录别名识别和非固件目录过滤。
+- 扩展文件扫描和 UI smoke tests，覆盖系列推断与详情展示兼容行为。
 - 本轮验证通过：`.\scripts\test.ps1` -> `120 passed`，总覆盖率 `80.87%`。
 
 ### refactor

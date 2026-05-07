@@ -6,6 +6,7 @@ import fwasset.core.file_scan as file_scan
 from fwasset.core.file_scan import (
     find_handcontrol_folders,
     guess_model_from_path,
+    guess_series_from_model_or_path,
     guess_version_from_path,
     parse_rom_filename,
     scan_firmware_assets,
@@ -55,6 +56,19 @@ def test_guess_model_from_path(dirpath: str, expected: str):
 )
 def test_guess_version_from_path(dirpath: str, expected: str):
     assert guess_version_from_path(dirpath) == expected
+
+
+@pytest.mark.parametrize(
+    ("model", "dirpath", "expected"),
+    [
+        ("L36A", r"D:\\workspace\\L36A手控\\release", "L36"),
+        ("L50SMAX", r"D:\\workspace\\L50Smax\\release", "L50"),
+        ("", r"D:\\workspace\\L39-零重力\\主板程序", "L39"),
+        ("未知型号", r"D:\\workspace\\foo\\bar", "未知系列"),
+    ],
+)
+def test_guess_series_from_model_or_path(model: str, dirpath: str, expected: str):
+    assert guess_series_from_model_or_path(model, dirpath) == expected
 
 
 
@@ -182,6 +196,8 @@ def test_scan_firmware_assets_uses_catalog_types(tmp_path: Path):
     assert errors == []
     assert len(assets) == 2
     assert [item["firmware_type"] for item in assets] == ["handcontrol_ui", "voice"]
+    assert assets[0]["series"] == "L35"
+    assert assets[0]["model_directory_name"] == "L35A手控UI"
     assert assets[0]["flash_mode"] == "auto_usb"
     assert assets[1]["firmware_label"] == "语音程序"
     assert "tool_dir" in assets[1]
@@ -208,3 +224,5 @@ def test_scan_firmware_assets_uses_expanded_catalog_keywords_and_excludes(tmp_pa
 
     assert errors == []
     assert [item["firmware_type"] for item in assets] == ["mainboard", "music_bt"]
+    assert [item["model_directory_name"] for item in assets] == ["L36配置", "L36配置"]
+    assert all(Path(item["model_directory_path"]).name == "L36配置" for item in assets)

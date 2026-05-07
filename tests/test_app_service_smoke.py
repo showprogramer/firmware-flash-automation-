@@ -143,7 +143,7 @@ def _mk_asset_stub(monkeypatch):
     panel.header_type_badge = FakeWidget(text="未选择")
     panel.detail_values = {
         key: FakeWidget(text="-")
-        for key in ["model", "version", "firmware_type", "flash_mode", "directory_name", "path", "files", "modified_time"]
+        for key in ["series", "model", "version", "firmware_type", "flash_mode", "directory_name", "path", "files", "modified_time"]
     }
     panel._log = lambda msg: panel.log_text.insert("end", str(msg))
     return panel
@@ -259,6 +259,7 @@ def test_asset_select_updates_detail_panel(monkeypatch):
     panel._select_asset(0)
 
     assert panel.header_model_label.text == "L36"
+    assert panel.detail_values["series"].text == "-"
     assert panel.detail_values["firmware_type"].text == "手控UI"
     assert panel.header_type_badge.text == "手控UI"
 

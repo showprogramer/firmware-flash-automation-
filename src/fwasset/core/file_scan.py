@@ -79,6 +79,27 @@ def _extract_model_version(dirpath: str, filenames: list[str]) -> tuple[str, str
     return guess_model_from_path(dirpath), guess_version_from_path(dirpath)
 
 
+def guess_series_from_model_or_path(model: str, dirpath: str) -> str:
+    """Infer series from model first, then path segments, using the [A-Z]+[0-9]+ prefix rule."""
+    candidates = [str(model or "")]
+    candidates.extend(reversed([str(part) for part in Path(dirpath).parts]))
+    for candidate in candidates:
+        match = re.search(r"([A-Za-z]+\d+)", candidate)
+        if match:
+            return match.group(1).upper()
+    return "未知系列"
+
+
+def _model_directory_for_asset(root_path: Path, folder_path: Path) -> Path:
+    try:
+        relative_parts = folder_path.relative_to(root_path).parts
+    except ValueError:
+        relative_parts = folder_path.parts
+    if not relative_parts:
+        return folder_path
+    return root_path / relative_parts[0]
+
+
 def scan_firmware_assets(root: str, catalog_path: str | Path | None = None) -> tuple[list[FirmwareAsset], list[str]]:
     """
     Scan root using catalog-configured directory keywords and file extensions.
@@ -108,16 +129,21 @@ def scan_firmware_assets(root: str, catalog_path: str | Path | None = None) -> t
             continue
 
         folder_path = Path(dirpath)
+        model_directory = _model_directory_for_asset(root_path, folder_path)
         model, version = _extract_model_version(dirpath, filenames)
+        series = guess_series_from_model_or_path(model, str(model_directory))
         files = sorted(filenames)
         label = f"{model}  {version or '-'}  [{folder_path.name}]  {cfg['label']}"
         results.append(
             {
+                "series": series,
                 "firmware_type": cfg["key"],
                 "firmware_label": cfg["label"],
                 "flash_mode": cfg["flash_mode"],
                 "model": model,
                 "version": version,
+                "model_directory_name": model_directory.name,
+                "model_directory_path": str(model_directory),
                 "path": str(folder_path),
                 "directory_name": folder_path.name,
                 "files": files,

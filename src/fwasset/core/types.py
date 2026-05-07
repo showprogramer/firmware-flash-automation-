@@ -88,11 +88,14 @@ class ToolRegistration(TypedDict):
 
 
 class FirmwareAsset(TypedDict):
+    series: str
     firmware_type: FirmwareType
     firmware_label: str
     flash_mode: FlashMode
     model: str
     version: str
+    model_directory_name: str
+    model_directory_path: str
     path: str
     directory_name: str
     files: list[str]
