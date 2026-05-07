@@ -127,23 +127,23 @@
 >
 > 当前优先级：应在 P0-2 树形导航 UI 大改之前先完成。树形导航、隐藏条目、搜索筛选都应基于索引数据，而不是直接耦合 `os.walk`。
 
-- [ ] 新增 `core/asset_index.py`，使用 Python 标准库 `sqlite3` 管理 `fwasset.db`
-- [ ] 设计并创建 SQLite schema：
-  - [ ] `assets`：保存 `series` / `model` / `model_directory_name` / `model_directory_path` / `firmware_type` / `firmware_label` / `flash_mode` / `version` / `path` / `directory_name` / `files_json` / `modified_time` / `scanned_at`
-  - [ ] `hidden_items`：按目录绝对路径保存隐藏状态，支持隐藏型号目录或固件类型
-  - [ ] `scan_meta`：保存 `root_dir` / `last_scan_at` / `schema_version`
-- [ ] 启动流程调整：优先从 SQLite 读取最近一次资产索引；无索引时显示首次扫描提示
-- [ ] 扫描流程调整：用户点击“扫描根目录”后后台扫描真实目录，完成后写入 SQLite 并刷新 UI
-- [ ] 搜索/筛选流程调整：搜索、固件类型筛选、后续树形导航默认基于内存索引或 SQLite 查询，不触发全量扫盘
-- [ ] 刷新清理：扫描时删除已不存在路径的资产记录，并清理对应隐藏记录
-- [ ] 数据库可靠性：支持 schema 版本检查；数据库损坏时给中文提示并允许重新扫描生成
-- [ ] 打包约定：`fwasset.db` 默认与 exe / `config.toml` / `firmware_catalog.toml` 同目录
-- [ ] 测试覆盖：
-  - [ ] schema 初始化和版本检查
-  - [ ] 写入/读取 `FirmwareAsset`
-  - [ ] 按关键词/固件类型查询
-  - [ ] 删除不存在路径资产
-  - [ ] 隐藏状态持久化与清理
+- [x] 新增 `core/asset_index.py`，使用 Python 标准库 `sqlite3` 管理 `fwasset.db`
+- [x] 设计并创建 SQLite schema：
+  - [x] `assets`：保存 `series` / `model` / `model_directory_name` / `model_directory_path` / `firmware_type` / `firmware_label` / `flash_mode` / `version` / `path` / `directory_name` / `files_json` / `modified_time` / `scanned_at`
+  - [x] `hidden_items`：按目录绝对路径保存隐藏状态，支持隐藏型号目录或固件类型
+  - [x] `scan_meta`：保存 `root_dir` / `last_scan_at` / `schema_version`
+- [~] 启动流程调整：优先从 SQLite 读取最近一次资产索引；无索引时显示首次扫描提示（已接入 AssetPanel 初始化读索引，待人工验证 UI 效果）
+- [~] 扫描流程调整：用户点击“扫描根目录”后后台扫描真实目录，完成后写入 SQLite 并刷新 UI（已在 `scan_service` 中写入 SQLite）
+- [~] 搜索/筛选流程调整：搜索、固件类型筛选、后续树形导航默认基于内存索引或 SQLite 查询，不触发全量扫盘（现有 UI 交互基于内存索引；SQLite 查询 API 已覆盖）
+- [x] 刷新清理：扫描时删除已不存在路径的资产记录，并清理对应隐藏记录
+- [x] 数据库可靠性：支持 schema 版本检查；数据库损坏时给中文提示并允许重新扫描生成
+- [x] 打包约定：`fwasset.db` 默认与 exe / `config.toml` / `firmware_catalog.toml` 同目录
+- [x] 测试覆盖：
+  - [x] schema 初始化和版本检查
+  - [x] 写入/读取 `FirmwareAsset`
+  - [x] 按关键词/固件类型查询
+  - [x] 删除不存在路径资产
+  - [x] 隐藏状态持久化与清理
 
 > 验收：已有索引时应用可先展示缓存结果；搜索和筛选不再触发文件系统全量遍历；扫描刷新在后台执行并更新 SQLite；后续树形导航可直接消费索引数据。
 

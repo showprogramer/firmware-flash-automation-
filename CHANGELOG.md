@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### app
+- 固件资源列表启动时优先读取本地 SQLite 资产索引；首次无索引时提示扫描根目录，避免每次启动都现场全量扫盘。
 - 固件资源列表默认不再全选全部类型，改为提示先选择一种固件类型，降低操作员在混合列表中误选程序的风险。
 - 工具中心完善为“先打开工具再找程序”的工作流：支持搜索工具名/固件类型/目录关键词，打开后自动解析可启动工具，并提供常用工具与最近使用工具区。
 - 工具中心工具行新增星标收藏，启动成功后自动记录最近使用，状态持久化到应用目录 `tool_usage.json`。
@@ -11,6 +12,8 @@
 - 资源详情面板新增“系列”字段，为后续系列优先的树形导航提供可见校验点。
 
 ### core
+- 新增 `core/asset_index.py`，使用标准库 `sqlite3` 管理 `fwasset.db`，持久化 `assets`、`hidden_items` 和 `scan_meta`，支持 schema 版本检查、资产读写、关键词/类型查询与隐藏记录清理。
+- `scan_service` 扫描完成后写入 SQLite 本地资产索引，并新增缓存读取入口供 UI 启动时加载最近一次结果。
 - 新增 `core/tool_discovery.py`，按 `tool_path`、`tool_root + tool_dir`、`tool_root` 模糊搜索、`APP_ROOT/tools/` 兜底的优先级发现外部烧录工具，并缓存首次匹配结果。
 - 新增 `core/tool_usage.py`，管理工具中心收藏与最近使用状态。
 - 扩展 `FirmwareAsset` / catalog 类型结构，新增 `tool_dir` 字段用于按固件类型定位外部工具目录。
@@ -20,11 +23,13 @@
 - `scan_firmware_assets()` 输出新增 `model_directory_name` / `model_directory_path`，为“系列 → 型号配置目录 → 固件类型”树形导航提供稳定中间层数据。
 
 ### config
+- 新增 `fwasset.db` 作为本地资产索引默认文件名，约定与 exe、`config.toml`、`firmware_catalog.toml` 同目录，并加入 `.gitignore` 避免提交本机索引数据。
 - `config.toml` 新增 `[paths] tool_root`，用于配置外部刷程序工具库根目录。
 - `firmware_catalog.toml` 为工具启动类固件补充 `tool_dir`，并新增 `tools/` 兜底目录骨架模板。
 - `config.toml` 的扫描排除目录同步更新为实际非固件目录关键词。
 
 ### test
+- 新增 `tests/test_asset_index.py`，覆盖 SQLite schema 初始化、版本检查、资产读写、关键词/类型查询、过期资产删除和隐藏状态持久化清理；本轮验证通过：`.\scripts\test.ps1` -> `133 passed`，总覆盖率 `82.36%`。
 - 新增 `tests/test_tool_discovery.py` 与 `tests/test_tool_usage.py`，覆盖工具发现优先级、缓存、兜底目录、收藏和最近使用状态。
 - 扩展 `tests/test_app_service_smoke.py`，覆盖 P1-10 程序交接动作和 `manual_doc` / `disabled` 操作区渲染。
 - 扩展 catalog 与文件扫描测试，覆盖实际目录别名识别和非固件目录过滤。

@@ -13,7 +13,7 @@ from fwasset.core.tool_discovery import discover_tool_path, launch_tool
 from fwasset.ui.tool_center_panel import ToolCenterPanel
 from fwasset.core.services.flash_service import run_one_click
 from fwasset.core.services.music_flash_service import run_music_flash
-from fwasset.core.services.scan_service import build_scan_result
+from fwasset.core.services.scan_service import build_cached_scan_result, build_scan_result
 from fwasset.core.settings import DEFAULT_ROOT
 from fwasset.core.sort_config import SortKey, apply_sort
 from fwasset.core.types import FirmwareAsset
@@ -66,6 +66,7 @@ class FirmwareListPanel(BaseFlashPanel):
         self._build_main_view()
         self._refresh_usb()
         self.search_var.trace_add("write", lambda *_: self._filter_assets())
+        self.after(100, self._load_cached_assets)
 
     def _build_brand_header_with_tools(self, parent, title: str = "程序资产管理系统"):
         """构建带工具中心按钮的品牌标题栏."""
@@ -426,6 +427,23 @@ class FirmwareListPanel(BaseFlashPanel):
             self._filter_assets()
 
         self._run_task("扫描目录", _work, _done)
+
+    def _load_cached_assets(self):
+        def _work(log_fn):
+            return build_cached_scan_result(log_fn=log_fn)
+
+        def _done(result):
+            if not result.get("ok"):
+                self._log(str(result.get("message", "本地资产索引读取失败")))
+                return
+            payload = result.get("payload", {}) or {}
+            self._all_assets = list(payload.get("assets", []))
+            self._selected_idx = -1
+            self._filter_assets()
+            if not self._all_assets:
+                self._render_empty_list_hint("本地暂无资产索引，请点击扫描根目录生成。")
+
+        self._run_task("读取本地索引", _work, _done)
 
     def _sort_assets(self, items: list[FirmwareAsset]) -> list[FirmwareAsset]:
         sort_key = SortKey.PATH

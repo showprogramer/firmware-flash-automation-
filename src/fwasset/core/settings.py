@@ -29,6 +29,7 @@ APP_ROOT = _find_app_root()
 """应用程序根目录。配置文件和可执行文件同目录。"""
 
 CONFIG_PATH = APP_ROOT / "config.toml"
+ASSET_INDEX_PATH = APP_ROOT / "fwasset.db"
 
 _DEFAULTS = {
     "paths": {

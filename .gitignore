@@ -5,6 +5,7 @@ specs/code-review-*.md
 specs/archive/
 specs/ui-reactor/new_uigemini.py
 config.toml
+fwasset.db
 
 # Python environment and caches
 .venv/
