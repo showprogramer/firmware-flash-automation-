@@ -7,6 +7,7 @@
 - 工具中心完善为“先打开工具再找程序”的工作流：支持搜索工具名/固件类型/目录关键词，打开后自动解析可启动工具，并提供常用工具与最近使用工具区。
 - 工具中心工具行新增星标收藏，启动成功后自动记录最近使用，状态持久化到应用目录 `tool_usage.json`。
 - `tool_launch` 类型操作区接入工具发现结果，选中外部工具型固件后可直接打开烧录工具和固件目录。
+- 操作区按 `flash_mode` 渲染补齐：外部工具型条目支持打开程序目录、复制目录路径、复制主文件路径、打开工具并同步打开程序目录；说明型和禁用型条目显示对应操作状态。
 
 ### core
 - 新增 `core/tool_discovery.py`，按 `tool_path`、`tool_root + tool_dir`、`tool_root` 模糊搜索、`APP_ROOT/tools/` 兜底的优先级发现外部烧录工具，并缓存首次匹配结果。
@@ -19,7 +20,8 @@
 
 ### test
 - 新增 `tests/test_tool_discovery.py` 与 `tests/test_tool_usage.py`，覆盖工具发现优先级、缓存、兜底目录、收藏和最近使用状态。
-- 本轮验证通过：`.\scripts\test.ps1` -> `117 passed`，总覆盖率 `80.87%`。
+- 扩展 `tests/test_app_service_smoke.py`，覆盖 P1-10 程序交接动作和 `manual_doc` / `disabled` 操作区渲染。
+- 本轮验证通过：`.\scripts\test.ps1` -> `120 passed`，总覆盖率 `80.87%`。
 
 ### refactor
 - 包名与源码根目录从 `handcontrol` 统一迁移到 `fwasset`，同步更新启动入口、测试导入与打包脚本，收敛为“固件资源管理平台”命名。

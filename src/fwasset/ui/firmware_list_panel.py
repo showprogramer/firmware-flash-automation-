@@ -670,9 +670,9 @@ class FirmwareListPanel(BaseFlashPanel):
         elif flash_mode == "tool_launch":
             self._build_tool_launch_ops(asset)
         elif flash_mode == "manual_doc":
-            self._render_placeholder_ops("该类型当前为说明模式，后续接入文档查看入口。")
+            self._build_manual_doc_ops(asset)
         else:
-            self._render_placeholder_ops("该类型当前不可自动化操作。")
+            self._build_disabled_ops(asset)
 
     def _render_placeholder_ops(self, text: str):
         ctk.CTkLabel(
@@ -683,6 +683,86 @@ class FirmwareListPanel(BaseFlashPanel):
             font=(FONT_FAMILY, FONT_SIZE_MD),
             text_color=TEXT_SECONDARY,
         ).pack(anchor="w", padx=20, pady=20)
+
+    def _asset_path_text(self, asset: FirmwareAsset | None = None) -> str:
+        selected = asset or self._selected_asset()
+        if not selected:
+            return ""
+        return str(selected.get("path", "") or "")
+
+    def _primary_file_path_text(self, asset: FirmwareAsset | None = None) -> str:
+        selected = asset or self._selected_asset()
+        if not selected:
+            return ""
+        base_path = Path(str(selected.get("path", "") or ""))
+        files = [str(name) for name in selected.get("files", []) if str(name).strip()]
+        preferred_exts = (".bin", ".hex", ".rom", ".pkg", ".zip")
+        primary = next((name for name in files if name.lower().endswith(preferred_exts)), "")
+        if not primary and files:
+            primary = files[0]
+        return str(base_path / primary) if primary else str(base_path)
+
+    def _copy_text_to_clipboard(self, text: str, label: str):
+        if not text:
+            messagebox.showwarning("提示", f"没有可复制的{label}")
+            return
+        try:
+            self.clipboard_clear()
+            self.clipboard_append(text)
+        except Exception as exc:
+            messagebox.showerror("复制失败", str(exc))
+            return
+        self._log(f"已复制{label}: {text}")
+
+    def _copy_asset_dir_path(self):
+        asset = self._selected_asset()
+        if asset:
+            self._copy_text_to_clipboard(self._asset_path_text(asset), "目录路径")
+
+    def _copy_primary_file_path(self):
+        asset = self._selected_asset()
+        if asset:
+            self._copy_text_to_clipboard(self._primary_file_path_text(asset), "主文件路径")
+
+    def _open_current_asset_dir(self):
+        self._open_asset_path(self._selected_idx)
+
+    def _launch_tool_and_open_asset_dir(self):
+        self._launch_current_tool()
+        self._open_current_asset_dir()
+
+    def _build_handoff_actions(self, asset: FirmwareAsset, include_tool_combo: bool = False):
+        action_frame = ctk.CTkFrame(self.ops_body, fg_color="transparent")
+        action_frame.pack(fill="x", padx=20, pady=(0, 12))
+
+        for title, command in [
+            ("打开程序目录", self._open_current_asset_dir),
+            ("复制目录路径", self._copy_asset_dir_path),
+            ("复制主文件路径", self._copy_primary_file_path),
+        ]:
+            ctk.CTkButton(
+                action_frame,
+                text=title,
+                height=36,
+                corner_radius=6,
+                fg_color=BG_INPUT,
+                text_color=TEXT_PRIMARY,
+                hover_color=BG_HOVER,
+                command=command,
+            ).pack(fill="x", pady=3)
+
+        if include_tool_combo:
+            ctk.CTkButton(
+                action_frame,
+                text="打开工具 + 打开程序目录",
+                height=40,
+                corner_radius=8,
+                font=(FONT_FAMILY, FONT_SIZE_MD, "bold"),
+                fg_color=BG_INPUT,
+                text_color=TEXT_PRIMARY,
+                hover_color=BG_HOVER,
+                command=self._launch_tool_and_open_asset_dir,
+            ).pack(fill="x", pady=(6, 0))
 
     def _build_tool_launch_ops(self, asset: FirmwareAsset):
         """构建工具启动模式的操作面板."""
@@ -748,21 +828,11 @@ class FirmwareListPanel(BaseFlashPanel):
             font=(FONT_FAMILY, FONT_SIZE_LG, "bold"),
             fg_color=COLOR_PRIMARY,
             hover_color=COLOR_PRIMARY_HOVER,
+            state="normal" if tool_path else "disabled",
             command=self._launch_current_tool,
         ).pack(fill="x", pady=(0, 8))
-        
-        # 打开固件目录按钮
-        ctk.CTkButton(
-            btn_frame,
-            text="📁 打开固件所在目录",
-            height=40,
-            corner_radius=8,
-            font=(FONT_FAMILY, FONT_SIZE_MD),
-            fg_color=BG_INPUT,
-            text_color=TEXT_PRIMARY,
-            hover_color=BG_HOVER,
-            command=lambda: self._open_asset_path(self._selected_idx),
-        ).pack(fill="x", pady=(0, 8))
+
+        self._build_handoff_actions(asset, include_tool_combo=True)
         
         if not tool_path:
             # 显示配置提示
@@ -774,6 +844,58 @@ class FirmwareListPanel(BaseFlashPanel):
                 font=(FONT_FAMILY, FONT_SIZE_SM),
                 text_color=TEXT_SECONDARY,
             ).pack(anchor="w", padx=20, pady=(0, 12))
+
+    def _build_manual_doc_ops(self, asset: FirmwareAsset):
+        ctk.CTkLabel(
+            self.ops_body,
+            text="该类型需要按说明人工处理。",
+            justify="left",
+            wraplength=360,
+            font=(FONT_FAMILY, FONT_SIZE_MD),
+            text_color=TEXT_SECONDARY,
+        ).pack(anchor="w", padx=20, pady=(16, 12))
+        ctk.CTkButton(
+            self.ops_body,
+            text="查看说明",
+            height=40,
+            corner_radius=8,
+            fg_color=BG_INPUT,
+            text_color=TEXT_PRIMARY,
+            hover_color=BG_HOVER,
+            command=lambda: self._show_manual_doc(asset),
+        ).pack(fill="x", padx=20, pady=(0, 12))
+        self._build_handoff_actions(asset)
+
+    def _build_disabled_ops(self, asset: FirmwareAsset):
+        ctk.CTkLabel(
+            self.ops_body,
+            text=f"{asset.get('firmware_label', '该类型')}当前不可自动化操作。",
+            justify="left",
+            wraplength=360,
+            font=(FONT_FAMILY, FONT_SIZE_MD),
+            text_color=TEXT_SECONDARY,
+        ).pack(anchor="w", padx=20, pady=(16, 12))
+        ctk.CTkButton(
+            self.ops_body,
+            text="暂不可操作",
+            height=40,
+            corner_radius=8,
+            fg_color=BG_INPUT,
+            text_color=TEXT_SECONDARY,
+            hover_color=BG_INPUT,
+            state="disabled",
+        ).pack(fill="x", padx=20, pady=(0, 12))
+        self._build_handoff_actions(asset)
+
+    def _show_manual_doc(self, asset: FirmwareAsset):
+        message = (
+            f"固件类型: {asset.get('firmware_label', '-')}\n"
+            f"型号: {asset.get('model', '-')}\n"
+            f"版本: {asset.get('version', '-')}\n"
+            f"目录: {asset.get('path', '-')}\n\n"
+            "当前类型暂未接入自动烧录工具，请按对应工艺说明处理。"
+        )
+        messagebox.showinfo("操作说明", message)
     
     def _launch_current_tool(self):
         """启动当前选中的工具."""

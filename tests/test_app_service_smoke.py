@@ -1,4 +1,5 @@
 import queue
+from pathlib import Path
 
 import customtkinter as ctk
 
@@ -345,6 +346,64 @@ def test_directory_flash_runs_music_service(monkeypatch):
     panel._run_directory_flash()
 
     assert called["music"] is True
+
+
+def test_copy_handoff_paths_to_clipboard(monkeypatch):
+    panel = _mk_asset_stub(monkeypatch)
+    panel._selected_idx = 0
+    panel.assets = [
+        {
+            "model": "L36",
+            "version": "V1.0.0",
+            "path": "D:/fw/L36",
+            "directory_name": "L36",
+            "firmware_type": "mainboard",
+            "firmware_label": "主板程序",
+            "flash_mode": "tool_launch",
+            "files": ["readme.txt", "main.bin"],
+            "modified_time": 0,
+        }
+    ]
+    copied = []
+    panel.clipboard_clear = lambda: copied.clear()
+    panel.clipboard_append = lambda text: copied.append(text)
+
+    panel._copy_asset_dir_path()
+    assert copied == ["D:/fw/L36"]
+
+    panel._copy_primary_file_path()
+    assert Path(copied[0]) == Path("D:/fw/L36/main.bin")
+
+
+def test_tool_launch_combo_opens_tool_and_asset_dir(monkeypatch):
+    panel = _mk_asset_stub(monkeypatch)
+    panel._selected_idx = 0
+    panel.assets = [
+        {"model": "L36", "version": "V1.0.0", "path": "D:/fw/L36", "directory_name": "L36", "firmware_type": "mainboard", "firmware_label": "主板程序", "flash_mode": "tool_launch", "files": ["main.bin"], "modified_time": 0}
+    ]
+    calls = []
+    panel._launch_current_tool = lambda: calls.append("tool")
+    panel._open_current_asset_dir = lambda: calls.append("dir")
+
+    panel._launch_tool_and_open_asset_dir()
+
+    assert calls == ["tool", "dir"]
+
+
+def test_operation_panel_renders_manual_and_disabled_modes(monkeypatch):
+    panel = _mk_asset_stub(monkeypatch)
+    built = []
+    panel._build_manual_doc_ops = lambda asset: built.append(("manual", asset["firmware_type"]))
+    panel._build_disabled_ops = lambda asset: built.append(("disabled", asset["firmware_type"]))
+
+    panel._render_operation_panel(
+        {"model": "L1", "version": "V1", "path": "D:/a", "directory_name": "a", "firmware_type": "seat_occupancy", "firmware_label": "占座提醒", "flash_mode": "manual_doc", "files": [], "modified_time": 0}
+    )
+    panel._render_operation_panel(
+        {"model": "L2", "version": "V1", "path": "D:/b", "directory_name": "b", "firmware_type": "aging", "firmware_label": "老化程序", "flash_mode": "disabled", "files": [], "modified_time": 0}
+    )
+
+    assert built == [("manual", "seat_occupancy"), ("disabled", "aging")]
 
 
 def test_serial_control_scan_ports_updates_ui(monkeypatch):
