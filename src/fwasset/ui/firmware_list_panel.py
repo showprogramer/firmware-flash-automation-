@@ -59,6 +59,7 @@ class FirmwareListPanel(BaseFlashPanel):
         self._all_assets: list[FirmwareAsset] = []
         self._selected_idx = -1
         self._asset_card_widgets: list[dict] = []
+        self._tree_expanded: set[str] = set()
 
         self.grid_columnconfigure(0, weight=0, minsize=440)
         self.grid_columnconfigure(1, weight=1)
@@ -424,6 +425,7 @@ class FirmwareListPanel(BaseFlashPanel):
             payload = result.get("payload", {}) or {}
             self._all_assets = list(payload.get("assets", []))
             self._selected_idx = -1
+            self._tree_expanded.clear()
             self._filter_assets()
 
         self._run_task("扫描目录", _work, _done)
@@ -439,6 +441,7 @@ class FirmwareListPanel(BaseFlashPanel):
             payload = result.get("payload", {}) or {}
             self._all_assets = list(payload.get("assets", []))
             self._selected_idx = -1
+            self._tree_expanded.clear()
             self._filter_assets()
             if not self._all_assets:
                 self._render_empty_list_hint("本地暂无资产索引，请点击扫描根目录生成。")
@@ -477,14 +480,52 @@ class FirmwareListPanel(BaseFlashPanel):
 
         self.assets = self._sort_assets(filtered)
         self.folders = self.assets
+        if keyword:
+            self._expand_matching_tree_nodes(self.assets)
         self._render_asset_cards()
 
     def _render_asset_cards(self):
         self._asset_card_widgets = []
         for widget in self.list_scroll.winfo_children():
             widget.destroy()
-        for idx, item in enumerate(self.assets):
-            self._create_sidebar_item(idx, item)
+        self._ensure_default_tree_expanded()
+        rendered_assets = 0
+        for series_node in self._build_tree_groups(self.assets):
+            series_key = self._tree_key("series", series_node["series"])
+            is_series_open = self._is_tree_node_open(series_key)
+            self._create_tree_header(
+                level=0,
+                key=series_key,
+                text=f"{series_node['series']}  ·  {series_node['model_count']} 个目录",
+                is_open=is_series_open,
+            )
+            if not is_series_open:
+                continue
+            for model_node in series_node["models"]:
+                model_key = self._tree_key("model", series_node["series"], model_node["path"])
+                is_model_open = self._is_tree_node_open(model_key)
+                self._create_tree_header(
+                    level=1,
+                    key=model_key,
+                    text=f"{model_node['name']}  ·  {model_node['type_count']} 类固件",
+                    is_open=is_model_open,
+                )
+                if not is_model_open:
+                    continue
+                for type_node in model_node["types"]:
+                    type_key = self._tree_key("type", model_node["path"], type_node["firmware_type"])
+                    is_type_open = self._is_tree_node_open(type_key)
+                    self._create_tree_header(
+                        level=2,
+                        key=type_key,
+                        text=f"{type_node['label']}  ·  {type_node['version_count']} 个版本",
+                        is_open=is_type_open,
+                    )
+                    if not is_type_open:
+                        continue
+                    for idx in type_node["asset_indices"]:
+                        self._create_sidebar_item(idx, self.assets[idx], indent=54)
+                        rendered_assets += 1
         if self.assets:
             next_idx = min(max(self._selected_idx, 0), len(self.assets) - 1)
             self._select_asset(next_idx)
@@ -495,6 +536,100 @@ class FirmwareListPanel(BaseFlashPanel):
                 self._render_empty_list_hint("请先在上方选择一种固件类型。")
             elif self._all_assets:
                 self._render_empty_list_hint("当前筛选条件下没有匹配的程序。")
+
+        if self.assets and rendered_assets == 0:
+            self._render_empty_list_hint("当前树节点已折叠，展开系列或型号目录后查看程序。")
+
+    def _tree_key(self, kind: str, *parts: object) -> str:
+        return "|".join([kind, *[str(part) for part in parts]])
+
+    def _is_tree_node_open(self, key: str) -> bool:
+        return key in self._tree_expanded
+
+    def _toggle_tree_node(self, key: str):
+        if key in self._tree_expanded:
+            self._tree_expanded.remove(key)
+        else:
+            self._tree_expanded.add(key)
+        self._render_asset_cards()
+
+    def _ensure_default_tree_expanded(self):
+        if self._tree_expanded or not self.assets:
+            return
+        self._expand_matching_tree_nodes(self.assets)
+
+    def _expand_matching_tree_nodes(self, assets: list[FirmwareAsset]):
+        for series_node in self._build_tree_groups(assets):
+            self._tree_expanded.add(self._tree_key("series", series_node["series"]))
+            for model_node in series_node["models"]:
+                self._tree_expanded.add(self._tree_key("model", series_node["series"], model_node["path"]))
+                for type_node in model_node["types"]:
+                    self._tree_expanded.add(self._tree_key("type", model_node["path"], type_node["firmware_type"]))
+
+    def _build_tree_groups(self, assets: list[FirmwareAsset]) -> list[dict]:
+        series_map: dict[str, dict] = {}
+        for idx, asset in enumerate(assets):
+            series = str(asset.get("series", "") or "未知系列")
+            model_path = str(asset.get("model_directory_path", "") or asset.get("path", ""))
+            model_name = str(asset.get("model_directory_name", "") or asset.get("model", "") or model_path)
+            firmware_type = str(asset.get("firmware_type", "") or "unknown")
+            firmware_label = str(asset.get("firmware_label", "") or firmware_type)
+            series_node = series_map.setdefault(series, {"series": series, "models": {}})
+            model_node = series_node["models"].setdefault(
+                model_path,
+                {"name": model_name, "path": model_path, "types": {}},
+            )
+            type_node = model_node["types"].setdefault(
+                firmware_type,
+                {"firmware_type": firmware_type, "label": firmware_label, "asset_indices": []},
+            )
+            type_node["asset_indices"].append(idx)
+
+        out: list[dict] = []
+        for series_name in sorted(series_map.keys(), key=str.casefold):
+            series_node = series_map[series_name]
+            models = []
+            for model_path, model_node in sorted(series_node["models"].items(), key=lambda item: item[1]["name"].casefold()):
+                types = []
+                for _firmware_type, type_node in sorted(model_node["types"].items(), key=lambda item: item[1]["label"].casefold()):
+                    type_node["version_count"] = len(
+                        {str(assets[idx].get("version", "") or "-") for idx in type_node["asset_indices"]}
+                    )
+                    types.append(type_node)
+                models.append(
+                    {
+                        "name": model_node["name"],
+                        "path": model_path,
+                        "types": types,
+                        "type_count": len(types),
+                    }
+                )
+            out.append({"series": series_name, "models": models, "model_count": len(models)})
+        return out
+
+    def _create_tree_header(self, level: int, key: str, text: str, is_open: bool):
+        padx = 8 + level * 16
+        header = ctk.CTkFrame(
+            self.list_scroll,
+            fg_color=BG_INPUT if level == 0 else "transparent",
+            corner_radius=8,
+            height=34,
+            cursor="hand2",
+            border_width=1 if level == 0 else 0,
+            border_color=BORDER_COLOR,
+        )
+        header.pack(fill="x", pady=(8 if level == 0 else 3, 2), padx=(padx, 8))
+        header.pack_propagate(False)
+        label = ctk.CTkLabel(
+            header,
+            text=f"{'▾' if is_open else '▸'} {text}",
+            font=(FONT_FAMILY, FONT_SIZE_MD if level == 0 else FONT_SIZE_SM, "bold" if level < 2 else "normal"),
+            text_color=TEXT_PRIMARY if level < 2 else TEXT_SECONDARY,
+            anchor="w",
+        )
+        label.pack(fill="x", expand=True, padx=10)
+        for widget in [header, label]:
+            widget.bind("<Button-1>", lambda _event, node_key=key: self._toggle_tree_node(node_key))
 
     def _render_empty_list_hint(self, text: str):
         ctk.CTkLabel(
@@ -523,16 +658,18 @@ class FirmwareListPanel(BaseFlashPanel):
         }
 
     def _apply_card_visual_state(self, idx: int, selected: bool):
-        if idx < 0 or idx >= len(self._asset_card_widgets):
+        if idx < 0:
             return
-        widgets = self._asset_card_widgets[idx]
+        widgets = next((item for item in self._asset_card_widgets if item.get("asset_idx") == idx), None)
+        if widgets is None:
+            return
         palette = self._selected_card_colors() if selected else self._unselected_card_colors()
         widgets["card"].configure(fg_color=palette["card_fg"], border_color=palette["border_color"])
         widgets["title_label"].configure(text_color=palette["title_text"])
         widgets["meta_label"].configure(text_color=palette["meta_text"])
         widgets["type_label"].configure(text_color=palette["meta_text"])
 
-    def _create_sidebar_item(self, idx: int, item: FirmwareAsset):
+    def _create_sidebar_item(self, idx: int, item: FirmwareAsset, indent: int = 8):
         is_selected = idx == self._selected_idx
         palette = self._selected_card_colors() if is_selected else self._unselected_card_colors()
         card_item = ctk.CTkFrame(
@@ -544,7 +681,7 @@ class FirmwareListPanel(BaseFlashPanel):
             border_width=1,
             border_color=palette["border_color"],
         )
-        card_item.pack(fill="x", pady=4, padx=8)
+        card_item.pack(fill="x", pady=4, padx=(indent, 8))
         card_item.pack_propagate(False)
 
         text_area = ctk.CTkFrame(card_item, fg_color="transparent")
@@ -583,6 +720,7 @@ class FirmwareListPanel(BaseFlashPanel):
         self._asset_card_widgets.append(
             {
                 "card": card_item,
+                "asset_idx": idx,
                 "title_label": title_label,
                 "meta_label": meta_label,
                 "type_label": type_label,

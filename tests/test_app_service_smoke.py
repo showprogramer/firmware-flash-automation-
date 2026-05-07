@@ -131,6 +131,7 @@ def _mk_asset_stub(monkeypatch):
     panel._task_queue = queue.Queue()
     panel._busy = False
     panel._polling_active = False
+    panel._tree_expanded = set()
     panel.list_scroll = FakeWidget()
     panel.ops_body = FakeWidget()
     panel.usb_menu = FakeWidget()
@@ -225,6 +226,78 @@ def test_asset_filter_supports_keyword_and_type(monkeypatch):
 
     assert len(panel.assets) == 1
     assert panel.assets[0]["firmware_type"] == "music_bt"
+
+
+def test_asset_tree_groups_series_model_and_type(monkeypatch):
+    panel = _mk_asset_stub(monkeypatch)
+    panel._all_assets = [
+        {
+            "series": "L36",
+            "model": "L36",
+            "version": "V1.0.0",
+            "path": "D:/root/L36配置/主板/V1",
+            "directory_name": "V1",
+            "model_directory_name": "L36配置",
+            "model_directory_path": "D:/root/L36配置",
+            "firmware_type": "mainboard",
+            "firmware_label": "主板程序",
+            "flash_mode": "tool_launch",
+            "files": ["main.bin"],
+            "modified_time": 0,
+        },
+        {
+            "series": "L36",
+            "model": "L36",
+            "version": "V2.0.0",
+            "path": "D:/root/L36配置/主板/V2",
+            "directory_name": "V2",
+            "model_directory_name": "L36配置",
+            "model_directory_path": "D:/root/L36配置",
+            "firmware_type": "mainboard",
+            "firmware_label": "主板程序",
+            "flash_mode": "tool_launch",
+            "files": ["main.bin"],
+            "modified_time": 0,
+        },
+    ]
+    panel.type_filter_vars["mainboard"] = FakeVar(True)
+
+    panel._filter_assets()
+
+    tree = panel._build_tree_groups(panel.assets)
+    assert tree[0]["series"] == "L36"
+    assert tree[0]["model_count"] == 1
+    assert tree[0]["models"][0]["type_count"] == 1
+    assert tree[0]["models"][0]["types"][0]["version_count"] == 2
+    assert len(panel._asset_card_widgets) == 2
+
+
+def test_asset_tree_toggle_collapses_rendered_leaf_cards(monkeypatch):
+    panel = _mk_asset_stub(monkeypatch)
+    panel._all_assets = [
+        {
+            "series": "L36",
+            "model": "L36",
+            "version": "V1.0.0",
+            "path": "D:/root/L36配置/主板/V1",
+            "directory_name": "V1",
+            "model_directory_name": "L36配置",
+            "model_directory_path": "D:/root/L36配置",
+            "firmware_type": "mainboard",
+            "firmware_label": "主板程序",
+            "flash_mode": "tool_launch",
+            "files": ["main.bin"],
+            "modified_time": 0,
+        }
+    ]
+    panel.type_filter_vars["mainboard"] = FakeVar(True)
+    panel._filter_assets()
+    series_key = panel._tree_key("series", "L36")
+
+    panel._toggle_tree_node(series_key)
+
+    assert series_key not in panel._tree_expanded
+    assert panel._asset_card_widgets == []
 
 
 def test_asset_default_sort_matches_natural_explorer_like_order(monkeypatch):
