@@ -120,6 +120,7 @@ def _mk_asset_stub(monkeypatch):
     panel.search_var = FakeVar("")
     panel.sort_key_var = FakeVar("默认(名称)")
     panel.sort_asc_var = FakeVar(True)
+    panel.show_hidden_var = FakeVar(False)
     panel.type_filter_vars = {
         "handcontrol_ui": FakeVar(True),
         "music_bt": FakeVar(True),
@@ -132,7 +133,11 @@ def _mk_asset_stub(monkeypatch):
     panel._busy = False
     panel._polling_active = False
     panel._tree_expanded = set()
+    panel._hidden_items = {}
+    panel._log_collapsed = True
+    panel._status_hint_text = "Select a firmware version"
     panel.list_scroll = FakeWidget()
+    panel.sidebar_status_label = FakeWidget(text="")
     panel.ops_body = FakeWidget()
     panel.usb_menu = FakeWidget()
     panel.log_text = FakeText()
@@ -298,6 +303,35 @@ def test_asset_tree_toggle_collapses_rendered_leaf_cards(monkeypatch):
 
     assert series_key not in panel._tree_expanded
     assert panel._asset_card_widgets == []
+
+
+def test_hidden_model_directory_is_filtered_until_show_hidden(monkeypatch):
+    panel = _mk_asset_stub(monkeypatch)
+    panel.type_filter_vars["mainboard"] = FakeVar(True)
+    panel._all_assets = [
+        {
+            "series": "L36",
+            "model": "L36",
+            "version": "V1.0.0",
+            "path": "D:/root/L36配置/主板/V1",
+            "directory_name": "V1",
+            "model_directory_name": "L36配置",
+            "model_directory_path": "D:/root/L36配置",
+            "firmware_type": "mainboard",
+            "firmware_label": "主板程序",
+            "flash_mode": "tool_launch",
+            "files": ["main.bin"],
+            "modified_time": 0,
+        }
+    ]
+    panel._hidden_items = {"D:/root/L36配置": "model_directory"}
+
+    panel._filter_assets()
+    assert panel.assets == []
+
+    panel.show_hidden_var.set(True)
+    panel._filter_assets()
+    assert len(panel.assets) == 1
 
 
 def test_asset_default_sort_matches_natural_explorer_like_order(monkeypatch):
