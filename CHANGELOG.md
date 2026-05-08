@@ -2,7 +2,29 @@
 
 ## Unreleased
 
+### core
+- ROM 手控版本号识别补齐 3 种边界格式：空格分隔 `ITE_NOR 120.3.1`、下划线子版本 `46_002`、无前缀三段式 `120.3.1`（含 `NULLLOG_16.3.7_FY` 后缀变体），修复 `\b` 因 `_` 属 `\w` 导致边界失效的根因；版本匹配从 10/15 → 13/15。
+- `scan_firmware_assets()` catalog 类型匹配修复 `segmented_screen`（断码屏手控）被 `handcontrol_ui`（手控UI）抢先劫持：`segmented_screen` 移至 catalog 第二位，ROM+PKG 特殊返回保留为兜底。
+- catalog 补齐 `.mot` 扩展名到 `music_bt`（蓝牙）、`movement_3d`、`movement_2d`（机芯板），修复 39 个 Renesas R5F104BC `.mot` 蓝牙固件和 3D/2D 机芯 `.mot` 文件完全扫不到的缺陷。
+- catalog `movement_3d` / `movement_2d` 移除非特异性关键词 `机芯板` / `机芯板程序`，`commercial_mainboard` 移除 `投币机` / `纸币机`（归属 `card_reader`），降低类型误判。
+- `asset_tree.py` `_insert_node` 增加 `tree.exists(iid)` 防御，先删后插避免筛选固件类型时 `Item already exists` Tkinter 崩溃。
+
+### config
+- `config.toml` / `settings.py` 的 `version_patterns` 新增 `_(\\d+_\\d+(?:_\\d+)?)$` 和 `(?<![0-9A-Za-z])(\\d+\\.\\d+\\.\\d+(?:_\\d+)?)(?![0-9A-Za-z])` 模式，覆盖下划线子版本和无前缀三段式版本号。
+
+### test
+- `tests/test_file_scan.py` 新增 12 个边界测试用例（空格分隔 ROM 版本、`NULLLOG_FY` 后缀、`Beelogo_103.3.1`、`H530_62.3.2`、`46_002` 下划线子版本、`segmented_screen` 优先级、`.mot` 扩展名检测）。
+
+### docs
+- 新增 `specs/bug_plan5-8.md`，记录 YJ-按摩椅程序汇总目录深度分析中发现的 7 个缺陷及修复方案。
+
 ### app
+- 固件资源列表改用 `ttk.Treeview` 高密度树表渲染“系列 → 型号目录 → 固件类型 → 程序版本”，筛选刷新不再同步销毁并重建大量 CTk 卡片；保留叶子选中、双击打开目录和右键隐藏/恢复。
+- Treeview 行字体与行高加大，并从主表格移除“方式”和“路径”列；刷写方式与原始路径继续在选中摘要/详情数据中显示，减少列表横向占用。
+- Treeview 正文字体继续放大并提高对比度，分组行不再使用浅灰文字；左侧列表下方移除选中详情卡，路径、方式和文件摘要改到右侧操作区顶部展示。
+- 切换固件类型筛选时重置树展开状态，确保手控、主板、蓝牙等类型默认展开行为一致；叶子行第一列改为型号，版本只保留在“版本”列，避免重复显示。
+- 运行日志保持在右侧底部区域，默认折叠且不参与主内容高度分配。
+- 左侧顶部筛选区压缩为单行快速定位工具栏：搜索、固件类型单选下拉、排序、清空、显示隐藏和扫描根目录；默认仍要求先选择一种固件类型，“全部类型”作为显式选项。
 - 固件资源列表完成 P1-9 布局反转：左侧树形资源区扩展为主工作区，右侧收敛为操作区；选中条目的型号、版本、路径和文件摘要移动到左侧底部状态条，运行日志默认折叠。
 - 资源树新增条目隐藏/恢复：支持右键隐藏型号目录、固件类型或单个版本，并通过“显示隐藏”复选框临时查看和恢复；隐藏状态持久化到 SQLite `hidden_items`。
 - 固件资源列表左侧改为“系列 → 型号配置目录 → 固件类型 → 程序版本”的可折叠树形导航；搜索和类型筛选后自动展开匹配节点，点击程序版本继续驱动右侧详情和 `flash_mode` 操作区。
@@ -32,6 +54,7 @@
 - `config.toml` 的扫描排除目录同步更新为实际非固件目录关键词。
 
 ### test
+- 扩展 `tests/test_app_service_smoke.py`，覆盖 Treeview 分组填充、单选固件类型筛选、清空筛选、显示隐藏、隐藏型号目录过滤、叶子选择、双击打开目录和右键隐藏菜单回调；本轮验证通过：`uv run python -m pytest tests\test_app_service_smoke.py -q --no-cov` -> `21 passed`，`.\scripts\test.ps1` -> `138 passed`。
 - 扩展 `tests/test_app_service_smoke.py`，覆盖隐藏型号目录在默认视图中过滤、启用“显示隐藏”后恢复展示；本轮验证通过：`.\scripts\test.ps1` -> `136 passed`，总覆盖率 `82.45%`。
 - 扩展 `tests/test_app_service_smoke.py`，覆盖树形导航分组、版本数量统计、折叠/展开以及叶子节点选择兼容行为；本轮验证通过：`.\scripts\test.ps1` -> `135 passed`，总覆盖率 `82.45%`。
 - 新增 `tests/test_asset_index.py`，覆盖 SQLite schema 初始化、版本检查、资产读写、关键词/类型查询、过期资产删除和隐藏状态持久化清理；本轮验证通过：`.\scripts\test.ps1` -> `133 passed`，总覆盖率 `82.36%`。

@@ -25,6 +25,13 @@ from fwasset.core.file_scan import (
         ("L35A手控UI.ROM", "L35A", ""),
         ("ITE_NOR_yj_massage_L26A_Max_music_72.33.ROM", "L26A", "V72.33"),
         ("YJ-L39S-2122XN-K032_UI_126.3.1.ROM", "L39S", "V126.3.1"),
+        ("ITE_NOR 120.3.1.ROM", "", "V120.3.1"),
+        ("ITE_NOR_yj_massage__NULL_s_V50.3.6.ROM", "", "V50.3.6"),
+        ("NULLLOG_16.3.7_FY.ROM", "", "V16.3.7"),
+        ("ITE_NOR_yj_Smassage_L36_4d_Beelogo_103.3.1.ROM", "L36", "V103.3.1"),
+        ("ITE_NOR_yj_Smassage_L36_H530_62.3.2.ROM", "L36", "V62.3.2"),
+        ("ITE_NOR_yj_massage_4d_l65_46_002.ROM", "L65", "V46_002"),
+        ("zey_standard_project_l50s_47_005.ROM", "L50S", "V47_005"),
     ],
 )
 def test_parse_rom_filename(filename: str, expected_model: str, expected_version: str):
@@ -226,3 +233,58 @@ def test_scan_firmware_assets_uses_expanded_catalog_keywords_and_excludes(tmp_pa
     assert [item["firmware_type"] for item in assets] == ["mainboard", "music_bt"]
     assert [item["model_directory_name"] for item in assets] == ["L36配置", "L36配置"]
     assert all(Path(item["model_directory_path"]).name == "L36配置" for item in assets)
+
+
+def test_segmented_screen_before_handcontrol_ui_in_catalog(tmp_path: Path):
+    """P0-3: '断码屏' directory with ROM+PKG should match segmented_screen, not handcontrol_ui."""
+    seg_dir = tmp_path / "L39MAX" / "断码屏亚克力手控"
+    seg_dir.mkdir(parents=True)
+    (seg_dir / "YJ-L39max_UI_125.3.2.ROM").write_text("rom", encoding="utf-8")
+    (seg_dir / "ITEPKG03.PKG").write_text("pkg", encoding="utf-8")
+
+    assets, errors = scan_firmware_assets(str(tmp_path))
+
+    assert errors == []
+    assert len(assets) == 1
+    assert assets[0]["firmware_type"] == "segmented_screen", f"Expected segmented_screen, got {assets[0]['firmware_type']}"
+
+
+def test_music_bt_detects_mot_files(tmp_path: Path):
+    """P0-2: Bluetooth directories with .mot files should be detected as music_bt."""
+    bt_dir = tmp_path / "L36" / "蓝牙板"
+    bt_dir.mkdir(parents=True)
+    (bt_dir / "YJ_Bt_Eng_Massage_R5F104BC_Pro_V15.mot").write_text("bt", encoding="utf-8")
+
+    assets, errors = scan_firmware_assets(str(tmp_path))
+
+    assert errors == []
+    assert len(assets) == 1
+    assert assets[0]["firmware_type"] == "music_bt", f"Expected music_bt, got {assets[0]['firmware_type']}"
+
+
+def test_movement_3d_detects_mot_files(tmp_path: Path):
+    """P0-2: 3D机芯 directories with .mot files should be detected as movement_3d."""
+    motor_dir = tmp_path / "L36" / "3d机芯板"
+    motor_dir.mkdir(parents=True)
+    (motor_dir / "motor_v1.mot").write_text("motor", encoding="utf-8")
+
+    assets, errors = scan_firmware_assets(str(tmp_path))
+
+    assert errors == []
+    assert len(assets) == 1
+    assert assets[0]["firmware_type"] == "movement_3d", f"Expected movement_3d, got {assets[0]['firmware_type']}"
+
+
+def test_version_extracted_from_space_separated_rom(tmp_path: Path):
+    """P0-1: 'ITE_NOR 120.3.1.ROM' should extract version V120.3.1."""
+    hand_dir = tmp_path / "L36" / "手控"
+    hand_dir.mkdir(parents=True)
+    (hand_dir / "ITE_NOR 120.3.1.ROM").write_text("rom", encoding="utf-8")
+    (hand_dir / "ITEPKG03.PKG").write_text("pkg", encoding="utf-8")
+
+    assets, errors = scan_firmware_assets(str(tmp_path))
+
+    assert errors == []
+    assert len(assets) == 1
+    assert assets[0]["model"] == "L36"
+    assert assets[0]["version"] == "V120.3.1", f"Expected V120.3.1, got '{assets[0]['version']}'"

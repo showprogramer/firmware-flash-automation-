@@ -53,6 +53,8 @@ _DEFAULTS = {
             r"_UI_(\d+\.\d+(?:\.\d+)?(?:_\d+)?)",
             r"_(\d+\.\d+\.\d+(?:_\d+))$",
             r"_(\d+\.\d+\.\d+(?:_\d+)?)$",
+            r"_(\d+_\d+(?:_\d+)?)$",
+            r"(?<![0-9A-Za-z])(\d+\.\d+\.\d+(?:_\d+)?)(?![0-9A-Za-z])",
         ],
         "path_model_patterns": [r"(L\d+[A-Za-z]*(?:max|pro|s)?)(?![A-Za-z0-9])"],
         "path_version_patterns": [
