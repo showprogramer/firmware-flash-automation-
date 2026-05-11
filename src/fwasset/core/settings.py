@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 
@@ -29,7 +30,39 @@ APP_ROOT = _find_app_root()
 """应用程序根目录。配置文件和可执行文件同目录。"""
 
 CONFIG_PATH = APP_ROOT / "config.toml"
-ASSET_INDEX_PATH = APP_ROOT / "fwasset.db"
+
+
+def _default_runtime_dir(app_root: Path | None = None) -> Path:
+    root = Path(app_root or APP_ROOT)
+    if getattr(sys, "frozen", False):
+        return root / "runtime"
+    return root / ".runtime"
+
+
+def _resolve_runtime_dir(app_root: Path | None = None, env_value: str | None = None) -> Path:
+    root = Path(app_root or APP_ROOT)
+    raw = os.environ.get("FWASSET_RUNTIME_DIR") if env_value is None else env_value
+    if raw and str(raw).strip():
+        path = Path(str(raw).strip())
+        if path.is_absolute():
+            return path
+        return (root / path).resolve()
+    return _default_runtime_dir(root).resolve()
+
+
+def ensure_runtime_dir(path: str | Path | None = None) -> Path:
+    target = Path(path) if path is not None else _resolve_runtime_dir()
+    try:
+        target.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise RuntimeError(f"运行时目录创建失败: {target} ({exc})") from exc
+    return target
+
+
+RUNTIME_DIR = ensure_runtime_dir()
+ASSET_INDEX_PATH = RUNTIME_DIR / "fwasset.db"
+LOG_DIR = RUNTIME_DIR / "logs"
+APP_LOG_PATH = LOG_DIR / "app.log"
 
 _DEFAULTS = {
     "paths": {

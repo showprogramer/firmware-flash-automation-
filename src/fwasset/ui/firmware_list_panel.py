@@ -902,6 +902,47 @@ class FirmwareListPanel(BaseFlashPanel):
         for key, value in details.items():
             self.detail_values[key].configure(text=value)
 
+    def _open_in_explorer(self, folder_path: str, model: str = "", version: str = ""):
+        try:
+            os.startfile(folder_path)
+        except OSError as exc:
+            messagebox.showerror("打开失败", f"打开目录失败: {exc}")
+            return
+
+        logger = (
+            self.__dict__.get("log")
+            or self.__dict__.get("_log")
+            or getattr(self, "_log", None)
+            or getattr(self, "log", None)
+        )
+        if callable(logger):
+            logger(f"快速定位已打开: {model} {version} -> {folder_path}")
+
+    def _open_folder_from_listbox(self, event=None):
+        selection = list(getattr(self.listbox, "curselection", lambda: ())())
+        idx = selection[0] if selection else None
+        if idx is None and event is not None and hasattr(self.listbox, "nearest"):
+            idx = int(self.listbox.nearest(event.y))
+            if hasattr(self.listbox, "selection_clear"):
+                self.listbox.selection_clear(0, "end")
+            if hasattr(self.listbox, "selection_set"):
+                self.listbox.selection_set(idx)
+        if idx is None or idx < 0 or idx >= len(getattr(self, "folders", [])):
+            return
+
+        if hasattr(self, "current_idx") and hasattr(self.current_idx, "set"):
+            self.current_idx.set(idx)
+        on_select = getattr(self, "_on_select", None)
+        if callable(on_select):
+            on_select(None)
+
+        folder = self.folders[idx]
+        folder_path = str(folder.get("path", "") or "")
+        if not Path(folder_path).exists():
+            messagebox.showwarning("目录不存在", f"目录不存在: {folder_path}")
+            return
+        self._open_in_explorer(folder_path, str(folder.get("model", "")), str(folder.get("version", "")))
+
     def _open_asset_path(self, idx: int):
         if idx < 0 or idx >= len(self.assets):
             return

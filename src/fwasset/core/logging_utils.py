@@ -4,10 +4,12 @@ from datetime import datetime
 from pathlib import Path
 import threading
 
+from fwasset.core.settings import APP_LOG_PATH
+
 
 class FileLogger:
-    def __init__(self, path: str | Path):
-        self.path = Path(path)
+    def __init__(self, path: str | Path | None = None):
+        self.path = Path(path) if path is not None else APP_LOG_PATH
         self._lock = threading.Lock()
 
     def log(self, message: str, level: str = "INFO") -> None:

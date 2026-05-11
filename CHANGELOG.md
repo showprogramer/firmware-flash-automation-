@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### core
+- 新增统一运行时目录解析：开发模式默认写入 `.runtime/`，打包模式默认写入 exe 同级 `runtime/`，并支持 `FWASSET_RUNTIME_DIR` 覆盖。
+- SQLite 资产索引默认路径从应用根目录 `fwasset.db` 迁移到运行时目录 `.runtime/fwasset.db`，避免源码目录混入运行时数据。
+- 文件日志默认路径迁移到运行时目录 `.runtime/logs/app.log`，启动时自动创建运行时目录，创建失败时抛出中文错误。
 - ROM 手控版本号识别补齐 3 种边界格式：空格分隔 `ITE_NOR 120.3.1`、下划线子版本 `46_002`、无前缀三段式 `120.3.1`（含 `NULLLOG_16.3.7_FY` 后缀变体），修复 `\b` 因 `_` 属 `\w` 导致边界失效的根因；版本匹配从 10/15 → 13/15。
 - `scan_firmware_assets()` catalog 类型匹配修复 `segmented_screen`（断码屏手控）被 `handcontrol_ui`（手控UI）抢先劫持：`segmented_screen` 移至 catalog 第二位，ROM+PKG 特殊返回保留为兜底。
 - catalog 补齐 `.mot` 扩展名到 `music_bt`（蓝牙）、`movement_3d`、`movement_2d`（机芯板），修复 39 个 Renesas R5F104BC `.mot` 蓝牙固件和 3D/2D 机芯 `.mot` 文件完全扫不到的缺陷。
@@ -10,15 +13,24 @@
 - `asset_tree.py` `_insert_node` 增加 `tree.exists(iid)` 防御，先删后插避免筛选固件类型时 `Item already exists` Tkinter 崩溃。
 
 ### config
+- 新增 `config.example.toml` 作为版本库标准配置样例；`config.toml` 改为本机私有配置，已从 Git 跟踪中移除并保留在 `.gitignore`。
+- `.gitignore` 补齐 `.runtime/`、`dist/`、`build/`、临时 `*.spec` 与异常 `tool-resultsdirs_4deep.txt` 类文件规则，同时保留已跟踪的 `fwasset.spec`。
 - `config.toml` / `settings.py` 的 `version_patterns` 新增 `_(\\d+_\\d+(?:_\\d+)?)$` 和 `(?<![0-9A-Za-z])(\\d+\\.\\d+\\.\\d+(?:_\\d+)?)(?![0-9A-Za-z])` 模式，覆盖下划线子版本和无前缀三段式版本号。
 
 ### test
+- 更新快速定位测试，直接验证 `FirmwareListPanel` 正式类方法，不再依赖 `app.py` 运行时 monkey patch。
+- 扩展 settings 与 logging 测试，覆盖运行时目录解析、环境变量覆盖、目录创建和默认日志路径。
+- 本轮验证通过：`uv run python -m pytest tests\test_src_layout.py tests\test_app_quick_locate.py tests\test_settings.py -q --no-cov` -> `22 passed`；`uv run python -m pytest tests\test_asset_index.py tests\test_logging_utils.py tests\test_app_service_smoke.py -q --no-cov` -> `29 passed`；`.\scripts\test.ps1` -> `153 passed`，总覆盖率 `82.49%`。
 - `tests/test_file_scan.py` 新增 12 个边界测试用例（空格分隔 ROM 版本、`NULLLOG_FY` 后缀、`Beelogo_103.3.1`、`H530_62.3.2`、`46_002` 下划线子版本、`segmented_screen` 优先级、`.mot` 扩展名检测）。
 
 ### docs
+- 新增 `specs/project-structure-cleanup-todo.md`，记录根目录清理、配置样例、入口清理、运行时数据隔离和验收测试 TODO，并在 `specs/newtasks.md` 横向任务中引用。
+- `README.md` 补充首次运行复制 `config.example.toml`、配置 `root_dir` / `tool_root`、运行时目录与日志/索引位置说明。
 - 新增 `specs/bug_plan5-8.md`，记录 YJ-按摩椅程序汇总目录深度分析中发现的 7 个缺陷及修复方案。
 
 ### app
+- `src/fwasset/app.py` 移除旧版 tkinter monkey patch 和未使用 service imports，收敛为 `main()` 入口、`App` 兼容导出和 `UnifiedFlashPlatform` 导出。
+- `_open_in_explorer`、`_open_folder_from_listbox` 正式迁回 `FirmwareListPanel`，快速定位、目录不存在提示和打开失败提示行为保持不变。
 - 固件资源列表改用 `ttk.Treeview` 高密度树表渲染“系列 → 型号目录 → 固件类型 → 程序版本”，筛选刷新不再同步销毁并重建大量 CTk 卡片；保留叶子选中、双击打开目录和右键隐藏/恢复。
 - Treeview 行字体与行高加大，并从主表格移除“方式”和“路径”列；刷写方式与原始路径继续在选中摘要/详情数据中显示，减少列表横向占用。
 - Treeview 正文字体继续放大并提高对比度，分组行不再使用浅灰文字；左侧列表下方移除选中详情卡，路径、方式和文件摘要改到右侧操作区顶部展示。
@@ -270,5 +282,4 @@
 ### 789b8e6
 - `chore: initialize repo, uv setup, sanitize template, and module1 cleanup`
 - 完成仓库初始化与基础工程落地（含模板文件、项目配置与初始脚手架整理）。
-
 

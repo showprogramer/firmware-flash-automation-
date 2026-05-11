@@ -418,7 +418,8 @@
 
 ### D. 遗留代码清理
 
-- [ ] 评估 `app.py`（65 行全部为旧版 tkinter monkey-patch）是否可删除，改为 `shell.main()` 作为唯一入口
+- [x] 项目结构现代化清理：[specs/project-structure-cleanup-todo.md](./project-structure-cleanup-todo.md)
+- [x] 评估 `app.py`（旧版 tkinter monkey-patch）并移除运行时 monkey patch，保留 `shell.main()` 作为稳定入口
 - [ ] `sort_config.py` 清理后，确认 `STATUS` 枚举和 `status_map` 参数已移除
 
 ---

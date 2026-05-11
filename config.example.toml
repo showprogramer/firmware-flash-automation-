@@ -1,6 +1,6 @@
 [paths]
 root_dir = ""
-tool_root = "D:\\按摩椅相关文件汇总\\摩众—按摩椅刷程序工具"
+tool_root = ""
 
 [usb]
 junk_extensions = [".usu", ".tmp", ".bak"]

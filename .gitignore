@@ -6,6 +6,7 @@ specs/archive/
 specs/ui-reactor/new_uigemini.py
 config.toml
 fwasset.db
+.runtime/
 
 # Python environment and caches
 .venv/
@@ -20,6 +21,7 @@ htmlcov/
 # Temp/system files
 *.tmp
 *.bak
+*tool-resultsdirs_4deep.txt
 手控UI问题汇总.xlsx
 现有摩众手控UI明细表.xlsx
 Thumbs.db
@@ -30,3 +32,8 @@ Thumbs.db
 .idea/
 logs/
 
+# Build outputs
+dist/
+build/
+*.spec
+!fwasset.spec

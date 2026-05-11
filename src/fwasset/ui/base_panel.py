@@ -8,6 +8,7 @@ from tkinter import messagebox
 
 import customtkinter as ctk
 
+from fwasset.core.logging_utils import FileLogger
 from fwasset.core.usb_ops import get_usb_drives
 from fwasset.ui.design_tokens import (
     BG_APP,
@@ -36,6 +37,7 @@ class BaseFlashPanel(ctk.CTkFrame):
         self._task_queue: queue.Queue = queue.Queue()
         self._busy = False
         self._polling_active = False
+        self._file_logger = FileLogger()
 
         self.grid_columnconfigure(0, weight=0, minsize=320)
         self.grid_columnconfigure(1, weight=1)
@@ -107,6 +109,7 @@ class BaseFlashPanel(ctk.CTkFrame):
         if hasattr(self, "log_text"):
             self.log_text.insert("end", f"[{Path(__file__).name}] {message or ''}\n")
             self.log_text.see("end")
+        self._file_logger.log(message or "")
 
     def _run_task(self, name: str, fn, on_done=None):
         if self._busy:

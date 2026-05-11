@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 import fwasset.core.settings as settings
-from fwasset.core.settings import _as_str_list, load_toml_config
+from fwasset.core.settings import _as_str_list, _resolve_runtime_dir, ensure_runtime_dir, load_toml_config
 
 
 def test_load_toml_config_missing_file(tmp_path: Path):
@@ -87,3 +87,20 @@ def test_music_and_serial_defaults_are_available():
     assert isinstance(settings.SERIAL_AT_PRESETS, list)
     assert len(settings.SERIAL_AT_PRESETS) >= 1
 
+
+def test_runtime_dir_defaults_to_project_runtime():
+    runtime_dir = _resolve_runtime_dir(Path("D:/app"), env_value="")
+
+    assert runtime_dir == Path("D:/app/.runtime")
+
+
+def test_runtime_dir_env_override_resolves_relative_to_app_root():
+    runtime_dir = _resolve_runtime_dir(Path("D:/app"), env_value="local-runtime")
+
+    assert runtime_dir == Path("D:/app/local-runtime")
+
+
+def test_ensure_runtime_dir_creates_directory(tmp_path: Path):
+    runtime_dir = ensure_runtime_dir(tmp_path / "runtime")
+
+    assert runtime_dir.is_dir()

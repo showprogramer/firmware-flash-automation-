@@ -1,4 +1,5 @@
 from fwasset.core.logging_utils import FileLogger
+from fwasset.core.settings import APP_LOG_PATH
 
 
 def test_file_logger_writes_info_and_error(tmp_path):
@@ -15,3 +16,8 @@ def test_file_logger_writes_info_and_error(tmp_path):
     assert "[ERROR] trace line 1" in content
     assert "[ERROR] trace line 2" in content
 
+
+def test_file_logger_defaults_to_runtime_log_path():
+    logger = FileLogger()
+
+    assert logger.path == APP_LOG_PATH

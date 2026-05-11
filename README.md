@@ -26,7 +26,13 @@ uv run fwasset
 
 ## 配置说明
 
-系统行为由项目根目录下的两个 TOML 文件控制：
+系统行为由项目根目录下的 TOML 文件控制。首次运行前先复制样例配置：
+
+```powershell
+Copy-Item config.example.toml config.toml
+```
+
+然后按本机环境填写 `config.toml` 中的 `paths.root_dir` 和 `paths.tool_root`。`config.toml` 是本机运行配置，不进入版本管理；`firmware_catalog.toml` 是项目级固件类型注册表，继续随代码维护。
 
 ### `config.toml`
 核心参数配置文件，当前支持以下配置段：
@@ -41,6 +47,8 @@ uv run fwasset
 - `dir_keywords` / `file_extensions`: 该类型固件的目录关键字与文件后缀特征。
 - `flash_mode`: 定义刷机行为（支持 `auto_usb` U盘自动刷写, `tool_launch` 拉起外部工具, `manual_doc` 提供文档说明）。
 - `tool_name` / `tool_path`: 关联的具体烧录工具配置。
+
+运行时生成的数据会写入运行时目录：开发模式默认为 `.runtime/`，打包后的 exe 默认为同级 `runtime/`；可通过环境变量 `FWASSET_RUNTIME_DIR` 覆盖。资产索引默认位于运行时目录下的 `fwasset.db`，日志默认位于运行时目录下的 `logs/app.log`。
 
 ## 测试
 
