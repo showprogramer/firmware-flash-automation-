@@ -1,4 +1,4 @@
-from fwasset.core.asset_index import AssetIndexError, load_assets, load_scan_meta, save_assets
+from fwasset.core.asset_index import AssetIndexError, count_assets, load_scan_meta, save_assets
 from fwasset.core.file_scan import find_handcontrol_folders, scan_firmware_assets
 
 
@@ -36,9 +36,9 @@ def build_scan_result(root: str, log_fn=print) -> dict:
 
 def build_cached_scan_result(log_fn=print) -> dict:
     try:
-        assets = load_assets()
+        asset_count = count_assets()
         meta = load_scan_meta()
-        if not assets:
+        if not asset_count:
             return {
                 "ok": True,
                 "code": "index_empty",
@@ -48,19 +48,21 @@ def build_cached_scan_result(log_fn=print) -> dict:
                     "folders": [],
                     "errors": [],
                     "scan_meta": meta,
+                    "asset_count": 0,
                 },
             }
 
-        log_fn(f"从本地资产索引读取 {len(assets)} 个程序条目")
+        log_fn(f"本地资产索引已有 {asset_count} 个程序条目")
         return {
             "ok": True,
             "code": "ok",
-            "message": "已读取本地资产索引",
+            "message": "已读取本地资产索引状态",
             "payload": {
-                "assets": assets,
-                "folders": _handcontrol_folders_from_assets(assets),
+                "assets": [],
+                "folders": [],
                 "errors": [],
                 "scan_meta": meta,
+                "asset_count": asset_count,
             },
         }
     except AssetIndexError as exc:
@@ -75,22 +77,3 @@ def build_cached_scan_result(log_fn=print) -> dict:
                 "scan_meta": [],
             },
         }
-
-
-def _handcontrol_folders_from_assets(assets: list[dict]) -> list[dict]:
-    folders = []
-    for asset in assets:
-        if asset.get("firmware_type") != "handcontrol_ui":
-            continue
-        files = list(asset.get("files", []))
-        folders.append(
-            {
-                "path": asset.get("path", ""),
-                "rom_file": next((name for name in files if str(name).lower().endswith(".rom")), ""),
-                "pkg_file": next((name for name in files if str(name).lower().endswith(".pkg")), ""),
-                "model": asset.get("model", ""),
-                "version": asset.get("version", ""),
-                "label": asset.get("label", ""),
-            }
-        )
-    return folders

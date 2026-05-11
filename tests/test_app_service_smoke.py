@@ -5,6 +5,7 @@ import customtkinter as ctk
 
 from fwasset.ui.firmware_list_panel import FirmwareListPanel
 from fwasset.ui.serial_control import SerialControl
+from fwasset.core.sort_config import SortKey, apply_sort
 
 
 class FakeVar:
@@ -164,7 +165,7 @@ def _mk_asset_stub(monkeypatch):
     panel._type_label_to_key = {"手控UI": "handcontrol_ui", "蓝牙程序": "music_bt", "主板程序": "mainboard"}
     panel.assets = []
     panel.folders = []
-    panel._all_assets = []
+    panel._has_index_assets = False
     panel._selected_idx = -1
     panel._task_queue = queue.Queue()
     panel._busy = False
@@ -198,26 +199,73 @@ def _mk_asset_stub(monkeypatch):
     return panel
 
 
+def _patch_query_assets(monkeypatch, panel, assets):
+    items = list(assets)
+    panel._has_index_assets = bool(items)
+    calls = []
+
+    def fake_query_assets(keyword="", firmware_types=None, sort_key=SortKey.PATH, ascending=True, **_kwargs):
+        calls.append(
+            {
+                "keyword": keyword,
+                "firmware_types": set(firmware_types or []),
+                "sort_key": sort_key,
+                "ascending": ascending,
+            }
+        )
+        selected_types = set(firmware_types or [])
+        filtered = [item for item in items if not selected_types or item.get("firmware_type") in selected_types]
+        if keyword:
+            needle = str(keyword).strip().lower()
+            filtered = [
+                item
+                for item in filtered
+                if needle
+                in " ".join(
+                    [
+                        str(item.get("model", "") or ""),
+                        str(item.get("series", "") or ""),
+                        str(item.get("version", "") or ""),
+                        str(item.get("firmware_label", "") or ""),
+                        str(item.get("model_directory_name", "") or ""),
+                        str(item.get("directory_name", "") or ""),
+                        str(item.get("path", "") or ""),
+                        str(item.get("flash_mode", "") or ""),
+                    ]
+                ).lower()
+            ]
+        try:
+            selected_sort_key = SortKey(sort_key)
+        except ValueError:
+            selected_sort_key = SortKey.PATH
+        return apply_sort(filtered, sort_key=selected_sort_key, ascending=ascending)
+
+    monkeypatch.setattr("fwasset.ui.firmware_list_panel.query_assets", fake_query_assets)
+    return calls
+
+
 def test_asset_scan_uses_service_assets(monkeypatch):
     panel = _mk_asset_stub(monkeypatch)
+    assets = [
+        {
+            "model": "L36",
+            "version": "V1.0.0",
+            "path": "D:/a",
+            "directory_name": "a",
+            "firmware_type": "handcontrol_ui",
+            "firmware_label": "手控UI",
+            "flash_mode": "auto_usb",
+            "files": ["ui.rom", "ui.pkg"],
+            "modified_time": 0,
+        }
+    ]
+    _patch_query_assets(monkeypatch, panel, assets)
     monkeypatch.setattr(
         "fwasset.ui.firmware_list_panel.build_scan_result",
         lambda *args, **kwargs: {
             "ok": True,
             "payload": {
-                "assets": [
-                    {
-                        "model": "L36",
-                        "version": "V1.0.0",
-                        "path": "D:/a",
-                        "directory_name": "a",
-                        "firmware_type": "handcontrol_ui",
-                        "firmware_label": "手控UI",
-                        "flash_mode": "auto_usb",
-                        "files": ["ui.rom", "ui.pkg"],
-                        "modified_time": 0,
-                    }
-                ]
+                "assets": assets
             },
         },
     )
@@ -243,7 +291,7 @@ def test_choose_root_and_scan_always_opens_directory_picker(monkeypatch):
 
 def test_asset_filter_supports_keyword_and_type(monkeypatch):
     panel = _mk_asset_stub(monkeypatch)
-    panel._all_assets = [
+    calls = _patch_query_assets(monkeypatch, panel, [
         {
             "model": "L36",
             "version": "V1.0.0",
@@ -266,7 +314,7 @@ def test_asset_filter_supports_keyword_and_type(monkeypatch):
             "files": ["song.mp3"],
             "modified_time": 0,
         },
-    ]
+    ])
     panel.search_var.set("L50")
     panel.type_filter_vars["handcontrol_ui"].set(False)
 
@@ -274,6 +322,8 @@ def test_asset_filter_supports_keyword_and_type(monkeypatch):
 
     assert len(panel.assets) == 1
     assert panel.assets[0]["firmware_type"] == "music_bt"
+    assert calls[-1]["keyword"] == "L50"
+    assert calls[-1]["firmware_types"] == {"music_bt"}
 
 
 def test_single_type_filter_and_clear_keep_type_selection_explicit(monkeypatch):
@@ -307,7 +357,7 @@ def test_single_type_filter_and_clear_keep_type_selection_explicit(monkeypatch):
 
 def test_asset_tree_groups_series_model_and_type(monkeypatch):
     panel = _mk_asset_stub(monkeypatch)
-    panel._all_assets = [
+    _patch_query_assets(monkeypatch, panel, [
         {
             "series": "L36",
             "model": "L36",
@@ -336,7 +386,7 @@ def test_asset_tree_groups_series_model_and_type(monkeypatch):
             "files": ["main.bin"],
             "modified_time": 0,
         },
-    ]
+    ])
     panel.type_filter_vars["mainboard"] = FakeVar(True)
 
     panel._filter_assets()
@@ -355,7 +405,7 @@ def test_asset_tree_groups_series_model_and_type(monkeypatch):
 
 def test_asset_tree_toggle_collapses_rendered_leaf_cards(monkeypatch):
     panel = _mk_asset_stub(monkeypatch)
-    panel._all_assets = [
+    _patch_query_assets(monkeypatch, panel, [
         {
             "series": "L36",
             "model": "L36",
@@ -370,7 +420,7 @@ def test_asset_tree_toggle_collapses_rendered_leaf_cards(monkeypatch):
             "files": ["main.bin"],
             "modified_time": 0,
         }
-    ]
+    ])
     panel.type_filter_vars["mainboard"] = FakeVar(True)
     panel._filter_assets()
     series_key = panel._tree_key("series", "L36")
@@ -384,7 +434,7 @@ def test_asset_tree_toggle_collapses_rendered_leaf_cards(monkeypatch):
 def test_hidden_model_directory_is_filtered_until_show_hidden(monkeypatch):
     panel = _mk_asset_stub(monkeypatch)
     panel.type_filter_vars["mainboard"] = FakeVar(True)
-    panel._all_assets = [
+    _patch_query_assets(monkeypatch, panel, [
         {
             "series": "L36",
             "model": "L36",
@@ -399,7 +449,7 @@ def test_hidden_model_directory_is_filtered_until_show_hidden(monkeypatch):
             "files": ["main.bin"],
             "modified_time": 0,
         }
-    ]
+    ])
     panel._hidden_items = {"D:/root/L36配置": "model_directory"}
 
     panel._filter_assets()
@@ -413,15 +463,16 @@ def test_hidden_model_directory_is_filtered_until_show_hidden(monkeypatch):
 
 def test_asset_default_sort_matches_natural_explorer_like_order(monkeypatch):
     panel = _mk_asset_stub(monkeypatch)
-    panel._all_assets = [
+    calls = _patch_query_assets(monkeypatch, panel, [
         {"model": "L100", "version": "V1.0.0", "path": "D:/root/L100", "directory_name": "L100", "firmware_type": "handcontrol_ui", "firmware_label": "手控UI", "flash_mode": "auto_usb", "files": [], "modified_time": 0},
         {"model": "L20", "version": "V1.0.0", "path": "D:/root/L20", "directory_name": "L20", "firmware_type": "handcontrol_ui", "firmware_label": "手控UI", "flash_mode": "auto_usb", "files": [], "modified_time": 0},
         {"model": "L3", "version": "V1.0.0", "path": "D:/root/L3", "directory_name": "L3", "firmware_type": "handcontrol_ui", "firmware_label": "手控UI", "flash_mode": "auto_usb", "files": [], "modified_time": 0},
-    ]
+    ])
 
     panel._filter_assets()
 
     assert [item["path"] for item in panel.assets] == ["D:/root/L3", "D:/root/L20", "D:/root/L100"]
+    assert calls[-1]["sort_key"] == SortKey.PATH
 
 
 def test_asset_select_updates_detail_panel(monkeypatch):

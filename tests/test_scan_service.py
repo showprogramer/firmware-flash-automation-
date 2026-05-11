@@ -38,24 +38,13 @@ def test_build_scan_result_failed(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_build_cached_scan_result_ok(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(
-        "fwasset.core.services.scan_service.load_assets",
-        lambda: [
-            {
-                "firmware_type": "handcontrol_ui",
-                "path": "D:/x",
-                "files": ["a.rom", "a.pkg"],
-                "model": "L36",
-                "version": "V1.0.0",
-                "label": "x",
-            }
-        ],
-    )
+    monkeypatch.setattr("fwasset.core.services.scan_service.count_assets", lambda: 1)
     monkeypatch.setattr("fwasset.core.services.scan_service.load_scan_meta", lambda: [])
 
     result = build_cached_scan_result(log_fn=lambda _m: None)
 
     assert result["ok"] is True
     assert result["code"] == "ok"
-    assert result["payload"]["assets"][0]["model"] == "L36"
-    assert result["payload"]["folders"][0]["rom_file"] == "a.rom"
+    assert result["payload"]["asset_count"] == 1
+    assert result["payload"]["assets"] == []
+    assert result["payload"]["folders"] == []

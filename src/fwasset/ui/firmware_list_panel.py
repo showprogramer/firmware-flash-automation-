@@ -8,7 +8,7 @@ from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
 
-from fwasset.core.asset_index import AssetIndexError, hide_item, load_hidden_items, unhide_item
+from fwasset.core.asset_index import AssetIndexError, hide_item, load_hidden_items, query_assets, unhide_item
 from fwasset.core.firmware_catalog import enabled_firmware_types, load_firmware_catalog
 from fwasset.core.tool_discovery import discover_tool_path, launch_tool
 from fwasset.ui.tool_center_panel import ToolCenterPanel
@@ -59,7 +59,7 @@ class FirmwareListPanel(BaseFlashPanel):
         }
         self.assets: list[FirmwareAsset] = []
         self.folders: list[dict] = []
-        self._all_assets: list[FirmwareAsset] = []
+        self._has_index_assets = False
         self._selected_idx = -1
         self._asset_card_widgets: list[dict] = []
         self.asset_tree: AssetTreeView | None = None
@@ -521,10 +521,12 @@ class FirmwareListPanel(BaseFlashPanel):
                 messagebox.showerror("扫描失败", str(result.get("message", "未知错误")))
                 return
             payload = result.get("payload", {}) or {}
-            self._all_assets = list(payload.get("assets", []))
+            self._has_index_assets = bool(payload.get("assets", []))
             self._selected_idx = -1
             self._tree_expanded.clear()
             self._filter_assets()
+            if not self._has_index_assets:
+                self._render_empty_list_hint("当前扫描没有发现程序资源。")
 
         self._run_task("扫描目录", _work, _done)
 
@@ -537,51 +539,48 @@ class FirmwareListPanel(BaseFlashPanel):
                 self._log(str(result.get("message", "本地资产索引读取失败")))
                 return
             payload = result.get("payload", {}) or {}
-            self._all_assets = list(payload.get("assets", []))
+            self._has_index_assets = bool(payload.get("asset_count", 0) or payload.get("assets", []))
             self._selected_idx = -1
             self._tree_expanded.clear()
             self._filter_assets()
-            if not self._all_assets:
+            if not self._has_index_assets:
                 self._render_empty_list_hint("本地暂无资产索引，请点击扫描根目录生成。")
 
         self._run_task("读取本地索引", _work, _done)
 
-    def _sort_assets(self, items: list[FirmwareAsset]) -> list[FirmwareAsset]:
+    def _selected_sort_key(self) -> SortKey:
         sort_key = SortKey.PATH
         if self.sort_key_var.get() == "按型号":
             sort_key = SortKey.MODEL
         elif self.sort_key_var.get() == "按版本":
             sort_key = SortKey.VERSION
-        return apply_sort(items, sort_key=sort_key, ascending=bool(self.sort_asc_var.get()))
+        return sort_key
+
+    def _sort_assets(self, items: list[FirmwareAsset]) -> list[FirmwareAsset]:
+        return apply_sort(items, sort_key=self._selected_sort_key(), ascending=bool(self.sort_asc_var.get()))
 
     def _filter_assets(self):
-        keyword = self.search_var.get().strip().lower()
+        keyword = self.search_var.get().strip()
         selected_types = self._selected_types()
         show_hidden = bool(self.show_hidden_var.get())
-        filtered: list[FirmwareAsset] = []
-        for item in self._all_assets:
-            if item.get("firmware_type") not in selected_types:
-                continue
-            if not show_hidden and self._is_asset_hidden(item):
-                continue
-            if keyword:
-                haystack = " ".join(
-                    [
-                        str(item.get("model", "") or ""),
-                        str(item.get("series", "") or ""),
-                        str(item.get("version", "") or ""),
-                        str(item.get("firmware_label", "") or ""),
-                        str(item.get("model_directory_name", "") or ""),
-                        str(item.get("directory_name", "") or ""),
-                        str(item.get("path", "") or ""),
-                        str(item.get("flash_mode", "") or ""),
-                    ]
-                ).lower()
-                if keyword not in haystack:
-                    continue
-            filtered.append(item)
+        if not selected_types:
+            self.assets = []
+            self.folders = []
+            self._render_asset_tree()
+            return
 
-        self.assets = self._sort_assets(filtered)
+        try:
+            queried = query_assets(
+                keyword=keyword,
+                firmware_types=selected_types,
+                sort_key=self._selected_sort_key(),
+                ascending=bool(self.sort_asc_var.get()),
+            )
+        except AssetIndexError as exc:
+            self._log(str(exc))
+            queried = []
+
+        self.assets = [item for item in queried if show_hidden or not self._is_asset_hidden(item)]
         self.folders = self.assets
         if keyword:
             self._expand_matching_tree_nodes(self.assets)
@@ -605,9 +604,9 @@ class FirmwareListPanel(BaseFlashPanel):
         else:
             self._selected_idx = -1
             self._clear_selection()
-            if self._all_assets and not self._selected_types():
+            if self._has_index_assets and not self._selected_types():
                 self._render_empty_list_hint("请先在上方选择一种固件类型。")
-            elif self._all_assets:
+            elif self._has_index_assets:
                 self._render_empty_list_hint("当前筛选条件下没有匹配的程序。")
 
         if self.assets and not visible_asset_indices:

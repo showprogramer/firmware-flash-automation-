@@ -5,6 +5,7 @@ import pytest
 from fwasset.core.asset_index import (
     SCHEMA_VERSION,
     AssetIndexError,
+    count_assets,
     delete_missing_assets,
     hide_item,
     init_asset_index,
@@ -17,6 +18,7 @@ from fwasset.core.asset_index import (
     schema_version,
     unhide_item,
 )
+from fwasset.core.sort_config import SortKey
 from fwasset.core.types import FirmwareAsset
 
 
@@ -66,6 +68,7 @@ def test_save_and_load_assets_roundtrip(tmp_path: Path):
 
     loaded = load_assets(db_path)
     assert loaded == [asset]
+    assert count_assets(db_path) == 1
     assert load_scan_meta(db_path) == [
         {"root_dir": str(tmp_path), "last_scan_at": 1000.0, "schema_version": SCHEMA_VERSION}
     ]
@@ -85,6 +88,31 @@ def test_query_assets_by_keyword_and_type(tmp_path: Path):
     assert [item["model"] for item in query_assets("L39", path=db_path)] == ["L39"]
     assert [item["firmware_type"] for item in query_assets(firmware_types=["mainboard"], path=db_path)] == ["mainboard"]
     assert query_assets("no-match", firmware_types=["mainboard"], path=db_path) == []
+
+
+def test_query_assets_supports_sort_key_and_direction(tmp_path: Path):
+    db_path = tmp_path / "fwasset.db"
+    assets = [
+        make_asset(tmp_path, model="L100", directory_name="mainboard_v2"),
+        make_asset(tmp_path, model="L20", directory_name="mainboard_v10"),
+        make_asset(tmp_path, model="L3", directory_name="mainboard_v1"),
+    ]
+    assets[0]["version"] = "V2.0.0"
+    assets[1]["version"] = "V10.0.0"
+    assets[2]["version"] = "V1.0.0"
+    save_assets(assets, str(tmp_path), db_path)
+
+    assert [item["model"] for item in query_assets(path=db_path, sort_key=SortKey.MODEL)] == ["L3", "L20", "L100"]
+    assert [item["version"] for item in query_assets(path=db_path, sort_key=SortKey.VERSION)] == [
+        "V1.0.0",
+        "V2.0.0",
+        "V10.0.0",
+    ]
+    assert [item["model"] for item in query_assets(path=db_path, sort_key=SortKey.MODEL, ascending=False)] == [
+        "L100",
+        "L20",
+        "L3",
+    ]
 
 
 def test_delete_missing_assets_prunes_hidden_items(tmp_path: Path):

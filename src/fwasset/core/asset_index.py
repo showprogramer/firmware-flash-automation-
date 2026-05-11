@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Iterable, Literal
 
 from fwasset.core.settings import ASSET_INDEX_PATH
+from fwasset.core.sort_config import SortKey, apply_sort
 from fwasset.core.types import FirmwareAsset
 
 
@@ -148,10 +149,19 @@ def load_assets(path: str | Path | None = None) -> list[FirmwareAsset]:
         return [_row_to_asset(row) for row in rows]
 
 
+def count_assets(path: str | Path | None = None) -> int:
+    init_asset_index(path)
+    with connect_asset_index(path) as conn:
+        row = conn.execute("SELECT COUNT(*) AS count FROM assets").fetchone()
+        return int(row["count"])
+
+
 def query_assets(
     keyword: str = "",
     firmware_types: Iterable[str] | None = None,
     path: str | Path | None = None,
+    sort_key: SortKey | str = SortKey.PATH,
+    ascending: bool = True,
 ) -> list[FirmwareAsset]:
     init_asset_index(path)
     clauses: list[str] = []
@@ -172,15 +182,21 @@ def query_assets(
                 OR lower(directory_name) LIKE ?
                 OR lower(model_directory_name) LIKE ?
                 OR lower(path) LIKE ?
+                OR lower(flash_mode) LIKE ?
             )"""
         )
-        params.extend([pattern] * 7)
+        params.extend([pattern] * 8)
     sql = "SELECT * FROM assets"
     if clauses:
         sql += " WHERE " + " AND ".join(clauses)
     sql += " ORDER BY path, firmware_type"
     with connect_asset_index(path) as conn:
-        return [_row_to_asset(row) for row in conn.execute(sql, params).fetchall()]
+        assets = [_row_to_asset(row) for row in conn.execute(sql, params).fetchall()]
+    try:
+        selected_sort_key = SortKey(sort_key)
+    except ValueError:
+        selected_sort_key = SortKey.PATH
+    return apply_sort(assets, sort_key=selected_sort_key, ascending=ascending)
 
 
 def delete_missing_assets(existing_paths: Iterable[str], path: str | Path | None = None) -> int:

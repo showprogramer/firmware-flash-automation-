@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### core
+- `query_assets()` 支持 `sort_key` / `ascending` 参数，并复用现有自然排序规则，供 UI 将关键词、类型筛选和排序统一下推到 SQLite 查询入口。
+- `build_cached_scan_result()` 启动缓存读取改为只读取资产数量与扫描元数据，不再启动时全量加载资产列表。
 - 新增统一运行时目录解析：开发模式默认写入 `.runtime/`，打包模式默认写入 exe 同级 `runtime/`，并支持 `FWASSET_RUNTIME_DIR` 覆盖。
 - SQLite 资产索引默认路径从应用根目录 `fwasset.db` 迁移到运行时目录 `.runtime/fwasset.db`，避免源码目录混入运行时数据。
 - 文件日志默认路径迁移到运行时目录 `.runtime/logs/app.log`，启动时自动创建运行时目录，创建失败时抛出中文错误。
@@ -18,17 +20,20 @@
 - `config.toml` / `settings.py` 的 `version_patterns` 新增 `_(\\d+_\\d+(?:_\\d+)?)$` 和 `(?<![0-9A-Za-z])(\\d+\\.\\d+\\.\\d+(?:_\\d+)?)(?![0-9A-Za-z])` 模式，覆盖下划线子版本和无前缀三段式版本号。
 
 ### test
+- 扩展 `tests/test_asset_index.py`、`tests/test_scan_service.py` 和 `tests/test_app_service_smoke.py`，覆盖 SQLite 查询排序、缓存计数读取以及 UI 筛选调用 `query_assets()` 的路径；本轮验证通过：`uv run python -m pytest tests\test_asset_index.py tests\test_scan_service.py tests\test_app_service_smoke.py -q --no-cov` -> `31 passed`，`uv run python -m pytest tests\test_src_layout.py tests\test_settings.py -q --no-cov` -> `18 passed`，`.\scripts\test.ps1` -> `154 passed`，总覆盖率 `82.45%`。
 - 更新快速定位测试，直接验证 `FirmwareListPanel` 正式类方法，不再依赖 `app.py` 运行时 monkey patch。
 - 扩展 settings 与 logging 测试，覆盖运行时目录解析、环境变量覆盖、目录创建和默认日志路径。
 - 本轮验证通过：`uv run python -m pytest tests\test_src_layout.py tests\test_app_quick_locate.py tests\test_settings.py -q --no-cov` -> `22 passed`；`uv run python -m pytest tests\test_asset_index.py tests\test_logging_utils.py tests\test_app_service_smoke.py -q --no-cov` -> `29 passed`；`.\scripts\test.ps1` -> `153 passed`，总覆盖率 `82.49%`。
 - `tests/test_file_scan.py` 新增 12 个边界测试用例（空格分隔 ROM 版本、`NULLLOG_FY` 后缀、`Beelogo_103.3.1`、`H530_62.3.2`、`46_002` 下划线子版本、`segmented_screen` 优先级、`.mot` 扩展名检测）。
 
 ### docs
+- 新增 `specs/fwasset_technical_plan.md` 技术债务路线图，并将 Issue 2（SQLite 查询替换内存全量筛选）标记为已完成。
 - 新增 `specs/project-structure-cleanup-todo.md`，记录根目录清理、配置样例、入口清理、运行时数据隔离和验收测试 TODO，并在 `specs/newtasks.md` 横向任务中引用。
 - `README.md` 补充首次运行复制 `config.example.toml`、配置 `root_dir` / `tool_root`、运行时目录与日志/索引位置说明。
 - 新增 `specs/bug_plan5-8.md`，记录 YJ-按摩椅程序汇总目录深度分析中发现的 7 个缺陷及修复方案。
 
 ### app
+- 固件资源列表筛选改为调用 SQLite `query_assets()`，移除 `_all_assets` 全量缓存；隐藏条目过滤、空状态提示和扫描后刷新行为保持不变。
 - `src/fwasset/app.py` 移除旧版 tkinter monkey patch 和未使用 service imports，收敛为 `main()` 入口、`App` 兼容导出和 `UnifiedFlashPlatform` 导出。
 - `_open_in_explorer`、`_open_folder_from_listbox` 正式迁回 `FirmwareListPanel`，快速定位、目录不存在提示和打开失败提示行为保持不变。
 - 固件资源列表改用 `ttk.Treeview` 高密度树表渲染“系列 → 型号目录 → 固件类型 → 程序版本”，筛选刷新不再同步销毁并重建大量 CTk 卡片；保留叶子选中、双击打开目录和右键隐藏/恢复。
@@ -282,4 +287,3 @@
 ### 789b8e6
 - `chore: initialize repo, uv setup, sanitize template, and module1 cleanup`
 - 完成仓库初始化与基础工程落地（含模板文件、项目配置与初始脚手架整理）。
-
