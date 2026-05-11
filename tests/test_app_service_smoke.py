@@ -89,6 +89,41 @@ class FakeText:
         pass
 
 
+class FakeAssetTree:
+    def __init__(self, *, on_select_asset=None, on_open_asset=None, on_context_menu=None):
+        self.populate_calls = []
+        self.focused = []
+        self.on_select_asset = on_select_asset
+        self.on_open_asset = on_open_asset
+        self.on_context_menu = on_context_menu
+
+    def populate(self, groups, assets, expanded_keys, selected_idx, hidden_indices=None):
+        self.populate_calls.append(
+            {
+                "groups": groups,
+                "assets": assets,
+                "expanded_keys": set(expanded_keys),
+                "selected_idx": selected_idx,
+                "hidden_indices": set(hidden_indices or set()),
+            }
+        )
+
+    def focus_asset(self, idx):
+        self.focused.append(idx)
+
+    def select_asset(self, idx):
+        if self.on_select_asset:
+            self.on_select_asset(idx)
+
+    def double_click_asset(self, idx):
+        if self.on_open_asset:
+            self.on_open_asset(idx)
+
+    def context_menu(self, event, path, hide_type):
+        if self.on_context_menu:
+            self.on_context_menu(event, path, hide_type)
+
+
 class FakeAppBase(FakeWidget):
     def title(self, _value):
         pass
@@ -125,6 +160,8 @@ def _mk_asset_stub(monkeypatch):
         "handcontrol_ui": FakeVar(True),
         "music_bt": FakeVar(True),
     }
+    panel.type_quick_var = FakeVar("全部类型")
+    panel._type_label_to_key = {"手控UI": "handcontrol_ui", "蓝牙程序": "music_bt", "主板程序": "mainboard"}
     panel.assets = []
     panel.folders = []
     panel._all_assets = []
@@ -137,6 +174,12 @@ def _mk_asset_stub(monkeypatch):
     panel._log_collapsed = True
     panel._status_hint_text = "Select a firmware version"
     panel.list_scroll = FakeWidget()
+    panel.asset_tree = FakeAssetTree(
+        on_select_asset=lambda idx: panel._select_asset(idx),
+        on_open_asset=lambda idx: panel._open_asset_path(idx),
+        on_context_menu=lambda event, path, hide_type: panel._show_hidden_context_menu(event, path, hide_type),
+    )
+    panel._empty_list_hint = None
     panel.sidebar_status_label = FakeWidget(text="")
     panel.ops_body = FakeWidget()
     panel.usb_menu = FakeWidget()
@@ -233,6 +276,35 @@ def test_asset_filter_supports_keyword_and_type(monkeypatch):
     assert panel.assets[0]["firmware_type"] == "music_bt"
 
 
+def test_single_type_filter_and_clear_keep_type_selection_explicit(monkeypatch):
+    panel = _mk_asset_stub(monkeypatch)
+    panel.type_filter_vars["mainboard"] = FakeVar(False)
+    called = {"count": 0}
+    panel._filter_assets = lambda: called.__setitem__("count", called["count"] + 1)
+
+    panel._select_single_type_filter("主板程序")
+
+    assert panel.type_filter_vars["handcontrol_ui"].get() is False
+    assert panel.type_filter_vars["music_bt"].get() is False
+    assert panel.type_filter_vars["mainboard"].get() is True
+    assert panel._tree_expanded == set()
+    assert called["count"] == 1
+
+    panel._tree_expanded.add("series|L36")
+    panel._clear_type_filters()
+
+    assert all(var.get() is False for var in panel.type_filter_vars.values())
+    assert panel.type_quick_var.get() == "先选择固件类型"
+    assert panel._tree_expanded == set()
+    assert called["count"] == 2
+
+    panel.type_filter_vars["mainboard"].set(True)
+    panel._select_single_type_filter("先选择固件类型")
+
+    assert all(var.get() is False for var in panel.type_filter_vars.values())
+    assert called["count"] == 3
+
+
 def test_asset_tree_groups_series_model_and_type(monkeypatch):
     panel = _mk_asset_stub(monkeypatch)
     panel._all_assets = [
@@ -271,10 +343,14 @@ def test_asset_tree_groups_series_model_and_type(monkeypatch):
 
     tree = panel._build_tree_groups(panel.assets)
     assert tree[0]["series"] == "L36"
+    assert tree[0]["key"] == "series|L36"
     assert tree[0]["model_count"] == 1
+    assert tree[0]["models"][0]["key"] == "model|L36|D:/root/L36配置"
     assert tree[0]["models"][0]["type_count"] == 1
+    assert tree[0]["models"][0]["types"][0]["key"] == "type|D:/root/L36配置|mainboard"
     assert tree[0]["models"][0]["types"][0]["version_count"] == 2
     assert len(panel._asset_card_widgets) == 2
+    assert panel.asset_tree.populate_calls[-1]["groups"][0]["models"][0]["types"][0]["asset_indices"] == [0, 1]
 
 
 def test_asset_tree_toggle_collapses_rendered_leaf_cards(monkeypatch):
@@ -332,6 +408,7 @@ def test_hidden_model_directory_is_filtered_until_show_hidden(monkeypatch):
     panel.show_hidden_var.set(True)
     panel._filter_assets()
     assert len(panel.assets) == 1
+    assert panel.asset_tree.populate_calls[-1]["hidden_indices"] == {0}
 
 
 def test_asset_default_sort_matches_natural_explorer_like_order(monkeypatch):
@@ -378,11 +455,12 @@ def test_asset_select_does_not_rebuild_full_card_list(monkeypatch):
         {"model": "L50S", "version": "V2.0.0", "path": "D:/b", "directory_name": "b", "firmware_type": "music_bt", "firmware_label": "蓝牙程序", "flash_mode": "auto_usb", "files": ["song.mp3"], "modified_time": 0},
     ]
     panel._render_asset_cards()
-    original_refs = [widgets["card"] for widgets in panel._asset_card_widgets]
+    original_populate_count = len(panel.asset_tree.populate_calls)
 
     panel._select_asset(1)
 
-    assert [widgets["card"] for widgets in panel._asset_card_widgets] == original_refs
+    assert len(panel.asset_tree.populate_calls) == original_populate_count
+    assert panel.asset_tree.focused[-1] == 1
 
 
 def test_asset_double_click_opens_selected_folder(monkeypatch):
@@ -395,10 +473,19 @@ def test_asset_double_click_opens_selected_folder(monkeypatch):
     monkeypatch.setattr("fwasset.ui.firmware_list_panel.Path.exists", lambda _self: True)
     monkeypatch.setattr("fwasset.ui.firmware_list_panel.os.startfile", lambda path: opened.append(path), raising=False)
 
-    handler = panel._asset_card_widgets[0]["card"].bindings["<Double-Button-1>"]
-    handler(None)
+    panel.asset_tree.double_click_asset(0)
 
     assert opened
+
+
+def test_asset_tree_context_menu_callback_keeps_hide_metadata(monkeypatch):
+    panel = _mk_asset_stub(monkeypatch)
+    calls = []
+    panel._show_hidden_context_menu = lambda event, path, hide_type: calls.append((path, hide_type))
+
+    panel.asset_tree.context_menu(object(), "D:/root/L36配置", "model_directory")
+
+    assert calls == [("D:/root/L36配置", "model_directory")]
 
 
 def test_panel_pollers_skip_when_deactivated(monkeypatch):

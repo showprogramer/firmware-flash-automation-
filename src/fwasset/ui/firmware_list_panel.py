@@ -19,6 +19,7 @@ from fwasset.core.settings import DEFAULT_ROOT
 from fwasset.core.sort_config import SortKey, apply_sort
 from fwasset.core.types import FirmwareAsset
 from fwasset.core.usb_ops import clean_usb, copy_to_usb, eject_usb, format_usb
+from fwasset.ui.asset_tree import AssetTreeView
 from fwasset.ui.base_panel import BaseFlashPanel
 from fwasset.ui.design_tokens import (
     BG_CARD,
@@ -61,14 +62,16 @@ class FirmwareListPanel(BaseFlashPanel):
         self._all_assets: list[FirmwareAsset] = []
         self._selected_idx = -1
         self._asset_card_widgets: list[dict] = []
+        self.asset_tree: AssetTreeView | None = None
+        self._empty_list_hint = None
         self._tree_expanded: set[str] = set()
         self._hidden_items: dict[str, str] = {}
         self._log_collapsed = True
         self.detail_values: dict[str, ctk.CTkLabel] = {}
         self._status_hint_text = "Select a firmware version on the left; key details stay here and actions stay on the right."
 
-        self.grid_columnconfigure(0, weight=7, minsize=700)
-        self.grid_columnconfigure(1, weight=3, minsize=420)
+        self.grid_columnconfigure(0, weight=8, minsize=760)
+        self.grid_columnconfigure(1, weight=0, minsize=320)
         self._reload_hidden_items()
         self._build_sidebar()
         self._build_main_view()
@@ -148,7 +151,7 @@ class FirmwareListPanel(BaseFlashPanel):
         self._build_brand_header_with_tools(sidebar, title="固件资源列表")
 
         search_sort_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
-        search_sort_frame.pack(fill="x", padx=20, pady=(0, 12))
+        search_sort_frame.pack(fill="x", padx=20, pady=(0, 10))
 
         search_box = ctk.CTkEntry(
             search_sort_frame,
@@ -162,6 +165,22 @@ class FirmwareListPanel(BaseFlashPanel):
             font=(FONT_FAMILY, FONT_SIZE_MD),
         )
         search_box.pack(side="left", fill="x", expand=True, padx=(0, 8))
+
+        quick_values = ["先选择固件类型", "全部类型", *self._type_label_to_key.keys()]
+        self.type_quick_menu = ctk.CTkOptionMenu(
+            search_sort_frame,
+            values=quick_values,
+            variable=self.type_quick_var,
+            width=150,
+            height=36,
+            fg_color=BG_CARD,
+            text_color=TEXT_PRIMARY,
+            button_color=BG_CARD,
+            button_hover_color=BG_HOVER,
+            font=(FONT_FAMILY, FONT_SIZE_MD),
+            command=self._select_single_type_filter,
+        )
+        self.type_quick_menu.pack(side="left", padx=(0, 8))
 
         self.sort_menu = ctk.CTkOptionMenu(
             search_sort_frame,
@@ -177,124 +196,65 @@ class FirmwareListPanel(BaseFlashPanel):
             font=(FONT_FAMILY, FONT_SIZE_MD),
             command=lambda _value: self._filter_assets(),
         )
-        self.sort_menu.pack(side="right")
+        self.sort_menu.pack(side="left", padx=(0, 8))
 
-        filter_card = ctk.CTkFrame(sidebar, fg_color=BG_CARD, corner_radius=12, border_width=1, border_color=BORDER_COLOR)
-        filter_card.pack(fill="x", padx=20, pady=(0, 12))
-        
-        filter_header = ctk.CTkFrame(filter_card, fg_color="transparent")
-        filter_header.pack(fill="x", padx=20, pady=(16, 8))
-        
-        ctk.CTkLabel(
-            filter_header,
-            text="固件类型筛选",
-            font=(FONT_FAMILY, FONT_SIZE_LG, "bold"),
-            text_color=TEXT_PRIMARY,
-        ).pack(side="left")
-        
         ctk.CTkButton(
-            filter_header,
+            search_sort_frame,
             text="清空",
-            width=50,
-            height=26,
+            width=58,
+            height=36,
             fg_color=BG_INPUT,
             text_color=TEXT_PRIMARY,
             hover_color=BG_HOVER,
             command=self._clear_type_filters,
-        ).pack(side="right")
-        
-        ctk.CTkButton(
-            filter_header,
-            text="全选",
-            width=50,
-            height=26,
-            fg_color=BG_INPUT,
-            text_color=TEXT_PRIMARY,
-            hover_color=BG_HOVER,
-            command=self._select_all_type_filters,
-        ).pack(side="right", padx=(0, 8))
-
-        quick_values = ["先选择固件类型", "全部类型", *self._type_label_to_key.keys()]
-        self.type_quick_menu = ctk.CTkOptionMenu(
-            filter_card,
-            values=quick_values,
-            variable=self.type_quick_var,
-            height=34,
-            fg_color=BG_INPUT,
-            text_color=TEXT_PRIMARY,
-            button_color=BG_INPUT,
-            button_hover_color=BG_HOVER,
-            font=(FONT_FAMILY, FONT_SIZE_MD),
-            command=self._select_single_type_filter,
-        )
-        self.type_quick_menu.pack(fill="x", padx=20, pady=(0, 8))
-
-        ctk.CTkLabel(
-            filter_card,
-            text="默认不全选，先选一种固件类型再找程序，避免误操作。",
-            font=(FONT_FAMILY, FONT_SIZE_SM),
-            text_color=TEXT_SECONDARY,
-            wraplength=360,
-            justify="left",
-        ).pack(anchor="w", padx=20, pady=(0, 6))
-        
-        self.filter_frame = ctk.CTkScrollableFrame(filter_card, fg_color="transparent", height=180)
-        self.filter_frame.pack(fill="x", padx=10, pady=(0, 12))
-        self._render_type_filters()
-
-        list_title = ctk.CTkFrame(sidebar, fg_color="transparent")
-        list_title.pack(fill="x", padx=20, pady=(0, 8))
-        ctk.CTkLabel(
-            list_title,
-            text="资源条目",
-            font=(FONT_FAMILY, FONT_SIZE_LG, "bold"),
-            text_color=TEXT_PRIMARY,
-        ).pack(side="left")
+        ).pack(side="left", padx=(0, 8))
         ctk.CTkCheckBox(
-            list_title,
+            search_sort_frame,
             text="显示隐藏",
             variable=self.show_hidden_var,
             font=(FONT_FAMILY, FONT_SIZE_SM),
             text_color=TEXT_SECONDARY,
-        ).pack(side="right", padx=(10, 0))
+        ).pack(side="left", padx=(0, 8))
         ctk.CTkButton(
-            list_title,
+            search_sort_frame,
             text="扫描根目录",
             fg_color=BG_INPUT,
             text_color=TEXT_PRIMARY,
             hover_color=BG_HOVER,
             width=96,
+            height=36,
             command=self._choose_root_and_scan,
         ).pack(side="right")
 
-        self.list_scroll = ctk.CTkScrollableFrame(sidebar, fg_color="transparent")
-        self.list_scroll.pack(fill="both", expand=True, padx=12, pady=(0, 8))
-        status_card = ctk.CTkFrame(sidebar, fg_color=BG_CARD, corner_radius=10, border_width=1, border_color=BORDER_COLOR)
-        status_card.pack(fill="x", padx=12, pady=(0, 12))
-        self.sidebar_status_label = ctk.CTkLabel(
-            status_card,
-            text=self._status_hint_text,
-            font=(FONT_FAMILY, FONT_SIZE_SM),
-            text_color=TEXT_SECONDARY,
-            justify="left",
-            wraplength=700,
-            anchor="w",
+        self.asset_tree = AssetTreeView(
+            sidebar,
+            on_select_asset=self._select_asset,
+            on_open_asset=self._open_asset_path,
+            on_context_menu=self._show_hidden_context_menu,
+            on_node_open=self._mark_tree_node_open,
+            on_node_close=self._mark_tree_node_closed,
         )
-        self.sidebar_status_label.pack(fill="x", padx=12, pady=10)
+        self.asset_tree.pack(fill="both", expand=True, padx=12, pady=(0, 8))
+        self.list_scroll = self.asset_tree.frame
 
     def _select_all_type_filters(self):
         for var in self.type_filter_vars.values():
             var.set(True)
         self.type_quick_var.set("全部类型")
+        self._tree_expanded.clear()
         self._filter_assets()
 
     def _clear_type_filters(self):
         for var in self.type_filter_vars.values():
             var.set(False)
         self.type_quick_var.set("先选择固件类型")
+        self._tree_expanded.clear()
         self._filter_assets()
 
     def _select_single_type_filter(self, label: str):
+        if label == "先选择固件类型":
+            self._clear_type_filters()
+            return
         if label == "全部类型":
             self._select_all_type_filters()
             return
@@ -303,10 +263,13 @@ class FirmwareListPanel(BaseFlashPanel):
         selected_key = self._type_label_to_key[label]
         for key, var in self.type_filter_vars.items():
             var.set(key == selected_key)
+        self._tree_expanded.clear()
         self._filter_assets()
 
     def _build_main_view(self):
         main = self._build_main_container()
+        main.grid_rowconfigure(1, weight=1)
+        main.grid_rowconfigure(2, weight=0)
         self._build_header(main)
         cards_container = ctk.CTkFrame(main, fg_color="transparent")
         cards_container.grid(row=1, column=0, sticky="nsew", pady=(0, 24))
@@ -426,6 +389,8 @@ class FirmwareListPanel(BaseFlashPanel):
         self.header_type_badge.pack(side="left", padx=8)
 
     def _render_type_filters(self):
+        if not hasattr(self, "filter_frame"):
+            return
         for widget in self.filter_frame.winfo_children():
             widget.destroy()
         for item in enabled_firmware_types():
@@ -603,8 +568,10 @@ class FirmwareListPanel(BaseFlashPanel):
                 haystack = " ".join(
                     [
                         str(item.get("model", "") or ""),
+                        str(item.get("series", "") or ""),
                         str(item.get("version", "") or ""),
                         str(item.get("firmware_label", "") or ""),
+                        str(item.get("model_directory_name", "") or ""),
                         str(item.get("directory_name", "") or ""),
                         str(item.get("path", "") or ""),
                         str(item.get("flash_mode", "") or ""),
@@ -618,56 +585,20 @@ class FirmwareListPanel(BaseFlashPanel):
         self.folders = self.assets
         if keyword:
             self._expand_matching_tree_nodes(self.assets)
-        self._render_asset_cards()
+        self._render_asset_tree()
 
     def _render_asset_cards(self):
+        self._render_asset_tree()
+
+    def _render_asset_tree(self):
         self._asset_card_widgets = []
-        for widget in self.list_scroll.winfo_children():
-            widget.destroy()
         self._ensure_default_tree_expanded()
-        rendered_assets = 0
-        for series_node in self._build_tree_groups(self.assets):
-            series_key = self._tree_key("series", series_node["series"])
-            is_series_open = self._is_tree_node_open(series_key)
-            self._create_tree_header(
-                level=0,
-                key=series_key,
-                text=f"{series_node['series']}  ·  {series_node['model_count']} 个目录",
-                is_open=is_series_open,
-            )
-            if not is_series_open:
-                continue
-            for model_node in series_node["models"]:
-                model_key = self._tree_key("model", series_node["series"], model_node["path"])
-                is_model_open = self._is_tree_node_open(model_key)
-                self._create_tree_header(
-                    level=1,
-                    key=model_key,
-                    text=f"{model_node['name']}  ·  {model_node['type_count']} 类固件",
-                    is_open=is_model_open,
-                    hide_path=model_node["path"],
-                    hide_type="model_directory",
-                    hidden=bool(model_node.get("hidden")),
-                )
-                if not is_model_open:
-                    continue
-                for type_node in model_node["types"]:
-                    type_key = self._tree_key("type", model_node["path"], type_node["firmware_type"])
-                    is_type_open = self._is_tree_node_open(type_key)
-                    self._create_tree_header(
-                        level=2,
-                        key=type_key,
-                        text=f"{type_node['label']}  ·  {type_node['version_count']} 个版本",
-                        is_open=is_type_open,
-                        hide_path=str(type_node.get("hide_path", "")),
-                        hide_type="firmware_type",
-                        hidden=bool(type_node.get("hidden")),
-                    )
-                    if not is_type_open:
-                        continue
-                    for idx in type_node["asset_indices"]:
-                        self._create_sidebar_item(idx, self.assets[idx], indent=54)
-                        rendered_assets += 1
+        groups = self._build_tree_groups(self.assets)
+        visible_asset_indices = self._visible_tree_asset_indices(groups)
+        self._asset_card_widgets = [{"asset_idx": idx} for idx in visible_asset_indices]
+        hidden_indices = {idx for idx, asset in enumerate(self.assets) if self._is_asset_hidden(asset)}
+        if self.asset_tree is not None:
+            self.asset_tree.populate(groups, self.assets, self._tree_expanded, -1, hidden_indices)
         if self.assets:
             next_idx = min(max(self._selected_idx, 0), len(self.assets) - 1)
             self._select_asset(next_idx)
@@ -679,7 +610,7 @@ class FirmwareListPanel(BaseFlashPanel):
             elif self._all_assets:
                 self._render_empty_list_hint("当前筛选条件下没有匹配的程序。")
 
-        if self.assets and rendered_assets == 0:
+        if self.assets and not visible_asset_indices:
             self._render_empty_list_hint("当前树节点已折叠，展开系列或型号目录后查看程序。")
 
     def _tree_key(self, kind: str, *parts: object) -> str:
@@ -693,7 +624,13 @@ class FirmwareListPanel(BaseFlashPanel):
             self._tree_expanded.remove(key)
         else:
             self._tree_expanded.add(key)
-        self._render_asset_cards()
+        self._render_asset_tree()
+
+    def _mark_tree_node_open(self, key: str):
+        self._tree_expanded.add(key)
+
+    def _mark_tree_node_closed(self, key: str):
+        self._tree_expanded.discard(key)
 
     def _ensure_default_tree_expanded(self):
         if self._tree_expanded or not self.assets:
@@ -733,10 +670,13 @@ class FirmwareListPanel(BaseFlashPanel):
         out: list[dict] = []
         for series_name in sorted(series_map.keys(), key=str.casefold):
             series_node = series_map[series_name]
+            series_key = self._tree_key("series", series_name)
             models = []
             for model_path, model_node in sorted(series_node["models"].items(), key=lambda item: item[1]["name"].casefold()):
+                model_key = self._tree_key("model", series_name, model_path)
                 types = []
                 for _firmware_type, type_node in sorted(model_node["types"].items(), key=lambda item: item[1]["label"].casefold()):
+                    type_node["key"] = self._tree_key("type", model_path, type_node["firmware_type"])
                     type_node["version_count"] = len(
                         {str(assets[idx].get("version", "") or "-") for idx in type_node["asset_indices"]}
                     )
@@ -744,14 +684,29 @@ class FirmwareListPanel(BaseFlashPanel):
                     types.append(type_node)
                 models.append(
                     {
+                        "key": model_key,
                         "name": model_node["name"],
                         "path": model_path,
                         "types": types,
                         "type_count": len(types),
+                        "hidden": bool(model_node.get("hidden")),
                     }
                 )
-            out.append({"series": series_name, "models": models, "model_count": len(models)})
+            out.append({"key": series_key, "series": series_name, "models": models, "model_count": len(models)})
         return out
+
+    def _visible_tree_asset_indices(self, groups: list[dict]) -> list[int]:
+        visible: list[int] = []
+        for series_node in groups:
+            if not self._is_tree_node_open(str(series_node["key"])):
+                continue
+            for model_node in series_node["models"]:
+                if not self._is_tree_node_open(str(model_node["key"])):
+                    continue
+                for type_node in model_node["types"]:
+                    if self._is_tree_node_open(str(type_node["key"])):
+                        visible.extend(type_node["asset_indices"])
+        return visible
 
     def _create_tree_header(
         self,
@@ -792,6 +747,10 @@ class FirmwareListPanel(BaseFlashPanel):
                 )
 
     def _render_empty_list_hint(self, text: str):
+        if self.asset_tree is not None:
+            if hasattr(self.asset_tree, "show_message"):
+                self.asset_tree.show_message(text)
+            return
         ctk.CTkLabel(
             self.list_scroll,
             text=text,
@@ -819,6 +778,10 @@ class FirmwareListPanel(BaseFlashPanel):
 
     def _apply_card_visual_state(self, idx: int, selected: bool):
         if idx < 0:
+            return
+        if self.asset_tree is not None:
+            if selected:
+                self.asset_tree.focus_asset(idx)
             return
         widgets = next((item for item in self._asset_card_widgets if item.get("asset_idx") == idx), None)
         if widgets is None:
@@ -981,11 +944,12 @@ class FirmwareListPanel(BaseFlashPanel):
             ctk.CTkLabel(
                 self.ops_body,
                 text="选择资源后显示对应操作",
-                font=(FONT_FAMILY, FONT_SIZE_MD),
-                text_color=TEXT_SECONDARY,
+                font=(FONT_FAMILY, FONT_SIZE_LG),
+                text_color=TEXT_PRIMARY,
             ).pack(anchor="w", padx=20, pady=20)
             return
 
+        self._render_selected_detail_summary(asset)
         flash_mode = str(asset.get("flash_mode", ""))
         if flash_mode == "auto_usb":
             self._build_auto_usb_ops(asset)
@@ -1000,6 +964,35 @@ class FirmwareListPanel(BaseFlashPanel):
             self._build_manual_doc_ops(asset)
         else:
             self._build_disabled_ops(asset)
+
+    def _render_selected_detail_summary(self, asset: FirmwareAsset):
+        summary = ctk.CTkFrame(self.ops_body, fg_color="transparent")
+        summary.pack(fill="x", padx=20, pady=(12, 12))
+        fields = [
+            ("方式", str(asset.get("flash_mode", "") or "-")),
+            ("目录", str(asset.get("path", "") or "-")),
+            ("文件", ", ".join(str(name) for name in asset.get("files", [])[:4]) or "-"),
+        ]
+        for label_text, value_text in fields:
+            row = ctk.CTkFrame(summary, fg_color="transparent")
+            row.pack(fill="x", pady=2)
+            ctk.CTkLabel(
+                row,
+                text=label_text,
+                width=40,
+                anchor="w",
+                font=(FONT_FAMILY, FONT_SIZE_MD, "bold"),
+                text_color=TEXT_PRIMARY,
+            ).pack(side="left")
+            ctk.CTkLabel(
+                row,
+                text=value_text,
+                anchor="w",
+                justify="left",
+                wraplength=360,
+                font=(FONT_FAMILY, FONT_SIZE_MD),
+                text_color=TEXT_PRIMARY,
+            ).pack(side="left", fill="x", expand=True, padx=(8, 0))
 
     def _render_placeholder_ops(self, text: str):
         ctk.CTkLabel(

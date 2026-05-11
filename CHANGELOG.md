@@ -74,6 +74,7 @@
 - `core/usb_ops.py` 修复 `format_usb` 的命令注入风险：移除 `shell=True`，改用参数列表调用，并补齐超时处理。
 
 ### docs
+- 新增 `specs/l36-app-feasibility.md`，整理 L36 用户控制 App 可行性调研问题清单、供应商交付物、难度判断标准、公司资源调度和第一次会议议程。
 - 新增 `specs/newtasks.md`，把当前需求整理为分阶段 todo，并与 `requirements-spec.md`、`firmware-types-catalog.md` 对齐。
 
 ### test
@@ -269,6 +270,5 @@
 ### 789b8e6
 - `chore: initialize repo, uv setup, sanitize template, and module1 cleanup`
 - 完成仓库初始化与基础工程落地（含模板文件、项目配置与初始脚手架整理）。
-
 
 
