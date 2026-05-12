@@ -58,15 +58,18 @@ FirmwareListPanel（只做装配和事件路由）
 
 ### 行动项
 
-- [ ] 新建 `src/fwasset/ui/view_models/asset_filter_model.py`，将 `_filter_assets()`、`_sort_assets()`、`_build_tree_groups()` 迁移进去
+- [x] 新建 `src/fwasset/ui/view_models/asset_filter_model.py`，将筛选查询、排序键选择、树形分组和可见叶子计算迁移进去
 - [ ] 新建 `src/fwasset/ui/view_models/asset_selection_model.py`，封装 `_selected_idx`、隐藏条目相关方法
-- [ ] FirmwareListPanel 保留为装配器，方法调用委托给上述 ViewModel
-- [ ] 每迁移一个职责后补充对应单元测试
+- [~] FirmwareListPanel 保留为装配器，筛选/排序/树分组已委托给 AssetFilterModel；选中状态和操作区仍待拆
+- [~] 每迁移一个职责后补充对应单元测试；AssetFilterModel 已补独立测试
 
 **预估工作量：** 3～5 天（可分批渐进迁移，不需要一次重写）
 
----
+### 当前状态
 
+第一阶段已完成。`FirmwareListPanel` 仍负责事件路由和 UI 渲染，但筛选查询、排序和树形分组逻辑已下沉到可单元测试的 `AssetFilterModel`。
+
+---
 ## Issue 2 🔴 SQLite 只作缓存，筛选仍走内存全量
 
 **文件：** `src/fwasset/ui/firmware_list_panel.py` 第 557 行 `_filter_assets()`  

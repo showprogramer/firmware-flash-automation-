@@ -8,7 +8,7 @@ from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
 
-from fwasset.core.asset_index import AssetIndexError, hide_item, load_hidden_items, query_assets, unhide_item
+from fwasset.core.asset_index import AssetIndexError, hide_item, load_hidden_items, unhide_item
 from fwasset.core.firmware_catalog import enabled_firmware_types, load_firmware_catalog
 from fwasset.core.tool_discovery import discover_tool_path, launch_tool
 from fwasset.ui.tool_center_panel import ToolCenterPanel
@@ -16,7 +16,6 @@ from fwasset.core.services.flash_service import run_one_click
 from fwasset.core.services.music_flash_service import run_music_flash
 from fwasset.core.services.scan_service import build_cached_scan_result, build_scan_result
 from fwasset.core.settings import DEFAULT_ROOT
-from fwasset.core.sort_config import SortKey, apply_sort
 from fwasset.core.types import FirmwareAsset
 from fwasset.core.usb_ops import clean_usb, copy_to_usb, eject_usb, format_usb
 from fwasset.ui.asset_tree import AssetTreeView
@@ -38,6 +37,7 @@ from fwasset.ui.design_tokens import (
 )
 from fwasset.ui.serial_control import SerialControl
 from fwasset.ui.shared_widgets import section_title
+from fwasset.ui.view_models.asset_filter_model import AssetFilterModel
 
 
 class FirmwareListPanel(BaseFlashPanel):
@@ -60,6 +60,7 @@ class FirmwareListPanel(BaseFlashPanel):
         self.assets: list[FirmwareAsset] = []
         self.folders: list[dict] = []
         self._has_index_assets = False
+        self.asset_filter_model = AssetFilterModel()
         self._selected_idx = -1
         self._asset_card_widgets: list[dict] = []
         self.asset_tree: AssetTreeView | None = None
@@ -437,16 +438,7 @@ class FirmwareListPanel(BaseFlashPanel):
         return ""
 
     def _common_asset_path(self, assets: list[FirmwareAsset], indices: list[int]) -> str:
-        paths = [str(assets[idx].get("path", "") or "") for idx in indices if idx < len(assets)]
-        paths = [path for path in paths if path]
-        if not paths:
-            return ""
-        if len(paths) == 1:
-            return paths[0]
-        try:
-            return os.path.commonpath(paths)
-        except ValueError:
-            return paths[0]
+        return self._filter_model().common_asset_path(assets, indices)
 
     def _set_log_collapsed(self, collapsed: bool):
         self._log_collapsed = collapsed
@@ -548,16 +540,19 @@ class FirmwareListPanel(BaseFlashPanel):
 
         self._run_task("读取本地索引", _work, _done)
 
-    def _selected_sort_key(self) -> SortKey:
-        sort_key = SortKey.PATH
-        if self.sort_key_var.get() == "按型号":
-            sort_key = SortKey.MODEL
-        elif self.sort_key_var.get() == "按版本":
-            sort_key = SortKey.VERSION
-        return sort_key
+    def _filter_model(self) -> AssetFilterModel:
+        model = getattr(self, "asset_filter_model", None)
+        if model is None:
+            model = AssetFilterModel()
+            self.asset_filter_model = model
+        return model
 
     def _sort_assets(self, items: list[FirmwareAsset]) -> list[FirmwareAsset]:
-        return apply_sort(items, sort_key=self._selected_sort_key(), ascending=bool(self.sort_asc_var.get()))
+        return self._filter_model().sort_assets(
+            items,
+            sort_label=self.sort_key_var.get(),
+            ascending=bool(self.sort_asc_var.get()),
+        )
 
     def _filter_assets(self):
         keyword = self.search_var.get().strip()
@@ -570,17 +565,19 @@ class FirmwareListPanel(BaseFlashPanel):
             return
 
         try:
-            queried = query_assets(
+            queried = self._filter_model().query_filtered_assets(
                 keyword=keyword,
-                firmware_types=selected_types,
-                sort_key=self._selected_sort_key(),
+                selected_types=selected_types,
+                sort_label=self.sort_key_var.get(),
                 ascending=bool(self.sort_asc_var.get()),
+                show_hidden=show_hidden,
+                is_hidden=self._is_asset_hidden,
             )
         except AssetIndexError as exc:
             self._log(str(exc))
             queried = []
 
-        self.assets = [item for item in queried if show_hidden or not self._is_asset_hidden(item)]
+        self.assets = queried
         self.folders = self.assets
         if keyword:
             self._expand_matching_tree_nodes(self.assets)
@@ -613,7 +610,7 @@ class FirmwareListPanel(BaseFlashPanel):
             self._render_empty_list_hint("当前树节点已折叠，展开系列或型号目录后查看程序。")
 
     def _tree_key(self, kind: str, *parts: object) -> str:
-        return "|".join([kind, *[str(part) for part in parts]])
+        return self._filter_model().tree_key(kind, *parts)
 
     def _is_tree_node_open(self, key: str) -> bool:
         return key in self._tree_expanded
@@ -645,67 +642,14 @@ class FirmwareListPanel(BaseFlashPanel):
                     self._tree_expanded.add(self._tree_key("type", model_node["path"], type_node["firmware_type"]))
 
     def _build_tree_groups(self, assets: list[FirmwareAsset]) -> list[dict]:
-        series_map: dict[str, dict] = {}
-        for idx, asset in enumerate(assets):
-            series = str(asset.get("series", "") or "未知系列")
-            model_path = str(asset.get("model_directory_path", "") or asset.get("path", ""))
-            model_name = str(asset.get("model_directory_name", "") or asset.get("model", "") or model_path)
-            firmware_type = str(asset.get("firmware_type", "") or "unknown")
-            firmware_label = str(asset.get("firmware_label", "") or firmware_type)
-            hidden = self._is_asset_hidden(asset)
-            series_node = series_map.setdefault(series, {"series": series, "models": {}})
-            model_node = series_node["models"].setdefault(
-                model_path,
-                {"name": model_name, "path": model_path, "types": {}, "hidden": False},
-            )
-            model_node["hidden"] = bool(model_node["hidden"] or self._hidden_items.get(model_path) == "model_directory")
-            type_node = model_node["types"].setdefault(
-                firmware_type,
-                {"firmware_type": firmware_type, "label": firmware_label, "asset_indices": [], "hidden": False},
-            )
-            type_node["hidden"] = bool(type_node["hidden"] or hidden)
-            type_node["asset_indices"].append(idx)
-
-        out: list[dict] = []
-        for series_name in sorted(series_map.keys(), key=str.casefold):
-            series_node = series_map[series_name]
-            series_key = self._tree_key("series", series_name)
-            models = []
-            for model_path, model_node in sorted(series_node["models"].items(), key=lambda item: item[1]["name"].casefold()):
-                model_key = self._tree_key("model", series_name, model_path)
-                types = []
-                for _firmware_type, type_node in sorted(model_node["types"].items(), key=lambda item: item[1]["label"].casefold()):
-                    type_node["key"] = self._tree_key("type", model_path, type_node["firmware_type"])
-                    type_node["version_count"] = len(
-                        {str(assets[idx].get("version", "") or "-") for idx in type_node["asset_indices"]}
-                    )
-                    type_node["hide_path"] = self._common_asset_path(assets, type_node["asset_indices"])
-                    types.append(type_node)
-                models.append(
-                    {
-                        "key": model_key,
-                        "name": model_node["name"],
-                        "path": model_path,
-                        "types": types,
-                        "type_count": len(types),
-                        "hidden": bool(model_node.get("hidden")),
-                    }
-                )
-            out.append({"key": series_key, "series": series_name, "models": models, "model_count": len(models)})
-        return out
+        return self._filter_model().build_tree_groups(
+            assets,
+            hidden_items=self._hidden_items,
+            is_hidden=self._is_asset_hidden,
+        )
 
     def _visible_tree_asset_indices(self, groups: list[dict]) -> list[int]:
-        visible: list[int] = []
-        for series_node in groups:
-            if not self._is_tree_node_open(str(series_node["key"])):
-                continue
-            for model_node in series_node["models"]:
-                if not self._is_tree_node_open(str(model_node["key"])):
-                    continue
-                for type_node in model_node["types"]:
-                    if self._is_tree_node_open(str(type_node["key"])):
-                        visible.extend(type_node["asset_indices"])
-        return visible
+        return self._filter_model().visible_tree_asset_indices(groups, self._tree_expanded)
 
     def _create_tree_header(
         self,

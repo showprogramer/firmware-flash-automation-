@@ -240,7 +240,7 @@ def _patch_query_assets(monkeypatch, panel, assets):
             selected_sort_key = SortKey.PATH
         return apply_sort(filtered, sort_key=selected_sort_key, ascending=ascending)
 
-    monkeypatch.setattr("fwasset.ui.firmware_list_panel.query_assets", fake_query_assets)
+    monkeypatch.setattr("fwasset.ui.view_models.asset_filter_model.query_assets", fake_query_assets)
     return calls
 
 

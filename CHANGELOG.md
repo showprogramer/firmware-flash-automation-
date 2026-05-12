@@ -20,6 +20,7 @@
 - `config.toml` / `settings.py` 的 `version_patterns` 新增 `_(\\d+_\\d+(?:_\\d+)?)$` 和 `(?<![0-9A-Za-z])(\\d+\\.\\d+\\.\\d+(?:_\\d+)?)(?![0-9A-Za-z])` 模式，覆盖下划线子版本和无前缀三段式版本号。
 
 ### test
+- 新增 `tests/test_asset_filter_model.py`，覆盖 `AssetFilterModel` 的排序键映射、SQLite 查询委托、隐藏过滤、树形分组和可见叶子计算；本轮验证通过：`uv run python -m pytest tests\test_asset_filter_model.py tests\test_app_service_smoke.py -q --no-cov` -> `24 passed`，`uv run python -m pytest tests\test_asset_index.py tests\test_scan_service.py -q --no-cov` -> `10 passed`，`.\scripts\test.ps1` -> `157 passed`，总覆盖率 `82.45%`。
 - 扩展 `tests/test_asset_index.py`、`tests/test_scan_service.py` 和 `tests/test_app_service_smoke.py`，覆盖 SQLite 查询排序、缓存计数读取以及 UI 筛选调用 `query_assets()` 的路径；本轮验证通过：`uv run python -m pytest tests\test_asset_index.py tests\test_scan_service.py tests\test_app_service_smoke.py -q --no-cov` -> `31 passed`，`uv run python -m pytest tests\test_src_layout.py tests\test_settings.py -q --no-cov` -> `18 passed`，`.\scripts\test.ps1` -> `154 passed`，总覆盖率 `82.45%`。
 - 更新快速定位测试，直接验证 `FirmwareListPanel` 正式类方法，不再依赖 `app.py` 运行时 monkey patch。
 - 扩展 settings 与 logging 测试，覆盖运行时目录解析、环境变量覆盖、目录创建和默认日志路径。
@@ -27,12 +28,14 @@
 - `tests/test_file_scan.py` 新增 12 个边界测试用例（空格分隔 ROM 版本、`NULLLOG_FY` 后缀、`Beelogo_103.3.1`、`H530_62.3.2`、`46_002` 下划线子版本、`segmented_screen` 优先级、`.mot` 扩展名检测）。
 
 ### docs
+- `specs/fwasset_technical_plan.md` 将 Issue 1 第一阶段标记为已完成：筛选查询、排序和树形分组逻辑已下沉到 `AssetFilterModel`。
 - 新增 `specs/fwasset_technical_plan.md` 技术债务路线图，并将 Issue 2（SQLite 查询替换内存全量筛选）标记为已完成。
 - 新增 `specs/project-structure-cleanup-todo.md`，记录根目录清理、配置样例、入口清理、运行时数据隔离和验收测试 TODO，并在 `specs/newtasks.md` 横向任务中引用。
 - `README.md` 补充首次运行复制 `config.example.toml`、配置 `root_dir` / `tool_root`、运行时目录与日志/索引位置说明。
 - 新增 `specs/bug_plan5-8.md`，记录 YJ-按摩椅程序汇总目录深度分析中发现的 7 个缺陷及修复方案。
 
 ### app
+- 新增 `AssetFilterModel`，将固件资源列表的查询筛选、排序键解析、树形分组和可见叶子计算从 `FirmwareListPanel` 拆出，降低列表面板的职责集中度。
 - 固件资源列表筛选改为调用 SQLite `query_assets()`，移除 `_all_assets` 全量缓存；隐藏条目过滤、空状态提示和扫描后刷新行为保持不变。
 - `src/fwasset/app.py` 移除旧版 tkinter monkey patch 和未使用 service imports，收敛为 `main()` 入口、`App` 兼容导出和 `UnifiedFlashPlatform` 导出。
 - `_open_in_explorer`、`_open_folder_from_listbox` 正式迁回 `FirmwareListPanel`，快速定位、目录不存在提示和打开失败提示行为保持不变。
