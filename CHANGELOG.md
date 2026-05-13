@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+### refactor
+- 新增 `src/fwasset/core/asset_helpers.py`，将 `FirmwareListPanel` 中与 UI 无关的纯逻辑方法提取为独立可测试函数：`asset_usb_flow()`、`asset_rom_pkg_files()`、`asset_dir_path()`、`asset_primary_file_path()`；`AutoUsbPanel` 改为直接调用 `asset_helpers` 函数而非通过 `panel_host` 间接访问。
+- 新增 `src/fwasset/ui/operation_panels/host_types.py`，定义 `PanelHost` Protocol，规范操作面板与宿主面板之间的接口契约（`usb_drive`、`_build_usb_selector_row`、`_refresh_usb`、`_run_task`、`_selected_asset`、`_open_current_asset_dir`、`_copy_asset_dir_path`、`_copy_primary_file_path`、`_launch_tool_and_open_asset_dir`），为后续解耦测试和 Mock 提供类型基础。
+- 提取 `_make_bool_var()` 为 `src/fwasset/ui/shared_widgets.make_bool_var()` 公共组件，`FirmwareListPanel` 和 `AutoUsbPanel` 统一委托到该函数。
+- 新增 `src/fwasset/ui/view_models/tree_expansion_model.py`，将 `FirmwareListPanel._tree_expanded` 及其 5 个操作方法提取为 `TreeExpansionModel` 类（`clear`、`is_open`、`toggle`、`mark_open`、`mark_closed`、`expand_all_default`），支持独立单元测试。
+- `BaseOperationPanel.panel_host` 参数增加 `PanelHost` 类型注解（TYPE_CHECKING 仅运行时检查），`shared_actions.build_handoff_actions` 增加 `PanelHost` 类型注解。
+- `FirmwareListPanel._asset_usb_flow`、`_asset_rom_pkg_files`、`_asset_path_text`、`_primary_file_path_text` 改为委托到 `asset_helpers` 模块函数，保留方法签名向后兼容。
+- `FirmwareListPanel._make_bool_var` 改为委托到 `shared_widgets.make_bool_var`。
+- `FirmwareListPanel._tree_expanded` 迁移为 `self._tree_expansion = TreeExpansionModel()`，原有 `_is_tree_node_open`、`_toggle_tree_node`、`_mark_tree_node_open`、`_mark_tree_node_closed`、`_ensure_default_tree_expanded` 全部委托到 `TreeExpansionModel`；移除 `_expand_matching_tree_nodes` 内联实现。
+- `operation_panels/__init__.py` 导出 `PanelHost`。
+
+### test
+- 新增 `tests/test_asset_helpers.py`（12 个测试），覆盖 `asset_usb_flow`、`asset_rom_pkg_files`、`asset_dir_path`、`asset_primary_file_path` 的推断、回退和空值场景。
+- 新增 `tests/test_tree_expansion_model.py`（5 个测试），覆盖 `TreeExpansionModel` 的初始状态、标记开关、切换和幂等关闭。
+
+- 新增 `src/fwasset/ui/operation_panels/` 包，将 `FirmwareListPanel` 的 `_render_operation_panel` if/elif 链和各 `_build_*_ops` 方法拆分为独立的 Panel 类，通过注册表机制按 `flash_mode` 查找，消除每新增一种烧录方式就必须修改 FirmwareListPanel 的问题。
+  - `BaseOperationPanel` 基类定义 `build()` 接口，各 Panel 通过 `panel_host` 访问 FirmwareListPanel 的方法。
+  - `AutoUsbPanel`（auto_usb）、`AutoSerialPanel`（auto_serial）、`ToolLaunchPanel`（tool_launch）、`ManualDocPanel`（manual_doc）、`DisabledPanel`（disabled/兜底）各自独立文件。
+  - `shared_actions.py` 提取 `build_handoff_actions` 等共享操作为独立函数。
+  - `FirmwareListPanel._render_operation_panel()` 简化为注册表查找 + `PanelClass(...).build()`。
+  - 从 FirmwareListPanel 移除已迁移的方法：`_build_auto_usb_ops`、`_build_directory_copy_usb_ops`、`_build_tool_launch_ops`、`_build_manual_doc_ops`、`_build_disabled_ops`、`_build_handoff_actions`、`_show_manual_doc`、`_launch_current_tool`、`_clean_usb`、`_format_usb`、`_copy_to_usb`、`_eject_usb`、`_one_click_handcontrol`、`_run_directory_flash`。
+  - 保留在 FirmwareListPanel：`_render_selected_detail_summary`、`_render_placeholder_ops`、`_asset_path_text`、`_primary_file_path_text`、`_copy_text_to_clipboard`、`_copy_asset_dir_path`、`_copy_primary_file_path`、`_open_current_asset_dir`、`_launch_tool_and_open_asset_dir`、`_reset_ops_body`。
+  - 清理 FirmwareListPanel 不再直接依赖的导入（`load_firmware_catalog`、`discover_tool_path`、`launch_tool`、`run_one_click`、`run_music_flash`、`clean_usb`、`copy_to_usb`、`eject_usb`、`format_usb`、`SerialControl`）。
+
 ### core
 - 资产索引 schema 升级到 v2，新增 `usb_flow` 持久化字段，并支持旧 v1 索引自动迁移，避免本地缓存因字段新增直接失效。
 - firmware catalog 新增显式 `usb_flow`：手控/断码屏走 `paired_files`，音乐蓝牙走 `directory_copy`，不再让 UI 依赖文件组合猜测刷机流程。

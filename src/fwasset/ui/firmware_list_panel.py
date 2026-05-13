@@ -8,16 +8,13 @@ from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
 
+from fwasset.core.asset_helpers import asset_dir_path, asset_primary_file_path, asset_rom_pkg_files, asset_usb_flow
 from fwasset.core.asset_index import AssetIndexError, hide_item, load_hidden_items, unhide_item
-from fwasset.core.firmware_catalog import enabled_firmware_types, load_firmware_catalog
-from fwasset.core.tool_discovery import discover_tool_path, launch_tool
+from fwasset.core.firmware_catalog import enabled_firmware_types
 from fwasset.ui.tool_center_panel import ToolCenterPanel
-from fwasset.core.services.flash_service import run_one_click
-from fwasset.core.services.music_flash_service import run_music_flash
 from fwasset.core.services.scan_service import build_cached_scan_result, build_scan_result
 from fwasset.core.settings import DEFAULT_ROOT
 from fwasset.core.types import FirmwareAsset
-from fwasset.core.usb_ops import clean_usb, copy_to_usb, eject_usb, format_usb
 from fwasset.ui.asset_tree import AssetTreeView
 from fwasset.ui.base_panel import BaseFlashPanel
 from fwasset.ui.design_tokens import (
@@ -35,10 +32,12 @@ from fwasset.ui.design_tokens import (
     TEXT_PRIMARY,
     TEXT_SECONDARY,
 )
-from fwasset.ui.serial_control import SerialControl
-from fwasset.ui.shared_widgets import section_title
+from fwasset.ui.operation_panels import get_panel
+from fwasset.ui.operation_panels.disabled_panel import DisabledPanel
+from fwasset.ui.shared_widgets import section_title, make_bool_var
 from fwasset.ui.view_models.asset_filter_model import AssetFilterModel
 from fwasset.ui.view_models.asset_selection_model import AssetSelectionModel
+from fwasset.ui.view_models.tree_expansion_model import TreeExpansionModel
 
 
 class FirmwareListPanel(BaseFlashPanel):
@@ -66,7 +65,7 @@ class FirmwareListPanel(BaseFlashPanel):
         self._asset_card_widgets: list[dict] = []
         self.asset_tree: AssetTreeView | None = None
         self._empty_list_hint = None
-        self._tree_expanded: set[str] = set()
+        self._tree_expansion = TreeExpansionModel()
         self._log_collapsed = True
         self.detail_values: dict[str, ctk.CTkLabel] = {}
         self._status_hint_text = "Select a firmware version on the left; key details stay here and actions stay on the right."
@@ -122,20 +121,7 @@ class FirmwareListPanel(BaseFlashPanel):
         ToolCenterPanel(self.winfo_toplevel(), log_fn=self._log)
 
     def _make_bool_var(self, value: bool):
-        try:
-            return tk.BooleanVar(master=self, value=value)
-        except Exception:
-            class _LocalVar:
-                def __init__(self, initial):
-                    self._value = bool(initial)
-
-                def get(self):
-                    return self._value
-
-                def set(self, new_value):
-                    self._value = bool(new_value)
-
-            return _LocalVar(value)
+        return make_bool_var(self, value)
 
     def activate(self):
         super().activate()
@@ -242,14 +228,14 @@ class FirmwareListPanel(BaseFlashPanel):
         for var in self.type_filter_vars.values():
             var.set(True)
         self.type_quick_var.set("全部类型")
-        self._tree_expanded.clear()
+        self._tree_expansion.clear()
         self._filter_assets()
 
     def _clear_type_filters(self):
         for var in self.type_filter_vars.values():
             var.set(False)
         self.type_quick_var.set("先选择固件类型")
-        self._tree_expanded.clear()
+        self._tree_expansion.clear()
         self._filter_assets()
 
     def _select_single_type_filter(self, label: str):
@@ -264,7 +250,7 @@ class FirmwareListPanel(BaseFlashPanel):
         selected_key = self._type_label_to_key[label]
         for key, var in self.type_filter_vars.items():
             var.set(key == selected_key)
-        self._tree_expanded.clear()
+        self._tree_expansion.clear()
         self._filter_assets()
 
     def _build_main_view(self):
@@ -522,7 +508,7 @@ class FirmwareListPanel(BaseFlashPanel):
             payload = result.get("payload", {}) or {}
             self._has_index_assets = bool(payload.get("assets", []))
             self._selection_model().clear_selection()
-            self._tree_expanded.clear()
+            self._tree_expansion.clear()
             self._filter_assets()
             if not self._has_index_assets:
                 self._render_empty_list_hint("当前扫描没有发现程序资源。")
@@ -540,7 +526,7 @@ class FirmwareListPanel(BaseFlashPanel):
             payload = result.get("payload", {}) or {}
             self._has_index_assets = bool(payload.get("asset_count", 0) or payload.get("assets", []))
             self._selection_model().clear_selection()
-            self._tree_expanded.clear()
+            self._tree_expansion.clear()
             self._filter_assets()
             if not self._has_index_assets:
                 self._render_empty_list_hint("本地暂无资产索引，请点击扫描根目录生成。")
@@ -587,7 +573,12 @@ class FirmwareListPanel(BaseFlashPanel):
         self.assets = queried
         self.folders = self.assets
         if keyword:
-            self._expand_matching_tree_nodes(self.assets)
+            self._tree_expansion.expand_all_default(
+                self.assets,
+                self._filter_model(),
+                self._hidden_items,
+                self._is_asset_hidden,
+            )
         self._render_asset_tree()
 
     def _render_asset_cards(self):
@@ -601,7 +592,7 @@ class FirmwareListPanel(BaseFlashPanel):
         self._asset_card_widgets = [{"asset_idx": idx} for idx in visible_asset_indices]
         hidden_indices = {idx for idx, asset in enumerate(self.assets) if self._is_asset_hidden(asset)}
         if self.asset_tree is not None:
-            self.asset_tree.populate(groups, self.assets, self._tree_expanded, -1, hidden_indices)
+            self.asset_tree.populate(groups, self.assets, self._tree_expansion.expanded, -1, hidden_indices)
         if self.assets:
             next_idx = self._selection_model().clamped_selected_idx(len(self.assets))
             self._select_asset(next_idx)
@@ -620,33 +611,27 @@ class FirmwareListPanel(BaseFlashPanel):
         return self._filter_model().tree_key(kind, *parts)
 
     def _is_tree_node_open(self, key: str) -> bool:
-        return key in self._tree_expanded
+        return self._tree_expansion.is_open(key)
 
     def _toggle_tree_node(self, key: str):
-        if key in self._tree_expanded:
-            self._tree_expanded.remove(key)
-        else:
-            self._tree_expanded.add(key)
+        self._tree_expansion.toggle(key)
         self._render_asset_tree()
 
     def _mark_tree_node_open(self, key: str):
-        self._tree_expanded.add(key)
+        self._tree_expansion.mark_open(key)
 
     def _mark_tree_node_closed(self, key: str):
-        self._tree_expanded.discard(key)
+        self._tree_expansion.mark_closed(key)
 
     def _ensure_default_tree_expanded(self):
-        if self._tree_expanded or not self.assets:
+        if self._tree_expansion.expanded or not self.assets:
             return
-        self._expand_matching_tree_nodes(self.assets)
-
-    def _expand_matching_tree_nodes(self, assets: list[FirmwareAsset]):
-        for series_node in self._build_tree_groups(assets):
-            self._tree_expanded.add(self._tree_key("series", series_node["series"]))
-            for model_node in series_node["models"]:
-                self._tree_expanded.add(self._tree_key("model", series_node["series"], model_node["path"]))
-                for type_node in model_node["types"]:
-                    self._tree_expanded.add(self._tree_key("type", model_node["path"], type_node["firmware_type"]))
+        self._tree_expansion.expand_all_default(
+            self.assets,
+            self._filter_model(),
+            self._hidden_items,
+            self._is_asset_hidden,
+        )
 
     def _build_tree_groups(self, assets: list[FirmwareAsset]) -> list[dict]:
         return self._filter_model().build_tree_groups(
@@ -656,7 +641,7 @@ class FirmwareListPanel(BaseFlashPanel):
         )
 
     def _visible_tree_asset_indices(self, groups: list[dict]) -> list[int]:
-        return self._filter_model().visible_tree_asset_indices(groups, self._tree_expanded)
+        return self._filter_model().visible_tree_asset_indices(groups, self._tree_expansion.expanded)
 
     def _create_tree_header(
         self,
@@ -916,20 +901,10 @@ class FirmwareListPanel(BaseFlashPanel):
         return self._selection_model().selected_flash_mode(self.assets)
 
     def _asset_rom_pkg_files(self, asset: FirmwareAsset) -> tuple[str, str]:
-        rom_file = next((name for name in asset.get("files", []) if name.lower().endswith(".rom")), "")
-        pkg_file = next((name for name in asset.get("files", []) if name.lower().endswith(".pkg")), "")
-        return rom_file, pkg_file
+        return asset_rom_pkg_files(asset)
 
     def _asset_usb_flow(self, asset: FirmwareAsset) -> str:
-        configured = str(asset.get("usb_flow", "") or "")
-        if configured:
-            return configured
-        firmware_type = str(asset.get("firmware_type", "") or "")
-        if firmware_type in {"handcontrol_ui", "segmented_screen"}:
-            return "paired_files"
-        if firmware_type == "music_bt":
-            return "directory_copy"
-        return ""
+        return asset_usb_flow(asset)
 
     def _reset_ops_body(self):
         if self.serial_control is not None:
@@ -952,19 +927,10 @@ class FirmwareListPanel(BaseFlashPanel):
 
         self._render_selected_detail_summary(asset)
         flash_mode = str(asset.get("flash_mode", ""))
-        if flash_mode == "auto_usb":
-            self._build_auto_usb_ops(asset)
-        elif flash_mode == "auto_serial":
-            self.serial_control = SerialControl(self.ops_body, log_fn=self._log)
-            self.serial_control.pack(fill="both", expand=True)
-            if self._polling_active:
-                self.serial_control.activate()
-        elif flash_mode == "tool_launch":
-            self._build_tool_launch_ops(asset)
-        elif flash_mode == "manual_doc":
-            self._build_manual_doc_ops(asset)
-        else:
-            self._build_disabled_ops(asset)
+        PanelClass = get_panel(flash_mode) or DisabledPanel
+        panel = PanelClass(self.ops_body, asset=asset, log_fn=self._log, panel_host=self)
+        panel.build()
+        panel.pack(fill="both", expand=True)
 
     def _render_selected_detail_summary(self, asset: FirmwareAsset):
         summary = ctk.CTkFrame(self.ops_body, fg_color="transparent")
@@ -1009,19 +975,13 @@ class FirmwareListPanel(BaseFlashPanel):
         selected = asset or self._selected_asset()
         if not selected:
             return ""
-        return str(selected.get("path", "") or "")
+        return asset_dir_path(selected)
 
     def _primary_file_path_text(self, asset: FirmwareAsset | None = None) -> str:
         selected = asset or self._selected_asset()
         if not selected:
             return ""
-        base_path = Path(str(selected.get("path", "") or ""))
-        files = [str(name) for name in selected.get("files", []) if str(name).strip()]
-        preferred_exts = (".bin", ".hex", ".rom", ".pkg", ".zip")
-        primary = next((name for name in files if name.lower().endswith(preferred_exts)), "")
-        if not primary and files:
-            primary = files[0]
-        return str(base_path / primary) if primary else str(base_path)
+        return asset_primary_file_path(selected)
 
     def _copy_text_to_clipboard(self, text: str, label: str):
         if not text:
@@ -1049,336 +1009,7 @@ class FirmwareListPanel(BaseFlashPanel):
         self._open_asset_path(self._selected_idx)
 
     def _launch_tool_and_open_asset_dir(self):
-        self._launch_current_tool()
         self._open_current_asset_dir()
-
-    def _build_handoff_actions(self, asset: FirmwareAsset, include_tool_combo: bool = False):
-        action_frame = ctk.CTkFrame(self.ops_body, fg_color="transparent")
-        action_frame.pack(fill="x", padx=20, pady=(0, 12))
-
-        for title, command in [
-            ("打开程序目录", self._open_current_asset_dir),
-            ("复制目录路径", self._copy_asset_dir_path),
-            ("复制主文件路径", self._copy_primary_file_path),
-        ]:
-            ctk.CTkButton(
-                action_frame,
-                text=title,
-                height=36,
-                corner_radius=6,
-                fg_color=BG_INPUT,
-                text_color=TEXT_PRIMARY,
-                hover_color=BG_HOVER,
-                command=command,
-            ).pack(fill="x", pady=3)
-
-        if include_tool_combo:
-            ctk.CTkButton(
-                action_frame,
-                text="打开工具 + 打开程序目录",
-                height=40,
-                corner_radius=8,
-                font=(FONT_FAMILY, FONT_SIZE_MD, "bold"),
-                fg_color=BG_INPUT,
-                text_color=TEXT_PRIMARY,
-                hover_color=BG_HOVER,
-                command=self._launch_tool_and_open_asset_dir,
-            ).pack(fill="x", pady=(6, 0))
-
-    def _build_tool_launch_ops(self, asset: FirmwareAsset):
-        """构建工具启动模式的操作面板."""
-        fw_type = str(asset.get("firmware_type", ""))
-        tool_name = str(asset.get("tool_name", "")) or "烧录工具"
-        tool_dir = str(asset.get("tool_dir", ""))
-        
-        # 获取当前工具路径
-        catalog = load_firmware_catalog()
-        tool_path = ""
-        dir_keywords: list[str] = []
-        for item in catalog.get("firmware_types", []):
-            if item.get("key") == fw_type:
-                tool_path = item.get("tool_path", "")
-                tool_dir = item.get("tool_dir", tool_dir)
-                dir_keywords = item.get("dir_keywords", [])
-                break
-        
-        # 如果没有配置路径，尝试自动发现
-        if not tool_path:
-            tool_path = discover_tool_path(
-                fw_type,
-                tool_name,
-                tool_dir=tool_dir,
-                dir_keywords=dir_keywords,
-            )
-        
-        # 保存工具路径到实例变量
-        self._current_tool_path = tool_path
-        
-        # 显示当前工具信息
-        info_frame = ctk.CTkFrame(self.ops_body, fg_color="transparent")
-        info_frame.pack(fill="x", padx=20, pady=(16, 8))
-        
-        ctk.CTkLabel(
-            info_frame,
-            text=f"工具类型: {tool_name}",
-            font=(FONT_FAMILY, FONT_SIZE_MD, "bold"),
-            text_color=TEXT_PRIMARY,
-        ).pack(anchor="w")
-        
-        path_text = tool_path if tool_path else "未配置工具路径"
-        path_color = TEXT_SECONDARY if tool_path else "#E74C3C"
-        self.tool_path_label = ctk.CTkLabel(
-            info_frame,
-            text=f"路径: {path_text}",
-            font=(FONT_FAMILY, FONT_SIZE_SM),
-            text_color=path_color,
-            wraplength=360,
-        )
-        self.tool_path_label.pack(anchor="w", pady=(4, 0))
-        
-        # 按钮区域
-        btn_frame = ctk.CTkFrame(self.ops_body, fg_color="transparent")
-        btn_frame.pack(fill="x", padx=20, pady=(8, 12))
-        
-        # 打开烧录工具按钮
-        ctk.CTkButton(
-            btn_frame,
-            text="🚀 打开烧录工具",
-            height=48,
-            corner_radius=8,
-            font=(FONT_FAMILY, FONT_SIZE_LG, "bold"),
-            fg_color=COLOR_PRIMARY,
-            hover_color=COLOR_PRIMARY_HOVER,
-            state="normal" if tool_path else "disabled",
-            command=self._launch_current_tool,
-        ).pack(fill="x", pady=(0, 8))
-
-        self._build_handoff_actions(asset, include_tool_combo=True)
-        
-        if not tool_path:
-            # 显示配置提示
-            ctk.CTkLabel(
-                self.ops_body,
-                text="提示: 将烧录工具放在程序同目录的 tools 文件夹中，程序会自动发现。",
-                wraplength=360,
-                justify="left",
-                font=(FONT_FAMILY, FONT_SIZE_SM),
-                text_color=TEXT_SECONDARY,
-            ).pack(anchor="w", padx=20, pady=(0, 12))
-
-    def _build_manual_doc_ops(self, asset: FirmwareAsset):
-        ctk.CTkLabel(
-            self.ops_body,
-            text="该类型需要按说明人工处理。",
-            justify="left",
-            wraplength=360,
-            font=(FONT_FAMILY, FONT_SIZE_MD),
-            text_color=TEXT_SECONDARY,
-        ).pack(anchor="w", padx=20, pady=(16, 12))
-        ctk.CTkButton(
-            self.ops_body,
-            text="查看说明",
-            height=40,
-            corner_radius=8,
-            fg_color=BG_INPUT,
-            text_color=TEXT_PRIMARY,
-            hover_color=BG_HOVER,
-            command=lambda: self._show_manual_doc(asset),
-        ).pack(fill="x", padx=20, pady=(0, 12))
-        self._build_handoff_actions(asset)
-
-    def _build_disabled_ops(self, asset: FirmwareAsset):
-        ctk.CTkLabel(
-            self.ops_body,
-            text=f"{asset.get('firmware_label', '该类型')}当前不可自动化操作。",
-            justify="left",
-            wraplength=360,
-            font=(FONT_FAMILY, FONT_SIZE_MD),
-            text_color=TEXT_SECONDARY,
-        ).pack(anchor="w", padx=20, pady=(16, 12))
-        ctk.CTkButton(
-            self.ops_body,
-            text="暂不可操作",
-            height=40,
-            corner_radius=8,
-            fg_color=BG_INPUT,
-            text_color=TEXT_SECONDARY,
-            hover_color=BG_INPUT,
-            state="disabled",
-        ).pack(fill="x", padx=20, pady=(0, 12))
-        self._build_handoff_actions(asset)
-
-    def _show_manual_doc(self, asset: FirmwareAsset):
-        message = (
-            f"固件类型: {asset.get('firmware_label', '-')}\n"
-            f"型号: {asset.get('model', '-')}\n"
-            f"版本: {asset.get('version', '-')}\n"
-            f"目录: {asset.get('path', '-')}\n\n"
-            "当前类型暂未接入自动烧录工具，请按对应工艺说明处理。"
-        )
-        messagebox.showinfo("操作说明", message)
-    
-    def _launch_current_tool(self):
-        """启动当前选中的工具."""
-        tool_path = getattr(self, "_current_tool_path", "")
-        if not tool_path:
-            messagebox.showwarning("提示", "工具路径未配置\n\n请将烧录工具放在程序同目录的 tools 文件夹中，或手动配置工具路径。")
-            return
-        
-        result = launch_tool(tool_path)
-        if result.get("ok"):
-            self._log(f"✓ {result.get('message')}")
-        else:
-            messagebox.showerror("启动失败", result.get("message", ""))
-            self._log(f"✗ {result.get('message')}")
-
-    def _build_auto_usb_ops(self, asset: FirmwareAsset):
-        self._build_usb_selector_row(self.ops_body)
-        self._refresh_usb()
-        usb_flow = self._asset_usb_flow(asset)
-        if usb_flow == "directory_copy":
-            self._build_directory_copy_usb_ops(asset)
-            return
-
-        rom_file, pkg_file = self._asset_rom_pkg_files(asset)
-        if usb_flow == "paired_files" and rom_file and pkg_file:
-            ctk.CTkButton(
-                self.ops_body,
-                text="一键智能刷机",
-                height=48,
-                corner_radius=8,
-                font=(FONT_FAMILY, FONT_SIZE_LG, "bold"),
-                fg_color=COLOR_PRIMARY,
-                hover_color=COLOR_PRIMARY_HOVER,
-                command=self._one_click_handcontrol,
-            ).pack(fill="x", padx=20, pady=(10, 8))
-            for title, command in [
-                ("1. 清理垃圾文件", self._clean_usb),
-                ("2. 格式化 FAT32", self._format_usb),
-                ("3. 复制文件到 U 盘", self._copy_to_usb),
-                ("4. 安全弹出", self._eject_usb),
-            ]:
-                ctk.CTkButton(
-                    self.ops_body,
-                    text=title,
-                    height=36,
-                    anchor="w",
-                    corner_radius=6,
-                    fg_color=BG_INPUT,
-                    text_color=TEXT_PRIMARY,
-                    hover_color=BG_HOVER,
-                    command=command,
-                ).pack(fill="x", padx=20, pady=3)
-            return
-
-        if usb_flow == "paired_files":
-            missing = []
-            if not rom_file:
-                missing.append("ROM")
-            if not pkg_file:
-                missing.append("PKG")
-            ctk.CTkLabel(
-                self.ops_body,
-                text=f"当前手控资源缺少 {' / '.join(missing)} 文件，无法执行手控刷机。",
-                wraplength=360,
-                justify="left",
-                font=(FONT_FAMILY, FONT_SIZE_MD),
-                text_color=TEXT_SECONDARY,
-            ).pack(anchor="w", padx=20, pady=(16, 12))
-            return
-
-        ctk.CTkLabel(
-            self.ops_body,
-            text="当前 USB 流程未配置，无法确定刷写方式。",
-            wraplength=360,
-            justify="left",
-            font=(FONT_FAMILY, FONT_SIZE_MD),
-            text_color=TEXT_SECONDARY,
-        ).pack(anchor="w", padx=20, pady=(16, 12))
-
-    def _build_directory_copy_usb_ops(self, asset: FirmwareAsset):
-        self.format_first = self._make_bool_var(True)
-        self.eject_after = self._make_bool_var(True)
-        options_row = ctk.CTkFrame(self.ops_body, fg_color="transparent")
-        options_row.pack(fill="x", padx=20, pady=(10, 8))
-        ctk.CTkCheckBox(options_row, text="格式化", variable=self.format_first, font=(FONT_FAMILY, FONT_SIZE_SM)).pack(side="left")
-        ctk.CTkCheckBox(options_row, text="完成后弹出", variable=self.eject_after, font=(FONT_FAMILY, FONT_SIZE_SM)).pack(side="left", padx=10)
-        ctk.CTkButton(
-            self.ops_body,
-            text="执行目录刷机流程",
-            height=48,
-            corner_radius=8,
-            font=(FONT_FAMILY, FONT_SIZE_LG, "bold"),
-            fg_color=COLOR_PRIMARY,
-            hover_color=COLOR_PRIMARY_HOVER,
-            command=self._run_directory_flash,
-        ).pack(fill="x", padx=20, pady=(8, 12))
-        ctk.CTkLabel(
-            self.ops_body,
-            text="该资源按目录复制到 U 盘，适用于音乐/蓝牙类资源。",
-            wraplength=360,
-            justify="left",
-            font=(FONT_FAMILY, FONT_SIZE_SM),
-            text_color=TEXT_SECONDARY,
-        ).pack(anchor="w", padx=20, pady=(0, 12))
-
-    def _clean_usb(self):
-        drive = self.usb_drive.get().strip()
-        if not drive:
-            return
-        self._run_task("清理", lambda log_fn: clean_usb(drive, log_fn))
-
-    def _format_usb(self):
-        drive = self.usb_drive.get().strip()
-        if not drive or not messagebox.askyesno("格式化", f"确认格式化 {drive}?"):
-            return
-        self._run_task("格式化", lambda log_fn: format_usb(drive, log_fn))
-
-    def _copy_to_usb(self):
-        asset = self._selected_asset()
-        drive = self.usb_drive.get().strip()
-        if not asset or not drive:
-            return
-        rom_file, pkg_file = self._asset_rom_pkg_files(asset)
-        if not rom_file or not pkg_file:
-            return
-        rom_path = str(Path(asset["path"]) / rom_file)
-        pkg_path = str(Path(asset["path"]) / pkg_file)
-        self._run_task("复制", lambda log_fn: copy_to_usb(rom_path, pkg_path, drive, log_fn))
-
-    def _eject_usb(self):
-        drive = self.usb_drive.get().strip()
-        if not drive:
-            return
-        self._run_task("弹出", lambda log_fn: eject_usb(drive, log_fn))
-
-    def _one_click_handcontrol(self):
-        asset = self._selected_asset()
-        drive = self.usb_drive.get().strip()
-        if not asset or not drive:
-            return
-        rom_file, pkg_file = self._asset_rom_pkg_files(asset)
-        if not rom_file or not pkg_file:
-            return
-        rom_path = str(Path(asset["path"]) / rom_file)
-        pkg_path = str(Path(asset["path"]) / pkg_file)
-        self._run_task(
-            "一键执行",
-            lambda log_fn: run_one_click(drive, asset["model"], asset["version"], rom_path, pkg_path, log_fn=log_fn),
-        )
-
-    def _run_directory_flash(self):
-        asset = self._selected_asset()
-        drive = self.usb_drive.get().strip()
-        if not asset or not drive:
-            return
-        format_first = bool(getattr(self, "format_first", self._make_bool_var(True)).get())
-        eject_after = bool(getattr(self, "eject_after", self._make_bool_var(True)).get())
-        self._run_task(
-            "目录刷机",
-            lambda log_fn: run_music_flash(asset["path"], drive, format_first=format_first, eject_after=eject_after, log_fn=log_fn),
-            lambda result: self._log(f"结果: {result.get('message')}"),
-        )
 
 
 HandcontrolPanel = FirmwareListPanel

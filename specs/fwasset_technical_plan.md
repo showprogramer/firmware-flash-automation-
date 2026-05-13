@@ -60,14 +60,20 @@ FirmwareListPanel（只做装配和事件路由）
 
 - [x] 新建 `src/fwasset/ui/view_models/asset_filter_model.py`，将筛选查询、排序键选择、树形分组和可见叶子计算迁移进去
 - [x] 新建 `src/fwasset/ui/view_models/asset_selection_model.py`，封装 `_selected_idx`、隐藏条目相关方法
-- [~] FirmwareListPanel 保留为装配器，筛选/排序/树分组已委托给 AssetFilterModel，选中状态与隐藏判定已委托给 AssetSelectionModel；操作区仍待拆
-- [~] 每迁移一个职责后补充对应单元测试；AssetFilterModel、AssetSelectionModel 已补独立测试
+- [x] 新建 `src/fwasset/ui/view_models/tree_expansion_model.py`，封装 `_tree_expanded` 树展开状态管理
+- [x] 新建 `src/fwasset/core/asset_helpers.py`，将 `_asset_usb_flow`、`_asset_rom_pkg_files`、`_asset_path_text`、`_primary_file_path_text` 提取为独立可测试的纯函数
+- [x] 新建 `src/fwasset/ui/operation_panels/host_types.py`，定义 `PanelHost` Protocol，规范化操作面板与宿主面板之间的接口契约
+- [x] 将 `_make_bool_var` 提取到 `src/fwasset/ui/shared_widgets.py`，公共组件复用
+- [x] `AutoUsbPanel` 改用独立函数 `asset_usb_flow`/`asset_rom_pkg_files`/`make_bool_var`，减少 `panel_host` 依赖面
+- [x] `FirmwareListPanel._asset_usb_flow` 等方法改为委托到 `asset_helpers` 模块
+- [x] 树展开状态从 `self._tree_expanded` 迁移到 `self._tree_expansion = TreeExpansionModel()`
+- [~] FirmwareListPanel 保留为装配器，筛选/排序/树分组已委托给 AssetFilterModel，选中状态与隐藏判定已委托给 AssetSelectionModel，树展开状态已委托给 TreeExpansionModel，操作面板已通过 PanelHost Protocol 解耦；详情卡和日志区仍待拆
 
 **预估工作量：** 3～5 天（可分批渐进迁移，不需要一次重写）
 
 ### 当前状态
 
-第二阶段已完成。`FirmwareListPanel` 仍负责事件路由和 UI 渲染，但筛选查询、排序和树形分组逻辑已下沉到可单元测试的 `AssetFilterModel`；当前选中项、隐藏条目缓存及隐藏判定逻辑已继续下沉到 `AssetSelectionModel`。
+第三阶段已完成。`FirmwareListPanel` 的纯业务逻辑已提取为独立可测试函数（`asset_usb_flow`、`asset_rom_pkg_files`、`asset_dir_path`、`asset_primary_file_path`）；树展开状态管理已提取为 `TreeExpansionModel`；操作面板通过 `PanelHost` Protocol 与宿主解耦，`AutoUsbPanel` 直接调用 `asset_helpers` 而非 `panel_host` 方法；`make_bool_var` 提取为公共组件。后续可继续拆分详情卡（DetailPanel）和日志区（LogPanel）。
 
 ---
 
@@ -211,7 +217,7 @@ settings = Settings(CONFIG_PATH)
 
 ---
 
-## Issue 5 🟡 flash_mode 操作区 if/elif 链，不可插件化
+## Issue 5 ✅ flash_mode 操作区注册表拆分（已完成）
 
 **文件：** `src/fwasset/ui/firmware_list_panel.py` 第 982 行 `_render_operation_panel()`
 
@@ -267,11 +273,12 @@ def _render_operation_panel(self, asset):
 
 ### 行动项
 
-- [ ] 新建 `src/fwasset/ui/operation_panels/` 目录
-- [ ] 定义 `BaseOperationPanel(ctk.CTkFrame)` 基类，规范接口
-- [ ] 将现有四个 `_build_xxx_ops()` 方法迁移为独立 Panel 类
-- [ ] 实现注册表机制
-- [ ] FirmwareListPanel 中 `_render_operation_panel()` 改为调用注册表
+- [x] 新建 `src/fwasset/ui/operation_panels/` 目录
+- [x] 定义 `BaseOperationPanel(ctk.CTkFrame)` 基类，规范接口
+- [x] 将现有五个 `_build_xxx_ops()` 方法迁移为独立 Panel 类（AutoUsbPanel、AutoSerialPanel、ToolLaunchPanel、ManualDocPanel、DisabledPanel）
+- [x] 实现注册表机制（`register` / `get_panel`）
+- [x] FirmwareListPanel 中 `_render_operation_panel()` 改为调用注册表
+- [x] 新增 `tests/test_operation_panels.py` 覆盖注册表与 Panel smoke test
 
 **预估工作量：** 2 天
 

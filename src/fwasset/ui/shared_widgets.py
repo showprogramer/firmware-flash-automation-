@@ -1,11 +1,33 @@
 from __future__ import annotations
 
+from typing import Any
+
+import tkinter as tk
+
 import customtkinter as ctk
 from tkinter import ttk
 from fwasset.ui.design_tokens import (
     BG_CARD, BG_HOVER, BG_SIDEBAR, BORDER_COLOR, COLOR_PRIMARY,
     FONT_FAMILY, FONT_SIZE_LG, FONT_SIZE_MD, TEXT_PRIMARY, TEXT_SECONDARY
 )
+
+
+def make_bool_var(master, value: bool) -> Any:
+    try:
+        return tk.BooleanVar(master=master, value=value)
+    except Exception:
+
+        class _LocalVar:
+            def __init__(self, initial):
+                self._value = bool(initial)
+
+            def get(self):
+                return self._value
+
+            def set(self, new_value):
+                self._value = bool(new_value)
+
+        return _LocalVar(value)
 
 
 def card(master, **kwargs) -> ctk.CTkFrame:
