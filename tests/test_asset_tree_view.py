@@ -1,4 +1,8 @@
+import pytest
+
 from fwasset.ui.asset_tree import AssetTreeView
+
+pytestmark = pytest.mark.ui
 
 
 class FakeTree:

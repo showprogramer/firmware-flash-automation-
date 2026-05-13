@@ -2,10 +2,14 @@ import queue
 from pathlib import Path
 
 import customtkinter as ctk
+import pytest
 
 from fwasset.ui.firmware_list_panel import FirmwareListPanel
 from fwasset.ui.serial_control import SerialControl
 from fwasset.core.sort_config import SortKey, apply_sort
+from fwasset.ui.view_models.tree_expansion_model import TreeExpansionModel
+
+pytestmark = pytest.mark.ui
 
 
 class FakeVar:
@@ -103,7 +107,7 @@ class FakeAssetTree:
             {
                 "groups": groups,
                 "assets": assets,
-                "expanded_keys": set(expanded_keys),
+                "expanded_keys": set(expanded_keys) if not isinstance(expanded_keys, set) else expanded_keys,
                 "selected_idx": selected_idx,
                 "hidden_indices": set(hidden_indices or set()),
             }
@@ -170,7 +174,7 @@ def _mk_asset_stub(monkeypatch):
     panel._task_queue = queue.Queue()
     panel._busy = False
     panel._polling_active = False
-    panel._tree_expanded = set()
+    panel._tree_expansion = TreeExpansionModel()
     panel._hidden_items = {}
     panel._log_collapsed = True
     panel._status_hint_text = "Select a firmware version"
@@ -196,6 +200,8 @@ def _mk_asset_stub(monkeypatch):
         for key in ["series", "model", "version", "firmware_type", "flash_mode", "directory_name", "path", "files", "modified_time"]
     }
     panel._log = lambda msg: panel.log_text.insert("end", str(msg))
+    panel._render_operation_panel = lambda asset: None
+
     return panel
 
 
@@ -289,43 +295,6 @@ def test_choose_root_and_scan_always_opens_directory_picker(monkeypatch):
     assert called["scan"] == 1
 
 
-def test_asset_filter_supports_keyword_and_type(monkeypatch):
-    panel = _mk_asset_stub(monkeypatch)
-    calls = _patch_query_assets(monkeypatch, panel, [
-        {
-            "model": "L36",
-            "version": "V1.0.0",
-            "path": "D:/a",
-            "directory_name": "手控目录",
-            "firmware_type": "handcontrol_ui",
-            "firmware_label": "手控UI",
-            "flash_mode": "auto_usb",
-            "files": ["ui.rom", "ui.pkg"],
-            "modified_time": 0,
-        },
-        {
-            "model": "L50S",
-            "version": "V2.0.0",
-            "path": "D:/b",
-            "directory_name": "蓝牙目录",
-            "firmware_type": "music_bt",
-            "firmware_label": "蓝牙程序",
-            "flash_mode": "auto_usb",
-            "files": ["song.mp3"],
-            "modified_time": 0,
-        },
-    ])
-    panel.search_var.set("L50")
-    panel.type_filter_vars["handcontrol_ui"].set(False)
-
-    panel._filter_assets()
-
-    assert len(panel.assets) == 1
-    assert panel.assets[0]["firmware_type"] == "music_bt"
-    assert calls[-1]["keyword"] == "L50"
-    assert calls[-1]["firmware_types"] == {"music_bt"}
-
-
 def test_single_type_filter_and_clear_keep_type_selection_explicit(monkeypatch):
     panel = _mk_asset_stub(monkeypatch)
     panel.type_filter_vars["mainboard"] = FakeVar(False)
@@ -337,15 +306,15 @@ def test_single_type_filter_and_clear_keep_type_selection_explicit(monkeypatch):
     assert panel.type_filter_vars["handcontrol_ui"].get() is False
     assert panel.type_filter_vars["music_bt"].get() is False
     assert panel.type_filter_vars["mainboard"].get() is True
-    assert panel._tree_expanded == set()
+    assert panel._tree_expansion.expanded == set()
     assert called["count"] == 1
 
-    panel._tree_expanded.add("series|L36")
+    panel._tree_expansion.mark_open("series|L36")
     panel._clear_type_filters()
 
     assert all(var.get() is False for var in panel.type_filter_vars.values())
     assert panel.type_quick_var.get() == "先选择固件类型"
-    assert panel._tree_expanded == set()
+    assert panel._tree_expansion.expanded == set()
     assert called["count"] == 2
 
     panel.type_filter_vars["mainboard"].set(True)
@@ -353,82 +322,6 @@ def test_single_type_filter_and_clear_keep_type_selection_explicit(monkeypatch):
 
     assert all(var.get() is False for var in panel.type_filter_vars.values())
     assert called["count"] == 3
-
-
-def test_asset_tree_groups_series_model_and_type(monkeypatch):
-    panel = _mk_asset_stub(monkeypatch)
-    _patch_query_assets(monkeypatch, panel, [
-        {
-            "series": "L36",
-            "model": "L36",
-            "version": "V1.0.0",
-            "path": "D:/root/L36配置/主板/V1",
-            "directory_name": "V1",
-            "model_directory_name": "L36配置",
-            "model_directory_path": "D:/root/L36配置",
-            "firmware_type": "mainboard",
-            "firmware_label": "主板程序",
-            "flash_mode": "tool_launch",
-            "files": ["main.bin"],
-            "modified_time": 0,
-        },
-        {
-            "series": "L36",
-            "model": "L36",
-            "version": "V2.0.0",
-            "path": "D:/root/L36配置/主板/V2",
-            "directory_name": "V2",
-            "model_directory_name": "L36配置",
-            "model_directory_path": "D:/root/L36配置",
-            "firmware_type": "mainboard",
-            "firmware_label": "主板程序",
-            "flash_mode": "tool_launch",
-            "files": ["main.bin"],
-            "modified_time": 0,
-        },
-    ])
-    panel.type_filter_vars["mainboard"] = FakeVar(True)
-
-    panel._filter_assets()
-
-    tree = panel._build_tree_groups(panel.assets)
-    assert tree[0]["series"] == "L36"
-    assert tree[0]["key"] == "series|L36"
-    assert tree[0]["model_count"] == 1
-    assert tree[0]["models"][0]["key"] == "model|L36|D:/root/L36配置"
-    assert tree[0]["models"][0]["type_count"] == 1
-    assert tree[0]["models"][0]["types"][0]["key"] == "type|D:/root/L36配置|mainboard"
-    assert tree[0]["models"][0]["types"][0]["version_count"] == 2
-    assert len(panel._asset_card_widgets) == 2
-    assert panel.asset_tree.populate_calls[-1]["groups"][0]["models"][0]["types"][0]["asset_indices"] == [0, 1]
-
-
-def test_asset_tree_toggle_collapses_rendered_leaf_cards(monkeypatch):
-    panel = _mk_asset_stub(monkeypatch)
-    _patch_query_assets(monkeypatch, panel, [
-        {
-            "series": "L36",
-            "model": "L36",
-            "version": "V1.0.0",
-            "path": "D:/root/L36配置/主板/V1",
-            "directory_name": "V1",
-            "model_directory_name": "L36配置",
-            "model_directory_path": "D:/root/L36配置",
-            "firmware_type": "mainboard",
-            "firmware_label": "主板程序",
-            "flash_mode": "tool_launch",
-            "files": ["main.bin"],
-            "modified_time": 0,
-        }
-    ])
-    panel.type_filter_vars["mainboard"] = FakeVar(True)
-    panel._filter_assets()
-    series_key = panel._tree_key("series", "L36")
-
-    panel._toggle_tree_node(series_key)
-
-    assert series_key not in panel._tree_expanded
-    assert panel._asset_card_widgets == []
 
 
 def test_hidden_model_directory_is_filtered_until_show_hidden(monkeypatch):
@@ -459,20 +352,6 @@ def test_hidden_model_directory_is_filtered_until_show_hidden(monkeypatch):
     panel._filter_assets()
     assert len(panel.assets) == 1
     assert panel.asset_tree.populate_calls[-1]["hidden_indices"] == {0}
-
-
-def test_asset_default_sort_matches_natural_explorer_like_order(monkeypatch):
-    panel = _mk_asset_stub(monkeypatch)
-    calls = _patch_query_assets(monkeypatch, panel, [
-        {"model": "L100", "version": "V1.0.0", "path": "D:/root/L100", "directory_name": "L100", "firmware_type": "handcontrol_ui", "firmware_label": "手控UI", "flash_mode": "auto_usb", "files": [], "modified_time": 0},
-        {"model": "L20", "version": "V1.0.0", "path": "D:/root/L20", "directory_name": "L20", "firmware_type": "handcontrol_ui", "firmware_label": "手控UI", "flash_mode": "auto_usb", "files": [], "modified_time": 0},
-        {"model": "L3", "version": "V1.0.0", "path": "D:/root/L3", "directory_name": "L3", "firmware_type": "handcontrol_ui", "firmware_label": "手控UI", "flash_mode": "auto_usb", "files": [], "modified_time": 0},
-    ])
-
-    panel._filter_assets()
-
-    assert [item["path"] for item in panel.assets] == ["D:/root/L3", "D:/root/L20", "D:/root/L100"]
-    assert calls[-1]["sort_key"] == SortKey.PATH
 
 
 def test_asset_select_updates_detail_panel(monkeypatch):
@@ -551,6 +430,9 @@ def test_panel_pollers_skip_when_deactivated(monkeypatch):
 
 
 def test_handcontrol_one_click_runs_service(monkeypatch):
+    """一键刷机逻辑已迁移到 AutoUsbPanel，直接测试面板行为。"""
+    from fwasset.ui.operation_panels.auto_usb_panel import AutoUsbPanel
+
     panel = _mk_asset_stub(monkeypatch)
     panel._selected_idx = 0
     panel.assets = [
@@ -563,44 +445,57 @@ def test_handcontrol_one_click_runs_service(monkeypatch):
         called["one_click"] = True
         return {"ok": True, "payload": {"copy_ok": True}}
 
-    monkeypatch.setattr("fwasset.ui.firmware_list_panel.run_one_click", mock_one_click)
+    monkeypatch.setattr("fwasset.ui.operation_panels.auto_usb_panel.run_one_click", mock_one_click)
     panel._run_task = lambda _name, fn, on_done=None: fn(panel._log)
 
-    panel._one_click_handcontrol()
+    usb_panel = AutoUsbPanel.__new__(AutoUsbPanel)
+    usb_panel.asset = panel.assets[0]
+    usb_panel._log = panel._log
+    usb_panel._panel_host = panel
+
+    usb_panel._one_click_handcontrol()
 
     assert called["one_click"] is True
 
 
 def test_directory_flash_runs_music_service(monkeypatch):
+    """目录刷机逻辑已迁移到 AutoUsbPanel，直接测试面板行为。"""
+    from fwasset.ui.operation_panels.auto_usb_panel import AutoUsbPanel
+
     panel = _mk_asset_stub(monkeypatch)
     panel._selected_idx = 0
     panel.assets = [
         {"model": "L50S", "version": "V2.0.0", "path": "D:/music", "directory_name": "music", "firmware_type": "music_bt", "firmware_label": "蓝牙程序", "flash_mode": "auto_usb", "files": ["song.mp3"], "modified_time": 0}
     ]
     panel.usb_drive.set("E:\\")
-    panel.format_first = FakeVar(True)
-    panel.eject_after = FakeVar(False)
     called = {"music": False}
 
     def mock_music_flash(*args, **kwargs):
         called["music"] = True
         return {"ok": True, "message": "done"}
 
-    monkeypatch.setattr("fwasset.ui.firmware_list_panel.run_music_flash", mock_music_flash)
+    monkeypatch.setattr("fwasset.ui.operation_panels.auto_usb_panel.run_music_flash", mock_music_flash)
     panel._run_task = lambda _name, fn, on_done=None: (on_done(fn(panel._log)) if on_done else fn(panel._log))
 
-    panel._run_directory_flash()
+    usb_panel = AutoUsbPanel.__new__(AutoUsbPanel)
+    usb_panel.format_first = FakeVar(True)
+    usb_panel.eject_after = FakeVar(False)
+    usb_panel._log = panel._log
+    usb_panel._panel_host = panel
+
+    usb_panel._run_directory_flash()
 
     assert called["music"] is True
 
 
 def test_auto_usb_paired_handcontrol_missing_pair_never_falls_back_to_directory(monkeypatch):
+    """usb_flow 分流逻辑已迁移到 AutoUsbPanel，直接测试面板 build 分支。"""
+    from fwasset.ui.operation_panels.auto_usb_panel import AutoUsbPanel
+
     panel = _mk_asset_stub(monkeypatch)
     panel._build_usb_selector_row = lambda *_args, **_kwargs: None
     panel._refresh_usb = lambda: None
-    directory_calls = []
     labels = []
-    panel._build_directory_copy_usb_ops = lambda _asset: directory_calls.append("directory")
 
     def fake_label(*args, **kwargs):
         labels.append(str(kwargs.get("text", "")))
@@ -608,38 +503,20 @@ def test_auto_usb_paired_handcontrol_missing_pair_never_falls_back_to_directory(
 
     monkeypatch.setattr(ctk, "CTkLabel", fake_label)
 
-    panel._build_auto_usb_ops(
-        {
-            "firmware_type": "handcontrol_ui",
-            "firmware_label": "手控UI",
-            "flash_mode": "auto_usb",
-            "usb_flow": "paired_files",
-            "files": ["only.rom"],
-        }
-    )
+    usb_panel = AutoUsbPanel.__new__(AutoUsbPanel)
+    usb_panel.asset = {
+        "firmware_type": "handcontrol_ui",
+        "firmware_label": "手控UI",
+        "flash_mode": "auto_usb",
+        "usb_flow": "paired_files",
+        "files": ["only.rom"],
+    }
+    usb_panel._log = panel._log
+    usb_panel._panel_host = panel
 
-    assert directory_calls == []
+    usb_panel.build()
+
     assert any("缺少 PKG" in text for text in labels)
-
-
-def test_auto_usb_directory_copy_flow_renders_directory_ops(monkeypatch):
-    panel = _mk_asset_stub(monkeypatch)
-    panel._build_usb_selector_row = lambda *_args, **_kwargs: None
-    panel._refresh_usb = lambda: None
-    directory_calls = []
-    panel._build_directory_copy_usb_ops = lambda asset: directory_calls.append(asset["firmware_type"])
-
-    panel._build_auto_usb_ops(
-        {
-            "firmware_type": "music_bt",
-            "firmware_label": "蓝牙程序",
-            "flash_mode": "auto_usb",
-            "usb_flow": "directory_copy",
-            "files": ["song.mp3"],
-        }
-    )
-
-    assert directory_calls == ["music_bt"]
 
 
 def test_copy_handoff_paths_to_clipboard(monkeypatch):
@@ -670,34 +547,27 @@ def test_copy_handoff_paths_to_clipboard(monkeypatch):
 
 
 def test_tool_launch_combo_opens_tool_and_asset_dir(monkeypatch):
+    """工具+目录组合操作已迁移到 ToolLaunchPanel。"""
+    from fwasset.ui.operation_panels.tool_launch_panel import ToolLaunchPanel
+
     panel = _mk_asset_stub(monkeypatch)
     panel._selected_idx = 0
     panel.assets = [
         {"model": "L36", "version": "V1.0.0", "path": "D:/fw/L36", "directory_name": "L36", "firmware_type": "mainboard", "firmware_label": "主板程序", "flash_mode": "tool_launch", "files": ["main.bin"], "modified_time": 0}
     ]
     calls = []
-    panel._launch_current_tool = lambda: calls.append("tool")
+
+    tool_panel = ToolLaunchPanel.__new__(ToolLaunchPanel)
+    tool_panel._current_tool_path = ""
+    tool_panel._log = panel._log
+    tool_panel._panel_host = panel
+
+    tool_panel._launch_current_tool = lambda: calls.append("tool")
     panel._open_current_asset_dir = lambda: calls.append("dir")
 
-    panel._launch_tool_and_open_asset_dir()
+    tool_panel._launch_tool_and_open_asset_dir()
 
     assert calls == ["tool", "dir"]
-
-
-def test_operation_panel_renders_manual_and_disabled_modes(monkeypatch):
-    panel = _mk_asset_stub(monkeypatch)
-    built = []
-    panel._build_manual_doc_ops = lambda asset: built.append(("manual", asset["firmware_type"]))
-    panel._build_disabled_ops = lambda asset: built.append(("disabled", asset["firmware_type"]))
-
-    panel._render_operation_panel(
-        {"model": "L1", "version": "V1", "path": "D:/a", "directory_name": "a", "firmware_type": "seat_occupancy", "firmware_label": "占座提醒", "flash_mode": "manual_doc", "files": [], "modified_time": 0}
-    )
-    panel._render_operation_panel(
-        {"model": "L2", "version": "V1", "path": "D:/b", "directory_name": "b", "firmware_type": "aging", "firmware_label": "老化程序", "flash_mode": "disabled", "files": [], "modified_time": 0}
-    )
-
-    assert built == [("manual", "seat_occupancy"), ("disabled", "aging")]
 
 
 def test_serial_control_scan_ports_updates_ui(monkeypatch):

@@ -34,6 +34,9 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 pythonpath = ["src"]
 addopts = "--cov=src/fwasset --cov-report=term-missing --cov-fail-under=80"
+markers = [
+    "ui: tests that require customtkinter or a display (deselected with -m 'not ui')",
+]
 
 [tool.coverage.run]
 source = ["src/fwasset"]
