@@ -38,6 +38,7 @@ from fwasset.ui.design_tokens import (
 from fwasset.ui.serial_control import SerialControl
 from fwasset.ui.shared_widgets import section_title
 from fwasset.ui.view_models.asset_filter_model import AssetFilterModel
+from fwasset.ui.view_models.asset_selection_model import AssetSelectionModel
 
 
 class FirmwareListPanel(BaseFlashPanel):
@@ -61,12 +62,11 @@ class FirmwareListPanel(BaseFlashPanel):
         self.folders: list[dict] = []
         self._has_index_assets = False
         self.asset_filter_model = AssetFilterModel()
-        self._selected_idx = -1
+        self.asset_selection_model = AssetSelectionModel()
         self._asset_card_widgets: list[dict] = []
         self.asset_tree: AssetTreeView | None = None
         self._empty_list_hint = None
         self._tree_expanded: set[str] = set()
-        self._hidden_items: dict[str, str] = {}
         self._log_collapsed = True
         self.detail_values: dict[str, ctk.CTkLabel] = {}
         self._status_hint_text = "Select a firmware version on the left; key details stay here and actions stay on the right."
@@ -407,6 +407,29 @@ class FirmwareListPanel(BaseFlashPanel):
     def _selected_types(self) -> set[str]:
         return {key for key, value in self.type_filter_vars.items() if bool(value.get())}
 
+    def _selection_model(self) -> AssetSelectionModel:
+        model = getattr(self, "asset_selection_model", None)
+        if model is None:
+            model = AssetSelectionModel()
+            self.asset_selection_model = model
+        return model
+
+    @property
+    def _selected_idx(self) -> int:
+        return self._selection_model().selected_idx
+
+    @_selected_idx.setter
+    def _selected_idx(self, idx: int) -> None:
+        self._selection_model().set_selected_idx(idx)
+
+    @property
+    def _hidden_items(self) -> dict[str, str]:
+        return self._selection_model().hidden_items
+
+    @_hidden_items.setter
+    def _hidden_items(self, hidden_items: dict[str, str]) -> None:
+        self._selection_model().replace_hidden_items(hidden_items)
+
     def _reload_hidden_items(self):
         try:
             self._hidden_items = load_hidden_items()
@@ -416,26 +439,10 @@ class FirmwareListPanel(BaseFlashPanel):
                 self._log(str(exc))
 
     def _is_asset_hidden(self, asset: FirmwareAsset) -> bool:
-        asset_path = str(asset.get("path", "") or "")
-        model_path = str(asset.get("model_directory_path", "") or "")
-        if asset_path in self._hidden_items or model_path in self._hidden_items:
-            return True
-        return any(
-            hide_type == "firmware_type" and bool(hidden_path) and asset_path.startswith(hidden_path)
-            for hidden_path, hide_type in self._hidden_items.items()
-        )
+        return self._selection_model().is_asset_hidden(asset)
 
     def _asset_hidden_type(self, asset: FirmwareAsset) -> str:
-        asset_path = str(asset.get("path", "") or "")
-        model_path = str(asset.get("model_directory_path", "") or "")
-        if asset_path in self._hidden_items:
-            return "asset"
-        if model_path in self._hidden_items:
-            return "model_directory"
-        for hidden_path, hide_type in self._hidden_items.items():
-            if hide_type == "firmware_type" and bool(hidden_path) and asset_path.startswith(hidden_path):
-                return "firmware_type"
-        return ""
+        return self._selection_model().asset_hidden_type(asset)
 
     def _common_asset_path(self, assets: list[FirmwareAsset], indices: list[int]) -> str:
         return self._filter_model().common_asset_path(assets, indices)
@@ -472,7 +479,7 @@ class FirmwareListPanel(BaseFlashPanel):
         if not item_path:
             return
         menu = tk.Menu(self, tearoff=0)
-        is_hidden = item_path in self._hidden_items
+        is_hidden = self._selection_model().is_item_hidden(item_path)
         label = "恢复此条目" if is_hidden else "隐藏此条目"
         command = (lambda: self._unhide_tree_item(item_path)) if is_hidden else (lambda: self._hide_tree_item(item_path, hide_type))
         menu.add_command(label=label, command=command)
@@ -514,7 +521,7 @@ class FirmwareListPanel(BaseFlashPanel):
                 return
             payload = result.get("payload", {}) or {}
             self._has_index_assets = bool(payload.get("assets", []))
-            self._selected_idx = -1
+            self._selection_model().clear_selection()
             self._tree_expanded.clear()
             self._filter_assets()
             if not self._has_index_assets:
@@ -532,7 +539,7 @@ class FirmwareListPanel(BaseFlashPanel):
                 return
             payload = result.get("payload", {}) or {}
             self._has_index_assets = bool(payload.get("asset_count", 0) or payload.get("assets", []))
-            self._selected_idx = -1
+            self._selection_model().clear_selection()
             self._tree_expanded.clear()
             self._filter_assets()
             if not self._has_index_assets:
@@ -596,10 +603,10 @@ class FirmwareListPanel(BaseFlashPanel):
         if self.asset_tree is not None:
             self.asset_tree.populate(groups, self.assets, self._tree_expanded, -1, hidden_indices)
         if self.assets:
-            next_idx = min(max(self._selected_idx, 0), len(self.assets) - 1)
+            next_idx = self._selection_model().clamped_selected_idx(len(self.assets))
             self._select_asset(next_idx)
         else:
-            self._selected_idx = -1
+            self._selection_model().clear_selection()
             self._clear_selection()
             if self._has_index_assets and not self._selected_types():
                 self._render_empty_list_hint("请先在上方选择一种固件类型。")
@@ -813,7 +820,7 @@ class FirmwareListPanel(BaseFlashPanel):
         if idx < 0 or idx >= len(self.assets):
             return
         previous_idx = self._selected_idx
-        self._selected_idx = idx
+        self._selection_model().set_selected_idx(idx)
         if previous_idx != idx:
             self._apply_card_visual_state(previous_idx, False)
             self._apply_card_visual_state(idx, True)
@@ -899,15 +906,14 @@ class FirmwareListPanel(BaseFlashPanel):
             messagebox.showerror("错误", f"打开目录失败: {exc}")
 
     def _selected_asset(self) -> FirmwareAsset | None:
-        if self._selected_idx < 0 or self._selected_idx >= len(self.assets):
+        selected = self._selection_model().selected_asset(self.assets)
+        if selected is None:
             messagebox.showwarning("提示", "请先选择一个条目")
             return None
-        return self.assets[self._selected_idx]
+        return selected
 
     def _selected_flash_mode(self) -> str:
-        if self._selected_idx < 0 or self._selected_idx >= len(self.assets):
-            return ""
-        return str(self.assets[self._selected_idx].get("flash_mode", ""))
+        return self._selection_model().selected_flash_mode(self.assets)
 
     def _asset_rom_pkg_files(self, asset: FirmwareAsset) -> tuple[str, str]:
         rom_file = next((name for name in asset.get("files", []) if name.lower().endswith(".rom")), "")

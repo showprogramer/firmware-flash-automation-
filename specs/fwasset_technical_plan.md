@@ -59,15 +59,15 @@ FirmwareListPanel（只做装配和事件路由）
 ### 行动项
 
 - [x] 新建 `src/fwasset/ui/view_models/asset_filter_model.py`，将筛选查询、排序键选择、树形分组和可见叶子计算迁移进去
-- [ ] 新建 `src/fwasset/ui/view_models/asset_selection_model.py`，封装 `_selected_idx`、隐藏条目相关方法
-- [~] FirmwareListPanel 保留为装配器，筛选/排序/树分组已委托给 AssetFilterModel；选中状态和操作区仍待拆
-- [~] 每迁移一个职责后补充对应单元测试；AssetFilterModel 已补独立测试
+- [x] 新建 `src/fwasset/ui/view_models/asset_selection_model.py`，封装 `_selected_idx`、隐藏条目相关方法
+- [~] FirmwareListPanel 保留为装配器，筛选/排序/树分组已委托给 AssetFilterModel，选中状态与隐藏判定已委托给 AssetSelectionModel；操作区仍待拆
+- [~] 每迁移一个职责后补充对应单元测试；AssetFilterModel、AssetSelectionModel 已补独立测试
 
 **预估工作量：** 3～5 天（可分批渐进迁移，不需要一次重写）
 
 ### 当前状态
 
-第一阶段已完成。`FirmwareListPanel` 仍负责事件路由和 UI 渲染，但筛选查询、排序和树形分组逻辑已下沉到可单元测试的 `AssetFilterModel`。
+第二阶段已完成。`FirmwareListPanel` 仍负责事件路由和 UI 渲染，但筛选查询、排序和树形分组逻辑已下沉到可单元测试的 `AssetFilterModel`；当前选中项、隐藏条目缓存及隐藏判定逻辑已继续下沉到 `AssetSelectionModel`。
 
 ---
 
