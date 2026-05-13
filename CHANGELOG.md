@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### core
+- 资产索引 schema 升级到 v2，新增 `usb_flow` 持久化字段，并支持旧 v1 索引自动迁移，避免本地缓存因字段新增直接失效。
+- firmware catalog 新增显式 `usb_flow`：手控/断码屏走 `paired_files`，音乐蓝牙走 `directory_copy`，不再让 UI 依赖文件组合猜测刷机流程。
 - `query_assets()` 支持 `sort_key` / `ascending` 参数，并复用现有自然排序规则，供 UI 将关键词、类型筛选和排序统一下推到 SQLite 查询入口。
 - `build_cached_scan_result()` 启动缓存读取改为只读取资产数量与扫描元数据，不再启动时全量加载资产列表。
 - 新增统一运行时目录解析：开发模式默认写入 `.runtime/`，打包模式默认写入 exe 同级 `runtime/`，并支持 `FWASSET_RUNTIME_DIR` 覆盖。
@@ -20,6 +22,7 @@
 - `config.toml` / `settings.py` 的 `version_patterns` 新增 `_(\\d+_\\d+(?:_\\d+)?)$` 和 `(?<![0-9A-Za-z])(\\d+\\.\\d+\\.\\d+(?:_\\d+)?)(?![0-9A-Za-z])` 模式，覆盖下划线子版本和无前缀三段式版本号。
 
 ### test
+- 新增 `tests/test_asset_tree_view.py`，锁定资源树叶子行不再重复展示型号目录和固件类型；扩展 catalog、扫描、索引与 UI smoke tests，覆盖 `usb_flow` 归一化、v1→v2 索引迁移、手控缺 ROM/PKG 时不回退目录刷机、蓝牙目录刷机仍可用；本轮验证通过：`uv run python -m pytest tests\test_asset_index.py tests\test_firmware_catalog.py tests\test_file_scan.py tests\test_app_service_smoke.py -q --no-cov` -> `76 passed`，`.\scripts\test.ps1` -> `162 passed`，总覆盖率 `82.64%`。
 - 新增 `tests/test_asset_filter_model.py`，覆盖 `AssetFilterModel` 的排序键映射、SQLite 查询委托、隐藏过滤、树形分组和可见叶子计算；本轮验证通过：`uv run python -m pytest tests\test_asset_filter_model.py tests\test_app_service_smoke.py -q --no-cov` -> `24 passed`，`uv run python -m pytest tests\test_asset_index.py tests\test_scan_service.py -q --no-cov` -> `10 passed`，`.\scripts\test.ps1` -> `157 passed`，总覆盖率 `82.45%`。
 - 扩展 `tests/test_asset_index.py`、`tests/test_scan_service.py` 和 `tests/test_app_service_smoke.py`，覆盖 SQLite 查询排序、缓存计数读取以及 UI 筛选调用 `query_assets()` 的路径；本轮验证通过：`uv run python -m pytest tests\test_asset_index.py tests\test_scan_service.py tests\test_app_service_smoke.py -q --no-cov` -> `31 passed`，`uv run python -m pytest tests\test_src_layout.py tests\test_settings.py -q --no-cov` -> `18 passed`，`.\scripts\test.ps1` -> `154 passed`，总覆盖率 `82.45%`。
 - 更新快速定位测试，直接验证 `FirmwareListPanel` 正式类方法，不再依赖 `app.py` 运行时 monkey patch。
@@ -35,6 +38,8 @@
 - 新增 `specs/bug_plan5-8.md`，记录 YJ-按摩椅程序汇总目录深度分析中发现的 7 个缺陷及修复方案。
 
 ### app
+- 资源树表收敛重复信息：型号目录只保留在树层级中，叶子行移除重复的型号目录与固件类型列，明细列聚焦程序目录和版本。
+- `auto_usb` 操作区改为按 `usb_flow` 显式分流：手控/断码屏仅允许成对 ROM+PKG 文件刷机，缺文件时提示不可执行；音乐蓝牙继续保留目录复制刷机。
 - 新增 `AssetFilterModel`，将固件资源列表的查询筛选、排序键解析、树形分组和可见叶子计算从 `FirmwareListPanel` 拆出，降低列表面板的职责集中度。
 - 固件资源列表筛选改为调用 SQLite `query_assets()`，移除 `_all_assets` 全量缓存；隐藏条目过滤、空状态提示和扫描后刷新行为保持不变。
 - `src/fwasset/app.py` 移除旧版 tkinter monkey patch 和未使用 service imports，收敛为 `main()` 入口、`App` 兼容导出和 `UnifiedFlashPlatform` 导出。

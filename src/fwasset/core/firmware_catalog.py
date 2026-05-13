@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, TypedDict
 
 from fwasset.core.settings import APP_ROOT, load_toml_config
-from fwasset.core.types import FirmwareType
+from fwasset.core.types import FirmwareType, UsbFlow
 
 
 DEFAULT_FIRMWARE_CATALOG_PATH = APP_ROOT / "firmware_catalog.toml"
@@ -16,6 +16,7 @@ class FirmwareTypeConfig(TypedDict):
     dir_keywords: list[str]
     file_extensions: list[str]
     flash_mode: str
+    usb_flow: UsbFlow
     tool_name: str
     tool_path: str
     tool_dir: str
@@ -26,6 +27,13 @@ def _as_str_list(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
     return [str(item).strip() for item in value if str(item).strip()]
+
+
+def _normalize_usb_flow(value: Any) -> UsbFlow:
+    text = str(value or "").strip()
+    if text in {"paired_files", "directory_copy"}:
+        return text  # type: ignore[return-value]
+    return ""
 
 
 def _normalize_type(node: Any) -> FirmwareTypeConfig | None:
@@ -40,6 +48,7 @@ def _normalize_type(node: Any) -> FirmwareTypeConfig | None:
         "dir_keywords": _as_str_list(node.get("dir_keywords", [])),
         "file_extensions": [item.lower() for item in _as_str_list(node.get("file_extensions", []))],
         "flash_mode": str(node.get("flash_mode", "tool_launch")).strip() or "tool_launch",
+        "usb_flow": _normalize_usb_flow(node.get("usb_flow", "")),
         "tool_name": str(node.get("tool_name", "")).strip(),
         "tool_path": str(node.get("tool_path", "")).strip(),
         "tool_dir": str(node.get("tool_dir", "")).strip(),

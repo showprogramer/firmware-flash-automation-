@@ -46,7 +46,7 @@ class AssetTreeView:
         self.frame.grid_rowconfigure(0, weight=1)
 
         self._configure_style()
-        columns = ("model_dir", "firmware_type", "version")
+        columns = ("program_dir", "version")
         self.tree = ttk.Treeview(
             self.frame,
             columns=columns,
@@ -54,13 +54,11 @@ class AssetTreeView:
             selectmode="browse",
             style="Asset.Treeview",
         )
-        self.tree.heading("#0", text="系列 / 型号", anchor="w")
-        self.tree.heading("model_dir", text="型号目录", anchor="w")
-        self.tree.heading("firmware_type", text="固件类型", anchor="w")
+        self.tree.heading("#0", text="系列 / 型号 / 程序", anchor="w")
+        self.tree.heading("program_dir", text="程序目录", anchor="w")
         self.tree.heading("version", text="版本", anchor="w")
-        self.tree.column("#0", width=260, minwidth=180, stretch=True)
-        self.tree.column("model_dir", width=280, minwidth=180, stretch=True)
-        self.tree.column("firmware_type", width=160, minwidth=120, stretch=False)
+        self.tree.column("#0", width=320, minwidth=220, stretch=True)
+        self.tree.column("program_dir", width=280, minwidth=180, stretch=True)
         self.tree.column("version", width=150, minwidth=110, stretch=False)
         self.tree.tag_configure("group", foreground=_resolve(TEXT_PRIMARY), font=(FONT_FAMILY, FONT_SIZE_LG, "bold"))
         self.tree.tag_configure("hidden", foreground="#4B5563")
@@ -116,7 +114,7 @@ class AssetTreeView:
 
     def show_message(self, text: str):
         self.clear()
-        self.tree.insert("", "end", text=text, values=("", "", ""), tags=("group",))
+        self.tree.insert("", "end", text=text, values=("", ""), tags=("group",))
 
     def populate(
         self,
@@ -136,7 +134,7 @@ class AssetTreeView:
                 series_iid,
                 series_key,
                 text=f"{series_node['series']}  ({series_node['model_count']} 个目录)",
-                values=("", "", ""),
+                values=("", ""),
                 open_node=series_key in expanded_keys,
             )
             for model_node in series_node["models"]:
@@ -148,7 +146,7 @@ class AssetTreeView:
                     model_iid,
                     model_key,
                     text=str(model_node["name"]),
-                    values=("", "", ""),
+                    values=("", ""),
                     open_node=model_key in expanded_keys,
                     context=(str(model_node.get("path", "")), "model_directory"),
                     tags=tags,
@@ -161,8 +159,8 @@ class AssetTreeView:
                         model_iid,
                         type_iid,
                         type_key,
-                        text=str(type_node["label"]),
-                        values=("", "", f"{type_node['version_count']} 个版本"),
+                        text=f"{type_node['version_count']} 个版本",
+                        values=("", ""),
                         open_node=type_key in expanded_keys,
                         context=(str(type_node.get("hide_path", "")), "firmware_type"),
                         tags=tags,
@@ -180,8 +178,7 @@ class AssetTreeView:
                             iid=asset_iid,
                             text=str(asset.get("model", "") or asset.get("directory_name", "") or "-"),
                             values=(
-                                asset.get("model_directory_name", "") or asset.get("directory_name", ""),
-                                asset.get("firmware_label", "") or asset.get("firmware_type", ""),
+                                asset.get("directory_name", "") or "-",
                                 asset.get("version", "") or "-",
                             ),
                             tags=tags,

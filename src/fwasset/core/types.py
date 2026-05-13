@@ -23,6 +23,7 @@ FirmwareType = Literal[
     "segmented_screen",
 ]
 FlashMode = Literal["auto_usb", "auto_serial", "tool_launch", "manual_doc", "disabled"]
+UsbFlow = Literal["paired_files", "directory_copy", ""]
 
 
 class ServiceResult(TypedDict):
@@ -92,6 +93,7 @@ class FirmwareAsset(TypedDict):
     firmware_type: FirmwareType
     firmware_label: str
     flash_mode: FlashMode
+    usb_flow: UsbFlow
     model: str
     version: str
     model_directory_name: str

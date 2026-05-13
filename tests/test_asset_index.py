@@ -36,6 +36,7 @@ def make_asset(
         "firmware_type": firmware_type,  # type: ignore[typeddict-item]
         "firmware_label": "主板程序" if firmware_type == "mainboard" else "手控UI",
         "flash_mode": "tool_launch",
+        "usb_flow": "",
         "model": model,
         "version": "V1.0.0",
         "model_directory_name": model_dir.name,
@@ -155,3 +156,45 @@ def test_schema_version_mismatch_raises_chinese_recovery_message(tmp_path: Path)
         with sqlite3.connect(db_path) as conn:
             conn.execute("UPDATE schema_meta SET value = '999' WHERE key = 'schema_version'")
         init_asset_index(db_path)
+
+
+def test_schema_version_one_migrates_usb_flow_column(tmp_path: Path):
+    db_path = tmp_path / "fwasset.db"
+    import sqlite3
+
+    with sqlite3.connect(db_path) as conn:
+        conn.executescript(
+            """
+            CREATE TABLE schema_meta (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
+            INSERT INTO schema_meta(key, value) VALUES('schema_version', '1');
+            CREATE TABLE assets (
+                path TEXT PRIMARY KEY,
+                series TEXT NOT NULL,
+                model TEXT NOT NULL,
+                model_directory_name TEXT NOT NULL,
+                model_directory_path TEXT NOT NULL,
+                firmware_type TEXT NOT NULL,
+                firmware_label TEXT NOT NULL,
+                flash_mode TEXT NOT NULL,
+                version TEXT NOT NULL,
+                directory_name TEXT NOT NULL,
+                files_json TEXT NOT NULL,
+                modified_time REAL NOT NULL,
+                scanned_at REAL NOT NULL,
+                tool_name TEXT NOT NULL,
+                tool_path TEXT NOT NULL,
+                tool_dir TEXT NOT NULL,
+                label TEXT NOT NULL
+            );
+            """
+        )
+
+    init_asset_index(db_path)
+
+    assert schema_version(db_path) == SCHEMA_VERSION
+    with sqlite3.connect(db_path) as conn:
+        columns = [row[1] for row in conn.execute("PRAGMA table_info(assets)").fetchall()]
+    assert "usb_flow" in columns

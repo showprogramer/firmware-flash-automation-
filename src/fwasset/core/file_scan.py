@@ -140,6 +140,7 @@ def scan_firmware_assets(root: str, catalog_path: str | Path | None = None) -> t
                 "firmware_type": cfg["key"],
                 "firmware_label": cfg["label"],
                 "flash_mode": cfg["flash_mode"],
+                "usb_flow": cfg.get("usb_flow", ""),
                 "model": model,
                 "version": version,
                 "model_directory_name": model_directory.name,

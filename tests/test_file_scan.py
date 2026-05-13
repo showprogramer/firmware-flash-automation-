@@ -206,6 +206,7 @@ def test_scan_firmware_assets_uses_catalog_types(tmp_path: Path):
     assert assets[0]["series"] == "L35"
     assert assets[0]["model_directory_name"] == "L35A手控UI"
     assert assets[0]["flash_mode"] == "auto_usb"
+    assert assets[0]["usb_flow"] == "paired_files"
     assert assets[1]["firmware_label"] == "语音程序"
     assert "tool_dir" in assets[1]
 

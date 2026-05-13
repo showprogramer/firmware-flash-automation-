@@ -914,6 +914,17 @@ class FirmwareListPanel(BaseFlashPanel):
         pkg_file = next((name for name in asset.get("files", []) if name.lower().endswith(".pkg")), "")
         return rom_file, pkg_file
 
+    def _asset_usb_flow(self, asset: FirmwareAsset) -> str:
+        configured = str(asset.get("usb_flow", "") or "")
+        if configured:
+            return configured
+        firmware_type = str(asset.get("firmware_type", "") or "")
+        if firmware_type in {"handcontrol_ui", "segmented_screen"}:
+            return "paired_files"
+        if firmware_type == "music_bt":
+            return "directory_copy"
+        return ""
+
     def _reset_ops_body(self):
         if self.serial_control is not None:
             self.serial_control.deactivate()
@@ -1218,8 +1229,13 @@ class FirmwareListPanel(BaseFlashPanel):
     def _build_auto_usb_ops(self, asset: FirmwareAsset):
         self._build_usb_selector_row(self.ops_body)
         self._refresh_usb()
+        usb_flow = self._asset_usb_flow(asset)
+        if usb_flow == "directory_copy":
+            self._build_directory_copy_usb_ops(asset)
+            return
+
         rom_file, pkg_file = self._asset_rom_pkg_files(asset)
-        if rom_file and pkg_file:
+        if usb_flow == "paired_files" and rom_file and pkg_file:
             ctk.CTkButton(
                 self.ops_body,
                 text="一键智能刷机",
@@ -1249,6 +1265,32 @@ class FirmwareListPanel(BaseFlashPanel):
                 ).pack(fill="x", padx=20, pady=3)
             return
 
+        if usb_flow == "paired_files":
+            missing = []
+            if not rom_file:
+                missing.append("ROM")
+            if not pkg_file:
+                missing.append("PKG")
+            ctk.CTkLabel(
+                self.ops_body,
+                text=f"当前手控资源缺少 {' / '.join(missing)} 文件，无法执行手控刷机。",
+                wraplength=360,
+                justify="left",
+                font=(FONT_FAMILY, FONT_SIZE_MD),
+                text_color=TEXT_SECONDARY,
+            ).pack(anchor="w", padx=20, pady=(16, 12))
+            return
+
+        ctk.CTkLabel(
+            self.ops_body,
+            text="当前 USB 流程未配置，无法确定刷写方式。",
+            wraplength=360,
+            justify="left",
+            font=(FONT_FAMILY, FONT_SIZE_MD),
+            text_color=TEXT_SECONDARY,
+        ).pack(anchor="w", padx=20, pady=(16, 12))
+
+    def _build_directory_copy_usb_ops(self, asset: FirmwareAsset):
         self.format_first = self._make_bool_var(True)
         self.eject_after = self._make_bool_var(True)
         options_row = ctk.CTkFrame(self.ops_body, fg_color="transparent")

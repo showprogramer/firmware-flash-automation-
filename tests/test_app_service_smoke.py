@@ -594,6 +594,54 @@ def test_directory_flash_runs_music_service(monkeypatch):
     assert called["music"] is True
 
 
+def test_auto_usb_paired_handcontrol_missing_pair_never_falls_back_to_directory(monkeypatch):
+    panel = _mk_asset_stub(monkeypatch)
+    panel._build_usb_selector_row = lambda *_args, **_kwargs: None
+    panel._refresh_usb = lambda: None
+    directory_calls = []
+    labels = []
+    panel._build_directory_copy_usb_ops = lambda _asset: directory_calls.append("directory")
+
+    def fake_label(*args, **kwargs):
+        labels.append(str(kwargs.get("text", "")))
+        return FakeWidget(*args, **kwargs)
+
+    monkeypatch.setattr(ctk, "CTkLabel", fake_label)
+
+    panel._build_auto_usb_ops(
+        {
+            "firmware_type": "handcontrol_ui",
+            "firmware_label": "手控UI",
+            "flash_mode": "auto_usb",
+            "usb_flow": "paired_files",
+            "files": ["only.rom"],
+        }
+    )
+
+    assert directory_calls == []
+    assert any("缺少 PKG" in text for text in labels)
+
+
+def test_auto_usb_directory_copy_flow_renders_directory_ops(monkeypatch):
+    panel = _mk_asset_stub(monkeypatch)
+    panel._build_usb_selector_row = lambda *_args, **_kwargs: None
+    panel._refresh_usb = lambda: None
+    directory_calls = []
+    panel._build_directory_copy_usb_ops = lambda asset: directory_calls.append(asset["firmware_type"])
+
+    panel._build_auto_usb_ops(
+        {
+            "firmware_type": "music_bt",
+            "firmware_label": "蓝牙程序",
+            "flash_mode": "auto_usb",
+            "usb_flow": "directory_copy",
+            "files": ["song.mp3"],
+        }
+    )
+
+    assert directory_calls == ["music_bt"]
+
+
 def test_copy_handoff_paths_to_clipboard(monkeypatch):
     panel = _mk_asset_stub(monkeypatch)
     panel._selected_idx = 0

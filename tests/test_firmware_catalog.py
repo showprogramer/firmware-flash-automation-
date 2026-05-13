@@ -21,6 +21,7 @@ label = "手控UI"
 dir_keywords = ["手控", "手控器"]
 file_extensions = [".ROM", ".PKG"]
 flash_mode = "auto_usb"
+usb_flow = "paired_files"
 tool_name = "手控流程"
 tool_path = ""
 enabled = true
@@ -33,6 +34,7 @@ enabled = true
     assert result["ok"] is True
     assert result["status"] == "ok"
     assert result["firmware_types"][0]["file_extensions"] == [".rom", ".pkg"]
+    assert result["firmware_types"][0]["usb_flow"] == "paired_files"
     assert result["firmware_types"][0]["tool_dir"] == ""
 
 
@@ -62,6 +64,14 @@ def test_default_catalog_contains_19_types():
     assert len(rows) == 19
     assert "handcontrol_ui" in [item["key"] for item in rows]
     assert "aging" in [item["key"] for item in rows]
+
+
+def test_default_catalog_assigns_explicit_usb_flows():
+    rows = {item["key"]: item for item in enabled_firmware_types()}
+
+    assert rows["handcontrol_ui"]["usb_flow"] == "paired_files"
+    assert rows["segmented_screen"]["usb_flow"] == "paired_files"
+    assert rows["music_bt"]["usb_flow"] == "directory_copy"
 
 
 def test_default_catalog_contains_expanded_real_world_keywords():

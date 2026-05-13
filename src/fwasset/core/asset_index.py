@@ -11,7 +11,7 @@ from fwasset.core.sort_config import SortKey, apply_sort
 from fwasset.core.types import FirmwareAsset
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 HiddenItemType = Literal["model_directory", "firmware_type", "asset"]
 
 
@@ -56,6 +56,7 @@ def init_asset_index(path: str | Path | None = None) -> None:
                     firmware_type TEXT NOT NULL,
                     firmware_label TEXT NOT NULL,
                     flash_mode TEXT NOT NULL,
+                    usb_flow TEXT NOT NULL DEFAULT '',
                     version TEXT NOT NULL,
                     directory_name TEXT NOT NULL,
                     files_json TEXT NOT NULL,
@@ -88,7 +89,15 @@ def init_asset_index(path: str | Path | None = None) -> None:
                     (str(SCHEMA_VERSION),),
                 )
                 return
-            if int(current["value"]) != SCHEMA_VERSION:
+            current_version = int(current["value"])
+            if current_version == 1 and SCHEMA_VERSION == 2:
+                conn.execute("ALTER TABLE assets ADD COLUMN usb_flow TEXT NOT NULL DEFAULT ''")
+                conn.execute(
+                    "UPDATE schema_meta SET value = ? WHERE key = 'schema_version'",
+                    (str(SCHEMA_VERSION),),
+                )
+                return
+            if current_version != SCHEMA_VERSION:
                 raise AssetIndexError(
                     f"本地资产索引版本不兼容：当前 {current['value']}，需要 {SCHEMA_VERSION}。请重新扫描生成。"
                 )
@@ -118,12 +127,12 @@ def save_assets(
             """
             INSERT INTO assets (
                 path, series, model, model_directory_name, model_directory_path,
-                firmware_type, firmware_label, flash_mode, version, directory_name,
+                firmware_type, firmware_label, flash_mode, usb_flow, version, directory_name,
                 files_json, modified_time, scanned_at, tool_name, tool_path, tool_dir, label
             )
             VALUES (
                 :path, :series, :model, :model_directory_name, :model_directory_path,
-                :firmware_type, :firmware_label, :flash_mode, :version, :directory_name,
+                :firmware_type, :firmware_label, :flash_mode, :usb_flow, :version, :directory_name,
                 :files_json, :modified_time, :scanned_at, :tool_name, :tool_path, :tool_dir, :label
             )
             """,
@@ -313,6 +322,7 @@ def _asset_to_row(asset: FirmwareAsset, scanned_at: float) -> dict[str, object]:
         "firmware_type": str(asset.get("firmware_type", "")),
         "firmware_label": str(asset.get("firmware_label", "")),
         "flash_mode": str(asset.get("flash_mode", "")),
+        "usb_flow": str(asset.get("usb_flow", "")),
         "version": str(asset.get("version", "")),
         "directory_name": str(asset.get("directory_name", "")),
         "files_json": json.dumps(list(asset.get("files", [])), ensure_ascii=False),
@@ -337,6 +347,7 @@ def _row_to_asset(row: sqlite3.Row) -> FirmwareAsset:
         "firmware_type": str(row["firmware_type"]),  # type: ignore[typeddict-item]
         "firmware_label": str(row["firmware_label"]),
         "flash_mode": str(row["flash_mode"]),  # type: ignore[typeddict-item]
+        "usb_flow": str(row["usb_flow"]),  # type: ignore[typeddict-item]
         "model": str(row["model"]),
         "version": str(row["version"]),
         "model_directory_name": str(row["model_directory_name"]),
