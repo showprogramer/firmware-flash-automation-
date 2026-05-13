@@ -21,6 +21,12 @@
 - `.gitignore` 补齐 `.runtime/`、`dist/`、`build/`、临时 `*.spec` 与异常 `tool-resultsdirs_4deep.txt` 类文件规则，同时保留已跟踪的 `fwasset.spec`。
 - `config.toml` / `settings.py` 的 `version_patterns` 新增 `_(\\d+_\\d+(?:_\\d+)?)$` 和 `(?<![0-9A-Za-z])(\\d+\\.\\d+\\.\\d+(?:_\\d+)?)(?![0-9A-Za-z])` 模式，覆盖下划线子版本和无前缀三段式版本号。
 
+### refactor
+- 新增 `AssetSelectionModel`，把资源列表当前选中项、隐藏条目缓存和隐藏判定从 `FirmwareListPanel` 拆出；面板保留兼容属性（`_selected_idx` / `_hidden_items` property），现有 UI 与 smoke test 构造方式不变。
+
+### refactor
+- 新增 `AssetSelectionModel`，把资源列表当前选中项、隐藏条目缓存和隐藏判定从 `FirmwareListPanel` 拆出；面板保留兼容属性（`_selected_idx` / `_hidden_items` property），现有 UI 与 smoke test 构造方式不变。
+
 ### test
 - 新增 `tests/test_asset_selection_model.py`，覆盖选中索引收敛、选中资源读取、刷写模式读取、隐藏条目与隐藏类型判定。
 - 新增 `tests/test_asset_tree_view.py`，锁定资源树叶子行不再重复展示型号目录和固件类型；扩展 catalog、扫描、索引与 UI smoke tests，覆盖 `usb_flow` 归一化、v1→v2 索引迁移、手控缺 ROM/PKG 时不回退目录刷机、蓝牙目录刷机仍可用；本轮验证通过：`uv run python -m pytest tests\test_asset_index.py tests\test_firmware_catalog.py tests\test_file_scan.py tests\test_app_service_smoke.py -q --no-cov` -> `76 passed`，`.\scripts\test.ps1` -> `162 passed`，总覆盖率 `82.64%`。
@@ -40,7 +46,6 @@
 - 新增 `specs/bug_plan5-8.md`，记录 YJ-按摩椅程序汇总目录深度分析中发现的 7 个缺陷及修复方案。
 
 ### app
-- 新增 `AssetSelectionModel`，把资源列表当前选中项、隐藏条目缓存和隐藏判定从 `FirmwareListPanel` 拆出；面板保留兼容属性，现有 UI 与 smoke test 构造方式不变。
 - 资源树表收敛重复信息：型号目录只保留在树层级中，叶子行移除重复的型号目录与固件类型列，明细列聚焦程序目录和版本。
 - `auto_usb` 操作区改为按 `usb_flow` 显式分流：手控/断码屏仅允许成对 ROM+PKG 文件刷机，缺文件时提示不可执行；音乐蓝牙继续保留目录复制刷机。
 - 新增 `AssetFilterModel`，将固件资源列表的查询筛选、排序键解析、树形分组和可见叶子计算从 `FirmwareListPanel` 拆出，降低列表面板的职责集中度。
