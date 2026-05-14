@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### fixed
+- 修复手控 UI 扫描在混合型号父目录下的归属与型号识别：手控目录名包含明确型号时优先使用目录型号，避免 ROM 文件名中的历史型号覆盖实际目录型号；实际验证 `L26A手控葡文（凡强）` / `L50S手控葡文（凡强）` 可识别为 `L26A` / `L50S`，版本仍从 ROM 文件名提取。
+
+### app
+- 精简固件资源树层级：移除型号目录层和“几个版本”分组层，系列下直接显示型号行；程序目录和版本继续保留在表格列中，降低重复信息干扰。
+
+### test
+- 新增手控 UI 混合型号目录回归测试、目录型号优先级测试，以及资源树去冗余展示测试；本轮验证通过 `uv run python -m pytest tests\test_file_scan.py tests\test_asset_filter_model.py tests\test_asset_tree_view.py tests\test_tree_expansion_model.py tests\test_app_service_smoke.py tests\test_asset_index.py tests\test_scan_service.py -q --no-cov` -> `78 passed`，`.\scripts\test.ps1` -> `177 passed`，总覆盖率 `84.26%`。
+
 ### refactor
 - 移除已废弃的蓝牙串口控制链路：删除 `auto_serial` 操作面板、`SerialControl` UI、串口/AT 服务、`pyserial` 依赖和对应测试；蓝牙固件统一通过外部工具烧录。
 - 新增 `src/fwasset/core/asset_helpers.py`，将 `FirmwareListPanel` 中与 UI 无关的纯逻辑方法提取为独立可测试函数：`asset_usb_flow()`、`asset_rom_pkg_files()`、`asset_dir_path()`、`asset_primary_file_path()`；`AutoUsbPanel` 改为直接调用 `asset_helpers` 函数而非通过 `panel_host` 间接访问。

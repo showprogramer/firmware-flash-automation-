@@ -238,6 +238,50 @@ def test_scan_firmware_assets_uses_expanded_catalog_keywords_and_excludes(tmp_pa
     assert all(Path(item["model_directory_path"]).name == "L36配置" for item in assets)
 
 
+def test_scan_uses_nearest_model_directory_inside_mixed_parent(tmp_path: Path):
+    bundle = tmp_path / "L26AmaxL50S葡萄牙"
+    l26_dir = bundle / "L26A手控葡文"
+    l50_dir = bundle / "L50S手控葡文"
+    l26_dir.mkdir(parents=True)
+    l50_dir.mkdir(parents=True)
+    (l26_dir / "ITE_NOR.ROM").write_text("rom", encoding="utf-8")
+    (l26_dir / "ITEPKG03.PKG").write_text("pkg", encoding="utf-8")
+    (l50_dir / "ITE_NOR.ROM").write_text("rom", encoding="utf-8")
+    (l50_dir / "ITEPKG03.PKG").write_text("pkg", encoding="utf-8")
+
+    assets, errors = scan_firmware_assets(str(tmp_path))
+
+    assert errors == []
+    assert len(assets) == 2
+    by_model = {item["model"]: item for item in assets}
+    assert by_model["L26A"]["model_directory_name"] == l26_dir.name
+    assert by_model["L26A"]["directory_name"] == l26_dir.name
+    assert by_model["L50S"]["model_directory_name"] == l50_dir.name
+    assert by_model["L50S"]["directory_name"] == l50_dir.name
+    assert bundle.name not in {item["model_directory_name"] for item in assets}
+
+
+def test_handcontrol_scan_prefers_model_from_handcontrol_directory_when_rom_differs(tmp_path: Path):
+    bundle = tmp_path / "L26Amax-L50S-portugal"
+    l26_dir = bundle / "L26A-handcontrol-portuguese"
+    l50_dir = bundle / "L50S-handcontrol-portuguese"
+    l26_dir.mkdir(parents=True)
+    l50_dir.mkdir(parents=True)
+    (l26_dir / "ITE_NOR_yj_Smassage_2d_L39_v111.3.5.ROM").write_text("rom", encoding="utf-8")
+    (l26_dir / "ITEPKG03.PKG").write_text("pkg", encoding="utf-8")
+    (l50_dir / "ITE_NOR_yj_Smassage_L50_4d_music_108.3.3.ROM").write_text("rom", encoding="utf-8")
+    (l50_dir / "ITEPKG03.PKG").write_text("pkg", encoding="utf-8")
+
+    assets, errors = scan_firmware_assets(str(tmp_path))
+
+    assert errors == []
+    by_dir = {Path(item["path"]).name: item for item in assets}
+    assert by_dir[l26_dir.name]["model"] == "L26A"
+    assert by_dir[l26_dir.name]["version"] == "V111.3.5"
+    assert by_dir[l50_dir.name]["model"] == "L50S"
+    assert by_dir[l50_dir.name]["version"] == "V108.3.3"
+
+
 def test_segmented_screen_before_handcontrol_ui_in_catalog(tmp_path: Path):
     """P0-3: '断码屏' directory with ROM+PKG should match segmented_screen, not handcontrol_ui."""
     seg_dir = tmp_path / "L39MAX" / "断码屏亚克力手控"

@@ -90,14 +90,55 @@ def guess_series_from_model_or_path(model: str, dirpath: str) -> str:
     return "未知系列"
 
 
-def _model_directory_for_asset(root_path: Path, folder_path: Path) -> Path:
+def _model_token(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", str(value or "").lower())
+
+
+def _is_known_model(model: str) -> bool:
+    token = _model_token(model)
+    return bool(re.search(r"(?:[a-z]+\d|\d+[a-z])", token))
+
+
+def _part_contains_model(part: str, model: str) -> bool:
+    model_token = _model_token(model)
+    if not model_token:
+        return False
+    return model_token in _model_token(part)
+
+
+def _model_directory_for_asset(root_path: Path, folder_path: Path, model: str = "", firmware_type: str = "") -> Path:
     try:
         relative_parts = folder_path.relative_to(root_path).parts
+        base_path = root_path
     except ValueError:
         relative_parts = folder_path.parts
+        base_path = Path(folder_path.anchor)
     if not relative_parts:
         return folder_path
+    if _is_known_model(model):
+        candidate = base_path
+        matches: list[Path] = []
+        for part in relative_parts:
+            candidate = Path(candidate) / part
+            if _part_contains_model(part, model):
+                matches.append(candidate)
+        if matches:
+            if firmware_type == "handcontrol_ui":
+                return matches[-1]
+            return matches[0]
+        if firmware_type == "handcontrol_ui":
+            return folder_path
+        return root_path / relative_parts[0]
     return root_path / relative_parts[0]
+
+
+def _prefer_handcontrol_directory_model(folder_path: Path, model: str) -> str:
+    path_model = guess_model_from_path(str(folder_path))
+    if not _is_known_model(path_model):
+        return model
+    if not _is_known_model(model) or _part_contains_model(folder_path.name, path_model):
+        return path_model
+    return model
 
 
 def scan_firmware_assets(root: str, catalog_path: str | Path | None = None) -> tuple[list[FirmwareAsset], list[str]]:
@@ -129,8 +170,10 @@ def scan_firmware_assets(root: str, catalog_path: str | Path | None = None) -> t
             continue
 
         folder_path = Path(dirpath)
-        model_directory = _model_directory_for_asset(root_path, folder_path)
         model, version = _extract_model_version(dirpath, filenames)
+        if str(cfg["key"]) == "handcontrol_ui":
+            model = _prefer_handcontrol_directory_model(folder_path, model)
+        model_directory = _model_directory_for_asset(root_path, folder_path, model, str(cfg["key"]))
         series = guess_series_from_model_or_path(model, str(model_directory))
         files = sorted(filenames)
         label = f"{model}  {version or '-'}  [{folder_path.name}]  {cfg['label']}"

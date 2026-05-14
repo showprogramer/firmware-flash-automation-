@@ -45,7 +45,7 @@ class TreeExpansionModel:
         hidden_items: dict[str, str],
         is_hidden,
     ) -> None:
-        """Expand series, model, and type nodes for the given assets.
+        """Expand series nodes for the given assets.
 
         Only expands when the expanded set is currently empty and assets exist.
         """
@@ -54,11 +54,3 @@ class TreeExpansionModel:
         groups = filter_model.build_tree_groups(assets, hidden_items=hidden_items, is_hidden=is_hidden)
         for series_node in groups:
             self._expanded.add(filter_model.tree_key("series", series_node["series"]))
-            for model_node in series_node["models"]:
-                self._expanded.add(
-                    filter_model.tree_key("model", series_node["series"], model_node["path"])
-                )
-                for type_node in model_node["types"]:
-                    self._expanded.add(
-                        filter_model.tree_key("type", model_node["path"], type_node["firmware_type"])
-                    )

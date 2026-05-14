@@ -1,3 +1,4 @@
+from fwasset.ui.view_models.asset_filter_model import AssetFilterModel
 from fwasset.ui.view_models.tree_expansion_model import TreeExpansionModel
 
 
@@ -35,3 +36,25 @@ def test_tree_expansion_model_mark_closed_idempotent():
     model = TreeExpansionModel()
     model.mark_closed("nonexistent")
     assert model.expanded == set()
+
+
+def test_expand_all_default_only_expands_visible_series_nodes():
+    model = TreeExpansionModel()
+    filter_model = AssetFilterModel()
+    assets = [
+        {
+            "series": "L36",
+            "model": "L36",
+            "version": "V1.0.0",
+            "path": "D:/root/L36-config/mainboard/V1",
+            "directory_name": "V1",
+            "model_directory_name": "L36-config",
+            "model_directory_path": "D:/root/L36-config",
+            "firmware_type": "mainboard",
+            "firmware_label": "Mainboard",
+        }
+    ]
+
+    model.expand_all_default(assets, filter_model, {}, lambda _asset: False)
+
+    assert model.expanded == {"series|L36"}

@@ -83,5 +83,7 @@ def test_build_tree_groups_and_visible_indices():
     assert groups[0]["models"][0]["types"][0]["key"] == "type|D:/root/L36配置|mainboard"
     assert groups[0]["models"][0]["types"][0]["version_count"] == 2
 
-    expanded = {"series|L36", "model|L36|D:/root/L36配置", "type|D:/root/L36配置|mainboard"}
+    expanded = {
+        "series|L36",
+    }
     assert model.visible_tree_asset_indices(groups, expanded) == [0, 1]

@@ -92,8 +92,10 @@ def test_populate_keeps_leaf_columns_compact_without_redundant_model_or_type():
         -1,
     )
 
-    type_row = next(row for row in view.tree.rows if row["text"] == "1 个版本")
+    assert all(row["text"] != assets[0]["model_directory_name"] for row in view.tree.rows)
     asset_row = next(row for row in view.tree.rows if row["text"] == "L36")
+    series_row = next(row for row in view.tree.rows if row["text"].startswith("L36  ("))
 
-    assert type_row["values"] == ("", "")
+    assert len(view.tree.rows) == 2
+    assert asset_row["parent"] == series_row["iid"]
     assert asset_row["values"] == ("V1", "V1.0.0")

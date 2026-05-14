@@ -54,7 +54,7 @@ class AssetTreeView:
             selectmode="browse",
             style="Asset.Treeview",
         )
-        self.tree.heading("#0", text="系列 / 型号 / 程序", anchor="w")
+        self.tree.heading("#0", text="系列 / 型号", anchor="w")
         self.tree.heading("program_dir", text="程序目录", anchor="w")
         self.tree.heading("version", text="版本", anchor="w")
         self.tree.column("#0", width=320, minwidth=220, stretch=True)
@@ -138,33 +138,7 @@ class AssetTreeView:
                 open_node=series_key in expanded_keys,
             )
             for model_node in series_node["models"]:
-                model_key = str(model_node["key"])
-                model_iid = self._iid(model_key)
-                tags = ("group", "hidden") if model_node.get("hidden") else ("group",)
-                self._insert_node(
-                    series_iid,
-                    model_iid,
-                    model_key,
-                    text=str(model_node["name"]),
-                    values=("", ""),
-                    open_node=model_key in expanded_keys,
-                    context=(str(model_node.get("path", "")), "model_directory"),
-                    tags=tags,
-                )
                 for type_node in model_node["types"]:
-                    type_key = str(type_node["key"])
-                    type_iid = self._iid(type_key)
-                    tags = ("group", "hidden") if type_node.get("hidden") else ("group",)
-                    self._insert_node(
-                        model_iid,
-                        type_iid,
-                        type_key,
-                        text=f"{type_node['version_count']} 个版本",
-                        values=("", ""),
-                        open_node=type_key in expanded_keys,
-                        context=(str(type_node.get("hide_path", "")), "firmware_type"),
-                        tags=tags,
-                    )
                     for idx in type_node["asset_indices"]:
                         asset = assets[idx]
                         asset_iid = self._iid(f"asset|{idx}|{asset.get('path', '')}")
@@ -173,7 +147,7 @@ class AssetTreeView:
                         tags = ("hidden",) if idx in hidden_indices else ()
                         self._context_by_iid[asset_iid] = (str(asset.get("path", "") or ""), "asset")
                         self.tree.insert(
-                            type_iid,
+                            series_iid,
                             "end",
                             iid=asset_iid,
                             text=str(asset.get("model", "") or asset.get("directory_name", "") or "-"),

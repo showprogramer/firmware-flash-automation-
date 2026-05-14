@@ -113,11 +113,8 @@ class AssetFilterModel:
             if str(series_node["key"]) not in expanded_keys:
                 continue
             for model_node in series_node["models"]:
-                if str(model_node["key"]) not in expanded_keys:
-                    continue
                 for type_node in model_node["types"]:
-                    if str(type_node["key"]) in expanded_keys:
-                        visible.extend(type_node["asset_indices"])
+                    visible.extend(type_node["asset_indices"])
         return visible
 
     def common_asset_path(self, assets: list[FirmwareAsset], indices: list[int]) -> str:
