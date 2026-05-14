@@ -106,7 +106,9 @@ class BaseFlashPanel(ctk.CTkFrame):
         return row
 
     def _log(self, message: str):
-        if hasattr(self, "log_text"):
+        if hasattr(self, "log_panel") and self.log_panel is not None:
+            self.log_panel.write(message or "")
+        elif hasattr(self, "log_text"):
             self.log_text.insert("end", f"[{Path(__file__).name}] {message or ''}\n")
             self.log_text.see("end")
         self._file_logger.log(message or "")

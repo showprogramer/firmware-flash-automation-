@@ -351,3 +351,47 @@ def test_version_extracted_from_space_separated_rom(tmp_path: Path):
     assert len(assets) == 1
     assert assets[0]["model"] == "L36"
     assert assets[0]["version"] == "V120.3.1", f"Expected V120.3.1, got '{assets[0]['version']}'"
+
+
+def test_scan_with_cancel_event(tmp_path: Path):
+    """Scanning with cancel_event already set should return empty results with a cancellation error."""
+    hand_dir = tmp_path / "L36" / "手控"
+    hand_dir.mkdir(parents=True)
+    (hand_dir / "ITE_NOR.ROM").write_text("rom", encoding="utf-8")
+    (hand_dir / "ITEPKG03.PKG").write_text("pkg", encoding="utf-8")
+
+    import threading
+    cancel_event = threading.Event()
+    cancel_event.set()
+
+    assets, errors = scan_firmware_assets(str(tmp_path), cancel_event=cancel_event)
+
+    assert len(assets) == 0
+    assert any("取消" in e for e in errors)
+
+
+def test_scan_with_last_scan_at_skips_unchanged(tmp_path: Path):
+    """Directories unchanged since last_scan_at should be skipped."""
+    model_dir = tmp_path / "L36" / "主板程序"
+    model_dir.mkdir(parents=True)
+    (model_dir / "main.bin").write_text("firmware", encoding="utf-8")
+
+    import time
+    future_time = time.time() + 10000
+
+    assets, errors = scan_firmware_assets(str(tmp_path), last_scan_at=future_time)
+    assert len(assets) == 0
+
+    past_time = time.time() - 10000
+    assets_past, errors_past = scan_firmware_assets(str(tmp_path), last_scan_at=past_time)
+    assert len(assets_past) == 1
+
+
+def test_scan_without_last_scan_at_finds_all(tmp_path: Path):
+    """Without last_scan_at, all directories are scanned."""
+    model_dir = tmp_path / "L36" / "主板程序"
+    model_dir.mkdir(parents=True)
+    (model_dir / "main.bin").write_text("firmware", encoding="utf-8")
+
+    assets, errors = scan_firmware_assets(str(tmp_path))
+    assert len(assets) == 1

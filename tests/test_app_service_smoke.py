@@ -1,4 +1,5 @@
 import queue
+import threading
 from pathlib import Path
 
 import customtkinter as ctk
@@ -168,7 +169,6 @@ def _mk_asset_stub(monkeypatch):
     panel.type_quick_var = FakeVar("全部类型")
     panel._type_label_to_key = {"手控UI": "handcontrol_ui", "蓝牙程序": "music_bt", "音乐文件": "music_files", "主板程序": "mainboard"}
     panel.assets = []
-    panel.folders = []
     panel._has_index_assets = False
     panel._selected_idx = -1
     panel._task_queue = queue.Queue()
@@ -176,8 +176,7 @@ def _mk_asset_stub(monkeypatch):
     panel._polling_active = False
     panel._tree_expansion = TreeExpansionModel()
     panel._hidden_items = {}
-    panel._log_collapsed = True
-    panel._status_hint_text = "Select a firmware version"
+    panel._scan_cancel_event = None
     panel.list_scroll = FakeWidget()
     panel.asset_tree = FakeAssetTree(
         on_select_asset=lambda idx: panel._select_asset(idx),
@@ -185,20 +184,29 @@ def _mk_asset_stub(monkeypatch):
         on_context_menu=lambda event, path, hide_type: panel._show_hidden_context_menu(event, path, hide_type),
     )
     panel._empty_list_hint = None
-    panel.sidebar_status_label = FakeWidget(text="")
     panel.ops_body = FakeWidget()
     panel.usb_menu = FakeWidget()
-    panel.log_text = FakeText()
+    panel.header_bar = FakeWidget()
+    panel.header_bar.update_from_asset_calls = []
+    _orig_update = lambda asset=None: None
+
+    def _header_update(asset=None):
+        panel.header_bar.update_from_asset_calls.append(asset or {})
+    panel.header_bar.update_from_asset = _header_update
+    panel.header_bar.clear = lambda: None
+    panel.detail_panel = FakeWidget()
+    panel.detail_panel.update_from_asset_calls = []
+
+    def _detail_update(asset=None):
+        panel.detail_panel.update_from_asset_calls.append(asset or {})
+    panel.detail_panel.update_from_asset = _detail_update
+    panel.detail_panel.clear = lambda: None
+    panel.detail_panel.grid_forget = lambda: None
+    panel.log_panel = FakeWidget()
+    panel.log_panel.write = lambda msg: None
     panel.after = lambda _ms, _fn: None
     panel._asset_card_widgets = []
-    panel.header_model_label = FakeWidget(text="-")
-    panel.header_version_badge = FakeWidget(text="-")
-    panel.header_type_badge = FakeWidget(text="未选择")
-    panel.detail_values = {
-        key: FakeWidget(text="-")
-        for key in ["series", "model", "version", "firmware_type", "flash_mode", "directory_name", "path", "files", "modified_time"]
-    }
-    panel._log = lambda msg: panel.log_text.insert("end", str(msg))
+    panel._log = lambda msg: None
     panel._render_operation_panel = lambda asset: None
 
     return panel
@@ -294,6 +302,51 @@ def test_choose_root_and_scan_always_opens_directory_picker(monkeypatch):
     assert called["scan"] == 1
 
 
+def test_scan_button_click_cancels_running_scan_without_directory_picker(monkeypatch):
+    panel = _mk_asset_stub(monkeypatch)
+    panel._scan_cancel_event = threading.Event()
+    called = {"scan": 0}
+    monkeypatch.setattr(
+        "fwasset.ui.firmware_list_panel.filedialog.askdirectory",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("directory picker should not open")),
+    )
+
+    def fake_scan():
+        called["scan"] += 1
+        panel._scan_cancel_event.set()
+
+    panel._scan = fake_scan
+
+    panel._on_scan_button_click()
+
+    assert called["scan"] == 1
+    assert panel._scan_cancel_event.is_set()
+
+
+def test_scan_worker_uses_original_cancel_event_after_panel_state_changes(monkeypatch):
+    panel = _mk_asset_stub(monkeypatch)
+    panel.scan_btn = FakeWidget(text="scan")
+    seen = {}
+
+    def fake_build_scan_result(root, log_fn, cancel_event):
+        seen["cancel_event"] = cancel_event
+        return {"ok": True, "payload": {"assets": []}}
+
+    def fake_run_task(_name, work_fn, done_fn):
+        original_event = panel._scan_cancel_event
+        panel._scan_cancel_event = None
+        result = work_fn(panel._log)
+        done_fn(result)
+        seen["original_event"] = original_event
+
+    monkeypatch.setattr("fwasset.ui.firmware_list_panel.build_scan_result", fake_build_scan_result)
+    panel._run_task = fake_run_task
+
+    panel._scan()
+
+    assert seen["cancel_event"] is seen["original_event"]
+
+
 def test_single_type_filter_and_clear_keep_type_selection_explicit(monkeypatch):
     panel = _mk_asset_stub(monkeypatch)
     panel.type_filter_vars["mainboard"] = FakeVar(False)
@@ -372,10 +425,10 @@ def test_asset_select_updates_detail_panel(monkeypatch):
 
     panel._select_asset(0)
 
-    assert panel.header_model_label.text == "L36"
-    assert panel.detail_values["series"].text == "-"
-    assert panel.detail_values["firmware_type"].text == "手控UI"
-    assert panel.header_type_badge.text == "手控UI"
+    last_asset = panel.header_bar.update_from_asset_calls[-1]
+    assert last_asset.get("model") == "L36"
+    assert panel.detail_panel.update_from_asset_calls[-1].get("firmware_label") == "手控UI"
+    assert last_asset.get("firmware_label") == "手控UI"
 
 
 def test_asset_select_does_not_rebuild_full_card_list(monkeypatch):
@@ -384,7 +437,7 @@ def test_asset_select_does_not_rebuild_full_card_list(monkeypatch):
         {"model": "L36", "version": "V1.0.0", "path": "D:/a", "directory_name": "a", "firmware_type": "handcontrol_ui", "firmware_label": "手控UI", "flash_mode": "auto_usb", "files": ["ui.rom", "ui.pkg"], "modified_time": 0},
         {"model": "L50S", "version": "V2.0.0", "path": "D:/b", "directory_name": "b", "firmware_type": "music_files", "firmware_label": "音乐文件", "flash_mode": "auto_usb", "files": ["song.mp3"], "modified_time": 0},
     ]
-    panel._render_asset_cards()
+    panel._render_asset_tree()
     original_populate_count = len(panel.asset_tree.populate_calls)
 
     panel._select_asset(1)
@@ -398,7 +451,7 @@ def test_asset_double_click_opens_selected_folder(monkeypatch):
     panel.assets = [
         {"model": "L36", "version": "V1.0.0", "path": "D:/a", "directory_name": "a", "firmware_type": "handcontrol_ui", "firmware_label": "手控UI", "flash_mode": "auto_usb", "files": ["ui.rom", "ui.pkg"], "modified_time": 0}
     ]
-    panel._render_asset_cards()
+    panel._render_asset_tree()
     opened = []
     monkeypatch.setattr("fwasset.ui.firmware_list_panel.Path.exists", lambda _self: True)
     monkeypatch.setattr("fwasset.ui.firmware_list_panel.os.startfile", lambda path: opened.append(path), raising=False)

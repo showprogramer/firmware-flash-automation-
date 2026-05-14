@@ -141,11 +141,22 @@ def _prefer_handcontrol_directory_model(folder_path: Path, model: str) -> str:
     return model
 
 
-def scan_firmware_assets(root: str, catalog_path: str | Path | None = None) -> tuple[list[FirmwareAsset], list[str]]:
+def scan_firmware_assets(
+    root: str,
+    catalog_path: str | Path | None = None,
+    last_scan_at: float | None = None,
+    cancel_event: "threading.Event | None" = None,
+) -> tuple[list[FirmwareAsset], list[str]]:
     """
     Scan root using catalog-configured directory keywords and file extensions.
     Returns recognized assets plus explicit directory read errors.
+
+    If last_scan_at is provided, directories whose mtime is older than
+    last_scan_at will be skipped (incremental mode).
+    If cancel_event is provided, scanning can be interrupted by setting the event.
     """
+    import threading
+
     root_path = Path(root)
     if not root_path.exists():
         raise FileNotFoundError(f"扫描根目录不存在: {root}")
@@ -163,6 +174,18 @@ def scan_firmware_assets(root: str, catalog_path: str | Path | None = None) -> t
             errors.append(str(exc))
 
     for dirpath, _, filenames in os.walk(root_path, onerror=_on_walk_error):
+        if cancel_event is not None and cancel_event.is_set():
+            errors.append("扫描已被用户取消")
+            break
+
+        if last_scan_at is not None and dirpath != str(root_path):
+            try:
+                dir_mtime = Path(dirpath).stat().st_mtime
+                if dir_mtime < last_scan_at:
+                    continue
+            except OSError:
+                pass
+
         if _is_excluded_dir(dirpath):
             continue
         cfg = _match_catalog_type(dirpath, filenames, type_configs)

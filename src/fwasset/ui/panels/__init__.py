@@ -1,0 +1,1 @@
+"""UI panels extracted from FirmwareListPanel for separation of concerns."""

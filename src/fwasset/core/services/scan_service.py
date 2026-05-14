@@ -1,11 +1,29 @@
+import threading
+
 from fwasset.core.asset_index import AssetIndexError, count_assets, load_scan_meta, save_assets
 from fwasset.core.file_scan import find_handcontrol_folders, scan_firmware_assets
 
 
-def build_scan_result(root: str, log_fn=print) -> dict:
+def build_scan_result(
+    root: str,
+    log_fn=print,
+    cancel_event: threading.Event | None = None,
+) -> dict:
     try:
         log_fn(f"扫描中: {root}")
-        assets, errors = scan_firmware_assets(root)
+        assets, errors = scan_firmware_assets(
+            root,
+            cancel_event=cancel_event,
+        )
+
+        if cancel_event is not None and cancel_event.is_set():
+            return {
+                "ok": True,
+                "code": "cancelled",
+                "message": "扫描已被用户取消",
+                "payload": {"assets": [], "folders": [], "errors": errors},
+            }
+
         folders = find_handcontrol_folders(root)
         save_assets(assets, root)
         message = "扫描完成"
