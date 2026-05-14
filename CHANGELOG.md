@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### refactor
+- 移除已废弃的蓝牙串口控制链路：删除 `auto_serial` 操作面板、`SerialControl` UI、串口/AT 服务、`pyserial` 依赖和对应测试；蓝牙固件统一通过外部工具烧录。
 - 新增 `src/fwasset/core/asset_helpers.py`，将 `FirmwareListPanel` 中与 UI 无关的纯逻辑方法提取为独立可测试函数：`asset_usb_flow()`、`asset_rom_pkg_files()`、`asset_dir_path()`、`asset_primary_file_path()`；`AutoUsbPanel` 改为直接调用 `asset_helpers` 函数而非通过 `panel_host` 间接访问。
 - 新增 `src/fwasset/ui/operation_panels/host_types.py`，定义 `PanelHost` Protocol，规范操作面板与宿主面板之间的接口契约（`usb_drive`、`_build_usb_selector_row`、`_refresh_usb`、`_run_task`、`_selected_asset`、`_open_current_asset_dir`、`_copy_asset_dir_path`、`_copy_primary_file_path`、`_launch_tool_and_open_asset_dir`），为后续解耦测试和 Mock 提供类型基础。
 - 提取 `_make_bool_var()` 为 `src/fwasset/ui/shared_widgets.make_bool_var()` 公共组件，`FirmwareListPanel` 和 `AutoUsbPanel` 统一委托到该函数。
@@ -14,12 +15,14 @@
 - `operation_panels/__init__.py` 导出 `PanelHost`。
 
 ### test
+- 更新 catalog、扫描、UI smoke 和操作面板测试，锁定蓝牙走 `tool_launch`、音乐文件才走 `directory_copy`，并移除串口控制相关测试。
+- 本轮验证通过：`uv run python -m pytest tests/test_asset_helpers.py tests/test_firmware_catalog.py tests/test_file_scan.py tests/test_settings.py tests/test_operation_panels.py tests/test_app_service_smoke.py -q --no-cov` -> `99 passed`；`.\scripts\test.ps1` -> `174 passed`，总覆盖率 `84.05%`。
 - 新增 `tests/test_asset_helpers.py`（12 个测试），覆盖 `asset_usb_flow`、`asset_rom_pkg_files`、`asset_dir_path`、`asset_primary_file_path` 的推断、回退和空值场景。
 - 新增 `tests/test_tree_expansion_model.py`（5 个测试），覆盖 `TreeExpansionModel` 的初始状态、标记开关、切换和幂等关闭。
 
 - 新增 `src/fwasset/ui/operation_panels/` 包，将 `FirmwareListPanel` 的 `_render_operation_panel` if/elif 链和各 `_build_*_ops` 方法拆分为独立的 Panel 类，通过注册表机制按 `flash_mode` 查找，消除每新增一种烧录方式就必须修改 FirmwareListPanel 的问题。
   - `BaseOperationPanel` 基类定义 `build()` 接口，各 Panel 通过 `panel_host` 访问 FirmwareListPanel 的方法。
-  - `AutoUsbPanel`（auto_usb）、`AutoSerialPanel`（auto_serial）、`ToolLaunchPanel`（tool_launch）、`ManualDocPanel`（manual_doc）、`DisabledPanel`（disabled/兜底）各自独立文件。
+  - `AutoUsbPanel`（auto_usb）、`ToolLaunchPanel`（tool_launch）、`ManualDocPanel`（manual_doc）、`DisabledPanel`（disabled/兜底）各自独立文件。
   - `shared_actions.py` 提取 `build_handoff_actions` 等共享操作为独立函数。
   - `FirmwareListPanel._render_operation_panel()` 简化为注册表查找 + `PanelClass(...).build()`。
   - 从 FirmwareListPanel 移除已迁移的方法：`_build_auto_usb_ops`、`_build_directory_copy_usb_ops`、`_build_tool_launch_ops`、`_build_manual_doc_ops`、`_build_disabled_ops`、`_build_handoff_actions`、`_show_manual_doc`、`_launch_current_tool`、`_clean_usb`、`_format_usb`、`_copy_to_usb`、`_eject_usb`、`_one_click_handcontrol`、`_run_directory_flash`。
@@ -27,8 +30,9 @@
   - 清理 FirmwareListPanel 不再直接依赖的导入（`load_firmware_catalog`、`discover_tool_path`、`launch_tool`、`run_one_click`、`run_music_flash`、`clean_usb`、`copy_to_usb`、`eject_usb`、`format_usb`、`SerialControl`）。
 
 ### core
+- catalog 将蓝牙程序 `music_bt` 改为 `tool_launch`，新增 `music_files` 类型承载音乐文件目录复制；`asset_flash_mode()` 对旧缓存中的蓝牙 `auto_usb` 记录强制归一为 `tool_launch`。
 - 资产索引 schema 升级到 v2，新增 `usb_flow` 持久化字段，并支持旧 v1 索引自动迁移，避免本地缓存因字段新增直接失效。
-- firmware catalog 新增显式 `usb_flow`：手控/断码屏走 `paired_files`，音乐蓝牙走 `directory_copy`，不再让 UI 依赖文件组合猜测刷机流程。
+- firmware catalog 新增显式 `usb_flow`：手控/断码屏走 `paired_files`，音乐文件走 `directory_copy`，不再让 UI 依赖文件组合猜测刷机流程。
 - `query_assets()` 支持 `sort_key` / `ascending` 参数，并复用现有自然排序规则，供 UI 将关键词、类型筛选和排序统一下推到 SQLite 查询入口。
 - `build_cached_scan_result()` 启动缓存读取改为只读取资产数量与扫描元数据，不再启动时全量加载资产列表。
 - 新增统一运行时目录解析：开发模式默认写入 `.runtime/`，打包模式默认写入 exe 同级 `runtime/`，并支持 `FWASSET_RUNTIME_DIR` 覆盖。
@@ -53,7 +57,7 @@
 
 ### test
 - 新增 `tests/test_asset_selection_model.py`，覆盖选中索引收敛、选中资源读取、刷写模式读取、隐藏条目与隐藏类型判定。
-- 新增 `tests/test_asset_tree_view.py`，锁定资源树叶子行不再重复展示型号目录和固件类型；扩展 catalog、扫描、索引与 UI smoke tests，覆盖 `usb_flow` 归一化、v1→v2 索引迁移、手控缺 ROM/PKG 时不回退目录刷机、蓝牙目录刷机仍可用；本轮验证通过：`uv run python -m pytest tests\test_asset_index.py tests\test_firmware_catalog.py tests\test_file_scan.py tests\test_app_service_smoke.py -q --no-cov` -> `76 passed`，`.\scripts\test.ps1` -> `162 passed`，总覆盖率 `82.64%`。
+- 新增 `tests/test_asset_tree_view.py`，锁定资源树叶子行不再重复展示型号目录和固件类型；扩展 catalog、扫描、索引与 UI smoke tests，覆盖 `usb_flow` 归一化、v1→v2 索引迁移、手控缺 ROM/PKG 时不回退目录刷机、音乐文件目录刷机可用；本轮验证通过：`uv run python -m pytest tests\test_asset_index.py tests\test_firmware_catalog.py tests\test_file_scan.py tests\test_app_service_smoke.py -q --no-cov` -> `76 passed`，`.\scripts\test.ps1` -> `162 passed`，总覆盖率 `82.64%`。
 - 新增 `tests/test_asset_filter_model.py`，覆盖 `AssetFilterModel` 的排序键映射、SQLite 查询委托、隐藏过滤、树形分组和可见叶子计算；本轮验证通过：`uv run python -m pytest tests\test_asset_filter_model.py tests\test_app_service_smoke.py -q --no-cov` -> `24 passed`，`uv run python -m pytest tests\test_asset_index.py tests\test_scan_service.py -q --no-cov` -> `10 passed`，`.\scripts\test.ps1` -> `157 passed`，总覆盖率 `82.45%`。
 - 扩展 `tests/test_asset_index.py`、`tests/test_scan_service.py` 和 `tests/test_app_service_smoke.py`，覆盖 SQLite 查询排序、缓存计数读取以及 UI 筛选调用 `query_assets()` 的路径；本轮验证通过：`uv run python -m pytest tests\test_asset_index.py tests\test_scan_service.py tests\test_app_service_smoke.py -q --no-cov` -> `31 passed`，`uv run python -m pytest tests\test_src_layout.py tests\test_settings.py -q --no-cov` -> `18 passed`，`.\scripts\test.ps1` -> `154 passed`，总覆盖率 `82.45%`。
 - 更新快速定位测试，直接验证 `FirmwareListPanel` 正式类方法，不再依赖 `app.py` 运行时 monkey patch。
@@ -70,8 +74,9 @@
 - 新增 `specs/bug_plan5-8.md`，记录 YJ-按摩椅程序汇总目录深度分析中发现的 7 个缺陷及修复方案。
 
 ### app
+- 蓝牙程序不再进入 USB 目录复制或串口发送/AT 修改流程；选中蓝牙资产时只展示外部工具启动操作，目录复制仅保留给音乐文件。
 - 资源树表收敛重复信息：型号目录只保留在树层级中，叶子行移除重复的型号目录与固件类型列，明细列聚焦程序目录和版本。
-- `auto_usb` 操作区改为按 `usb_flow` 显式分流：手控/断码屏仅允许成对 ROM+PKG 文件刷机，缺文件时提示不可执行；音乐蓝牙继续保留目录复制刷机。
+- `auto_usb` 操作区改为按 `usb_flow` 显式分流：手控/断码屏仅允许成对 ROM+PKG 文件刷机，缺文件时提示不可执行；音乐文件继续保留目录复制刷机。
 - 新增 `AssetFilterModel`，将固件资源列表的查询筛选、排序键解析、树形分组和可见叶子计算从 `FirmwareListPanel` 拆出，降低列表面板的职责集中度。
 - 固件资源列表筛选改为调用 SQLite `query_assets()`，移除 `_all_assets` 全量缓存；隐藏条目过滤、空状态提示和扫描后刷新行为保持不变。
 - `src/fwasset/app.py` 移除旧版 tkinter monkey patch 和未使用 service imports，收敛为 `main()` 入口、`App` 兼容导出和 `UnifiedFlashPlatform` 导出。

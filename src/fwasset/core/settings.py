@@ -100,15 +100,6 @@ _DEFAULTS = {
     "music": {
         "default_source_dir": "",
     },
-    "serial": {
-        "default_baudrate": 115200,
-        "at_presets": [
-            "AT+NM=Premium XZ8",
-            "AT+MP=8888",
-            "AT+FUN=PIN=EN",
-            "AT+BD=38400",
-        ],
-    },
 }
 
 
@@ -260,12 +251,4 @@ SCAN_PATH_VERSION_PATTERNS = _as_str_list(
 MUSIC_DEFAULT_SOURCE_DIR = _resolve_path(
     _cfg_get(_cfg, "music", "default_source_dir", _DEFAULTS["music"]["default_source_dir"]),
     _DEFAULTS["music"]["default_source_dir"],
-)
-SERIAL_DEFAULT_BAUDRATE = max(
-    1200,
-    _as_int(_cfg_get(_cfg, "serial", "default_baudrate", _DEFAULTS["serial"]["default_baudrate"]), 115200),
-)
-SERIAL_AT_PRESETS = _as_str_list(
-    _cfg_get(_cfg, "serial", "at_presets", _DEFAULTS["serial"]["at_presets"]),
-    _DEFAULTS["serial"]["at_presets"],
 )

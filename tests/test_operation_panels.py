@@ -10,7 +10,6 @@ from fwasset.ui.operation_panels.disabled_panel import DisabledPanel
 from fwasset.ui.operation_panels.manual_doc_panel import ManualDocPanel
 from fwasset.ui.operation_panels.tool_launch_panel import ToolLaunchPanel
 from fwasset.ui.operation_panels.auto_usb_panel import AutoUsbPanel
-from fwasset.ui.operation_panels.auto_serial_panel import AutoSerialPanel
 
 
 class TestRegistry:
@@ -19,7 +18,6 @@ class TestRegistry:
     def test_registered_flash_modes(self):
         """All expected flash_modes should be registered."""
         assert get_panel("auto_usb") is AutoUsbPanel
-        assert get_panel("auto_serial") is AutoSerialPanel
         assert get_panel("tool_launch") is ToolLaunchPanel
         assert get_panel("manual_doc") is ManualDocPanel
         assert get_panel("disabled") is DisabledPanel
@@ -151,12 +149,6 @@ class TestPanelClasses:
         """AutoUsbPanel.build() should not raise."""
         assert hasattr(AutoUsbPanel, "build")
         assert issubclass(AutoUsbPanel, BaseOperationPanel)
-
-    def test_auto_serial_panel_build(self):
-        """AutoSerialPanel.build() should not raise."""
-        assert hasattr(AutoSerialPanel, "build")
-        assert issubclass(AutoSerialPanel, BaseOperationPanel)
-
 
 class _FakeBoolVar:
     def __init__(self, value=True):

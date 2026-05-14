@@ -232,6 +232,8 @@ def test_scan_firmware_assets_uses_expanded_catalog_keywords_and_excludes(tmp_pa
 
     assert errors == []
     assert [item["firmware_type"] for item in assets] == ["mainboard", "music_bt"]
+    assert assets[1]["flash_mode"] == "tool_launch"
+    assert assets[1]["usb_flow"] == ""
     assert [item["model_directory_name"] for item in assets] == ["L36配置", "L36配置"]
     assert all(Path(item["model_directory_path"]).name == "L36配置" for item in assets)
 
@@ -261,6 +263,22 @@ def test_music_bt_detects_mot_files(tmp_path: Path):
     assert errors == []
     assert len(assets) == 1
     assert assets[0]["firmware_type"] == "music_bt", f"Expected music_bt, got {assets[0]['firmware_type']}"
+    assert assets[0]["flash_mode"] == "tool_launch"
+    assert assets[0]["usb_flow"] == ""
+
+
+def test_music_files_detects_mp3_as_directory_copy_asset(tmp_path: Path):
+    music_dir = tmp_path / "L36" / "音乐文件"
+    music_dir.mkdir(parents=True)
+    (music_dir / "welcome.mp3").write_text("music", encoding="utf-8")
+
+    assets, errors = scan_firmware_assets(str(tmp_path))
+
+    assert errors == []
+    assert len(assets) == 1
+    assert assets[0]["firmware_type"] == "music_files"
+    assert assets[0]["flash_mode"] == "auto_usb"
+    assert assets[0]["usb_flow"] == "directory_copy"
 
 
 def test_movement_3d_detects_mot_files(tmp_path: Path):

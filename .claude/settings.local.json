@@ -8,7 +8,16 @@
       "Bash(cd:*)",
       "Bash(git config:*)",
       "Bash(netstat:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(uv run:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "WebFetch(domain:skillsmp.com)",
+      "WebSearch",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(mkdir:*)",
+      "Bash(curl:*)",
+      "Bash(which gh:*)"
     ]
   }
 }

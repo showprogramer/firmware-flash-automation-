@@ -5,6 +5,7 @@ FirmwareType = Literal[
     "mainboard",
     "handcontrol_ui",
     "music_bt",
+    "music_files",
     "voice",
     "shortcut_key",
     "movement_3d",
@@ -22,7 +23,7 @@ FirmwareType = Literal[
     "aging",
     "segmented_screen",
 ]
-FlashMode = Literal["auto_usb", "auto_serial", "tool_launch", "manual_doc", "disabled"]
+FlashMode = Literal["auto_usb", "tool_launch", "manual_doc", "disabled"]
 UsbFlow = Literal["paired_files", "directory_copy", ""]
 
 

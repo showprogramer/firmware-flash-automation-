@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from fwasset.core.asset_helpers import asset_dir_path, asset_primary_file_path, asset_rom_pkg_files, asset_usb_flow
+from fwasset.core.asset_helpers import asset_dir_path, asset_flash_mode, asset_primary_file_path, asset_rom_pkg_files, asset_usb_flow
 
 
 def _asset(**overrides) -> dict:
@@ -38,7 +38,16 @@ def test_asset_usb_flow_infer_paired_files_from_type():
 
 
 def test_asset_usb_flow_infer_directory_copy_from_music():
-    assert asset_usb_flow(_asset(firmware_type="music_bt", usb_flow="")) == "directory_copy"
+    assert asset_usb_flow(_asset(firmware_type="music_files", usb_flow="")) == "directory_copy"
+
+
+def test_asset_usb_flow_never_uses_directory_copy_for_bluetooth():
+    assert asset_usb_flow(_asset(firmware_type="music_bt", usb_flow="directory_copy")) == ""
+
+
+def test_asset_flash_mode_forces_bluetooth_to_tool_launch():
+    assert asset_flash_mode(_asset(firmware_type="music_bt", flash_mode="auto_usb")) == "tool_launch"
+    assert asset_flash_mode(_asset(firmware_type="music_files", flash_mode="auto_usb")) == "auto_usb"
 
 
 def test_asset_usb_flow_returns_empty_for_unknown():

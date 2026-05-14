@@ -5,14 +5,23 @@ from pathlib import Path
 from fwasset.core.types import FirmwareAsset
 
 
+def asset_flash_mode(asset: FirmwareAsset) -> str:
+    firmware_type = str(asset.get("firmware_type", "") or "")
+    if firmware_type == "music_bt":
+        return "tool_launch"
+    return str(asset.get("flash_mode", "") or "")
+
+
 def asset_usb_flow(asset: FirmwareAsset) -> str:
+    firmware_type = str(asset.get("firmware_type", "") or "")
+    if firmware_type == "music_bt":
+        return ""
     configured = str(asset.get("usb_flow", "") or "")
     if configured:
         return configured
-    firmware_type = str(asset.get("firmware_type", "") or "")
     if firmware_type in {"handcontrol_ui", "segmented_screen"}:
         return "paired_files"
-    if firmware_type == "music_bt":
+    if firmware_type == "music_files":
         return "directory_copy"
     return ""
 

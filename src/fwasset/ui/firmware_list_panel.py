@@ -8,7 +8,7 @@ from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
 
-from fwasset.core.asset_helpers import asset_dir_path, asset_primary_file_path, asset_rom_pkg_files, asset_usb_flow
+from fwasset.core.asset_helpers import asset_dir_path, asset_flash_mode, asset_primary_file_path, asset_rom_pkg_files, asset_usb_flow
 from fwasset.core.asset_index import AssetIndexError, hide_item, load_hidden_items, unhide_item
 from fwasset.core.firmware_catalog import enabled_firmware_types
 from fwasset.ui.tool_center_panel import ToolCenterPanel
@@ -125,13 +125,9 @@ class FirmwareListPanel(BaseFlashPanel):
 
     def activate(self):
         super().activate()
-        if hasattr(self, "serial_control") and self.serial_control is not None and self._selected_flash_mode() == "auto_serial":
-            self.serial_control.activate()
 
     def deactivate(self):
         super().deactivate()
-        if hasattr(self, "serial_control") and self.serial_control is not None:
-            self.serial_control.deactivate()
 
     def _build_sidebar(self):
         sidebar = self._build_sidebar_frame(width=760)
@@ -319,7 +315,6 @@ class FirmwareListPanel(BaseFlashPanel):
         section_title(self.ops_card, "操作区")
         self.ops_body = ctk.CTkFrame(self.ops_card, fg_color="transparent")
         self.ops_body.pack(fill="both", expand=True, padx=0, pady=(0, 10))
-        self.serial_control = None
         self._render_operation_panel(None)
 
         panel = ctk.CTkFrame(main, corner_radius=12, fg_color=BG_CARD)
@@ -898,7 +893,10 @@ class FirmwareListPanel(BaseFlashPanel):
         return selected
 
     def _selected_flash_mode(self) -> str:
-        return self._selection_model().selected_flash_mode(self.assets)
+        selected = self._selection_model().selected_asset(self.assets)
+        if selected is None:
+            return ""
+        return asset_flash_mode(selected)
 
     def _asset_rom_pkg_files(self, asset: FirmwareAsset) -> tuple[str, str]:
         return asset_rom_pkg_files(asset)
@@ -907,10 +905,6 @@ class FirmwareListPanel(BaseFlashPanel):
         return asset_usb_flow(asset)
 
     def _reset_ops_body(self):
-        if self.serial_control is not None:
-            self.serial_control.deactivate()
-            self.serial_control.destroy()
-            self.serial_control = None
         for widget in self.ops_body.winfo_children():
             widget.destroy()
 
@@ -926,7 +920,7 @@ class FirmwareListPanel(BaseFlashPanel):
             return
 
         self._render_selected_detail_summary(asset)
-        flash_mode = str(asset.get("flash_mode", ""))
+        flash_mode = asset_flash_mode(asset)
         PanelClass = get_panel(flash_mode) or DisabledPanel
         panel = PanelClass(self.ops_body, asset=asset, log_fn=self._log, panel_host=self)
         panel.build()
@@ -936,7 +930,7 @@ class FirmwareListPanel(BaseFlashPanel):
         summary = ctk.CTkFrame(self.ops_body, fg_color="transparent")
         summary.pack(fill="x", padx=20, pady=(12, 12))
         fields = [
-            ("方式", str(asset.get("flash_mode", "") or "-")),
+            ("方式", asset_flash_mode(asset) or "-"),
             ("目录", str(asset.get("path", "") or "-")),
             ("文件", ", ".join(str(name) for name in asset.get("files", [])[:4]) or "-"),
         ]

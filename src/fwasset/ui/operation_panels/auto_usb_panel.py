@@ -119,7 +119,7 @@ class AutoUsbPanel(BaseOperationPanel):
         ).pack(fill="x", padx=20, pady=(8, 12))
         ctk.CTkLabel(
             self,
-            text="该资源按目录复制到 U 盘，适用于音乐/蓝牙类资源。",
+            text="该资源按目录复制到 U 盘，仅适用于音乐文件资源。",
             wraplength=360,
             justify="left",
             font=(FONT_FAMILY, FONT_SIZE_SM),

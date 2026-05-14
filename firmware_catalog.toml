@@ -36,11 +36,22 @@ enabled = true
 [[firmware_types]]
 key = "music_bt"
 label = "蓝牙程序"
-dir_keywords = ["蓝牙", "蓝牙板", "蓝牙版", "蓝牙程序", "蓝牙—语音", "三合一蓝牙版", "音乐"]
+dir_keywords = ["蓝牙", "蓝牙板", "蓝牙版", "蓝牙程序", "蓝牙—语音", "三合一蓝牙版"]
 file_extensions = [".bin", ".hex", ".mp3", ".mot"]
+flash_mode = "tool_launch"
+tool_name = "蓝牙烧录工具"
+tool_path = ""
+tool_dir = "蓝牙程序"
+enabled = true
+
+[[firmware_types]]
+key = "music_files"
+label = "音乐文件"
+dir_keywords = ["音乐", "音乐文件", "音乐目录", "MP3", "mp3"]
+file_extensions = [".mp3", ".wav", ".wma"]
 flash_mode = "auto_usb"
 usb_flow = "directory_copy"
-tool_name = "蓝牙烧录流程"
+tool_name = "音乐文件复制流程"
 tool_path = ""
 tool_dir = ""
 enabled = true

@@ -58,11 +58,12 @@ enabled = false
     assert [item["key"] for item in rows] == ["handcontrol_ui"]
 
 
-def test_default_catalog_contains_19_types():
+def test_default_catalog_contains_20_types():
     rows = enabled_firmware_types()
 
-    assert len(rows) == 19
+    assert len(rows) == 20
     assert "handcontrol_ui" in [item["key"] for item in rows]
+    assert "music_files" in [item["key"] for item in rows]
     assert "aging" in [item["key"] for item in rows]
 
 
@@ -71,7 +72,10 @@ def test_default_catalog_assigns_explicit_usb_flows():
 
     assert rows["handcontrol_ui"]["usb_flow"] == "paired_files"
     assert rows["segmented_screen"]["usb_flow"] == "paired_files"
-    assert rows["music_bt"]["usb_flow"] == "directory_copy"
+    assert rows["music_bt"]["flash_mode"] == "tool_launch"
+    assert rows["music_bt"]["usb_flow"] == ""
+    assert rows["music_files"]["flash_mode"] == "auto_usb"
+    assert rows["music_files"]["usb_flow"] == "directory_copy"
 
 
 def test_default_catalog_contains_expanded_real_world_keywords():
