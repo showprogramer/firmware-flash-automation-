@@ -407,3 +407,12 @@ for cfg in type_configs:
 - 已修复取消事件竞态：后台扫描任务固定捕获本次扫描创建的 `cancel_event`，不再从可变面板属性读取。
 - 暂不启用 `scan_meta.last_scan_at` 下推：当前索引保存仍是全表替换，增量跳过会造成未变化资产丢失；后续若要做 mtime 增量扫描，必须先实现旧索引与本次变更结果的合并策略。
 - 验证：`uv run python -m pytest tests\test_file_scan.py tests\test_scan_service.py tests\test_app_service_smoke.py -q --no-cov`，66 passed。
+
+---
+
+## 2026-05-16 更新记录：Issue 1 扫描状态模型拆分
+
+- Issue 1 继续推进：新增 `ScanStateModel`，将扫描开始、取消请求、完成清理从 `FirmwareListPanel` 中提取为可单测的 ViewModel。
+- `FirmwareListPanel` 仍保留 `_scan_cancel_event` 兼容层，当前测试和潜在外部调用无需同步大改；后续可在确认无依赖后删除兼容属性。
+- Issue 3 已完成的扫描取消链路保持不变：扫描中再次点击按钮触发取消，不打开目录选择器；后台任务继续捕获本次扫描创建的 `cancel_event`。
+- 当前自动化验证：`uv run python -m pytest tests\test_scan_state_model.py tests\test_app_service_smoke.py -q --no-cov`，22 passed。

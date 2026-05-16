@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### refactor
+- 提取扫描状态管理为 `ScanStateModel`，将扫描开始、取消请求、完成清理从 `FirmwareListPanel` 中拆出，并保留 `_scan_cancel_event` 兼容层以降低既有调用影响。
+
+### test
+- 新增 `tests/test_scan_state_model.py`，覆盖扫描生命周期、重复开始、取消请求和旧任务完成隔离；本轮验证通过 `.\scripts\test.ps1` -> `188 passed`，总覆盖率 `84.45%`。
+
 ### fixed
 - 修复扫描中点击“取消扫描”仍弹出目录选择器的问题；扫描按钮现在按状态分流，运行中只触发现有扫描任务取消。
 - 修复扫描取消事件通过可变面板属性传入后台任务的竞态；后台任务固定捕获本次扫描创建的 `cancel_event`。

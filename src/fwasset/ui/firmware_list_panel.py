@@ -38,6 +38,7 @@ from fwasset.ui.panels.log_panel import LogPanel
 from fwasset.ui.shared_widgets import section_title, make_bool_var
 from fwasset.ui.view_models.asset_filter_model import AssetFilterModel
 from fwasset.ui.view_models.asset_selection_model import AssetSelectionModel
+from fwasset.ui.view_models.scan_state_model import ScanStateModel
 from fwasset.ui.view_models.tree_expansion_model import TreeExpansionModel
 
 
@@ -64,7 +65,7 @@ class FirmwareListPanel(BaseFlashPanel):
         self.asset_selection_model = AssetSelectionModel()
         self.asset_tree: AssetTreeView | None = None
         self._tree_expansion = TreeExpansionModel()
-        self._scan_cancel_event: threading.Event | None = None
+        self.scan_state_model = ScanStateModel()
 
         self.grid_columnconfigure(0, weight=8, minsize=760)
         self.grid_columnconfigure(1, weight=0, minsize=320)
@@ -99,6 +100,21 @@ class FirmwareListPanel(BaseFlashPanel):
 
     def _make_bool_var(self, value: bool):
         return make_bool_var(self, value)
+
+    def _scan_state(self) -> ScanStateModel:
+        model = getattr(self, "scan_state_model", None)
+        if model is None:
+            model = ScanStateModel()
+            self.scan_state_model = model
+        return model
+
+    @property
+    def _scan_cancel_event(self) -> threading.Event | None:
+        return self._scan_state().cancel_event
+
+    @_scan_cancel_event.setter
+    def _scan_cancel_event(self, event: threading.Event | None) -> None:
+        self._scan_state().replace(event)
 
     def activate(self):
         super().activate()
@@ -300,7 +316,7 @@ class FirmwareListPanel(BaseFlashPanel):
         self._scan()
 
     def _on_scan_button_click(self):
-        if self._scan_cancel_event is not None:
+        if self._scan_state().is_scanning:
             self._scan()
             return
         self._choose_root_and_scan()
@@ -310,8 +326,9 @@ class FirmwareListPanel(BaseFlashPanel):
             self.scan_btn.configure(text="取消中...", state="disabled")
 
     def _scan(self):
-        if self._scan_cancel_event is not None:
-            self._scan_cancel_event.set()
+        scan_state = self._scan_state()
+        if scan_state.is_scanning:
+            scan_state.request_cancel()
             self._set_scan_button_cancelling()
             return
 
@@ -320,8 +337,7 @@ class FirmwareListPanel(BaseFlashPanel):
             messagebox.showwarning("提示", "请先选择程序根目录")
             return
 
-        cancel_event = threading.Event()
-        self._scan_cancel_event = cancel_event
+        cancel_event = scan_state.begin()
         if hasattr(self, 'scan_btn') and self.scan_btn:
             self.scan_btn.configure(state="normal")
             self.scan_btn.configure(text="取消扫描")
@@ -330,8 +346,7 @@ class FirmwareListPanel(BaseFlashPanel):
             return build_scan_result(root, log_fn=log_fn, cancel_event=cancel_event)
 
         def _done(result):
-            if self._scan_cancel_event is cancel_event:
-                self._scan_cancel_event = None
+            scan_state.finish(cancel_event)
             if hasattr(self, 'scan_btn') and self.scan_btn:
                 self.scan_btn.configure(state="normal")
                 self.scan_btn.configure(text="扫描根目录")
