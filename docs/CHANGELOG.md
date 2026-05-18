@@ -6,7 +6,11 @@
 - 新增 `SidebarPanel`，将左侧搜索、类型快速筛选、排序、隐藏开关、扫描按钮和 `AssetTreeView` 装配从 `FirmwareListPanel` 中拆出；`FirmwareListPanel._build_sidebar()` 保留兼容属性并只负责创建和路由侧边栏。
 
 ### docs
-- 补充 `AGENTS.md` 的人工验证、`docs/CHANGELOG.md`、`docs/code-review/` 与 `docs/migrations/` 使用规则；新增迁移记录，明确文档目录迁移后的维护位置。
+- 统一文档命名规范：code-review 文件重命名为 `REVIEW-YYYYMMDD-short-name.md`，migration note 迁移到 `docs/migrations/MIGRATION-YYYYMMDD-short-name.md`，task 文件迁移到 `specs/active/TASK-YYYYMMDD-short-name.md`。
+- 重写 `AGENTS.md`：修正测试路径、补充编码风格（TypedDict 契约、ServiceResult 返回规范、Panel 注册表、Design tokens）、review 触发时机、文档命名规范表。
+- 修正 `pyproject.toml` 的 `testpaths` 从 `tests` 改为 `src/fwasset/tests`，匹配 src layout 实际位置。
+- 移动 `COMMIT_TEMPLATE.md` → `docs/COMMIT_TEMPLATE.md`；移动 `tests/` → `src/fwasset/tests/`。
+- 清理过时文档：删除 `specs/requirements-spec.md`、`specs/src-layout-migration/`、重复的 `code-review-2026-04-17.md`、`code-review-20260514-01.md`、`code-review-20260514-02.md`。
 
 ### test
 - 新增 `tests/test_sidebar_panel.py`，覆盖侧边栏扫描按钮和资源树回调契约；本轮验证通过 `uv run python -m pytest tests\test_sidebar_panel.py tests\test_app_service_smoke.py tests\test_operation_panels.py -q --no-cov` -> `31 passed`，`.\scripts\test.ps1` -> `189 passed`，总覆盖率 `84.45%`。
