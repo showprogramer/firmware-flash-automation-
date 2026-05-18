@@ -6,7 +6,7 @@
 - 新增 `SidebarPanel`，将左侧搜索、类型快速筛选、排序、隐藏开关、扫描按钮和 `AssetTreeView` 装配从 `FirmwareListPanel` 中拆出；`FirmwareListPanel._build_sidebar()` 保留兼容属性并只负责创建和路由侧边栏。
 
 ### docs
-- 补充 `AGENTS.md` 的人工验证、`docs/CHANGELOG.md`、`docs/code-review/` 与 `docs/migration note.md` 使用规则；新增迁移记录，明确文档目录迁移后的维护位置。
+- 补充 `AGENTS.md` 的人工验证、`docs/CHANGELOG.md`、`docs/code-review/` 与 `docs/migrations/` 使用规则；新增迁移记录，明确文档目录迁移后的维护位置。
 
 ### test
 - 新增 `tests/test_sidebar_panel.py`，覆盖侧边栏扫描按钮和资源树回调契约；本轮验证通过 `uv run python -m pytest tests\test_sidebar_panel.py tests\test_app_service_smoke.py tests\test_operation_panels.py -q --no-cov` -> `31 passed`，`.\scripts\test.ps1` -> `189 passed`，总覆盖率 `84.45%`。
@@ -95,10 +95,10 @@
 - `tests/test_file_scan.py` 新增 12 个边界测试用例（空格分隔 ROM 版本、`NULLLOG_FY` 后缀、`Beelogo_103.3.1`、`H530_62.3.2`、`46_002` 下划线子版本、`segmented_screen` 优先级、`.mot` 扩展名检测）。
 
 ### docs
-- `specs/fwasset_technical_plan.md` 将 Issue 1 推进到第二阶段：选中状态与隐藏判定已拆入 `AssetSelectionModel`，操作区拆分仍待继续。
-- `specs/fwasset_technical_plan.md` 将 Issue 1 第一阶段标记为已完成：筛选查询、排序和树形分组逻辑已下沉到 `AssetFilterModel`。
-- 新增 `specs/fwasset_technical_plan.md` 技术债务路线图，并将 Issue 2（SQLite 查询替换内存全量筛选）标记为已完成。
-- 新增 `specs/project-structure-cleanup-todo.md`，记录根目录清理、配置样例、入口清理、运行时数据隔离和验收测试 TODO，并在 `specs/newtasks.md` 横向任务中引用。
+- `specs/active/TASK-20260511-technical-plan.md` 将 Issue 1 推进到第二阶段：选中状态与隐藏判定已拆入 `AssetSelectionModel`，操作区拆分仍待继续。
+- `specs/active/TASK-20260511-technical-plan.md` 将 Issue 1 第一阶段标记为已完成：筛选查询、排序和树形分组逻辑已下沉到 `AssetFilterModel`。
+- 新增 `specs/active/TASK-20260511-technical-plan.md` 技术债务路线图，并将 Issue 2（SQLite 查询替换内存全量筛选）标记为已完成。
+- 新增 `specs/archive/project-structure-cleanup-todo.md`，记录根目录清理、配置样例、入口清理、运行时数据隔离和验收测试 TODO，并在 `specs/active/TASK-20260505-newtasks.md` 横向任务中引用。
 - `README.md` 补充首次运行复制 `config.example.toml`、配置 `root_dir` / `tool_root`、运行时目录与日志/索引位置说明。
 - 新增 `specs/bug_plan5-8.md`，记录 YJ-按摩椅程序汇总目录深度分析中发现的 7 个缺陷及修复方案。
 
@@ -166,7 +166,7 @@
 
 ### docs
 - 新增 `specs/l36-app-feasibility.md`，整理 L36 用户控制 App 可行性调研问题清单、供应商交付物、难度判断标准、公司资源调度和第一次会议议程。
-- 新增 `specs/newtasks.md`，把当前需求整理为分阶段 todo，并与 `requirements-spec.md`、`firmware-types-catalog.md` 对齐。
+- 新增 `specs/active/TASK-20260505-newtasks.md`，把当前需求整理为分阶段 todo，并与 `requirements-spec.md`、`firmware-types-catalog.md` 对齐。
 
 ### test
 - 新增 `tests/test_firmware_catalog.py`，覆盖 catalog 缺失、规范化与启用过滤行为。

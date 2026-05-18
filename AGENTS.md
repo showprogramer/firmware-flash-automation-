@@ -1,69 +1,103 @@
 # Repository Guidelines (项目规范)
 
-## Project Structure & Module Organization (项目结构与模块组织)
-This is a Python desktop application for managing firmware assets. Source code lives under `src/fwasset/`:
-- Core domain logic → `core/`
-- UI panels and view models → `ui/`
+## Project Structure & Module Organization
+
+Python desktop application for managing firmware assets. Source code under `src/fwasset/`:
+
+- Core domain logic → `core/` (scanner, index, types, settings, services)
+- UI panels & view models → `ui/` (shell, panels, operation_panels, view_models)
 - Console entry point → `fwasset.app:main`
+- Tests → `src/fwasset/tests/` (use `test_*.py` naming)
+- Specs & plans → `specs/` (active, decisions, archive, prompts)
+- User docs → `docs/README.md`, change history → `docs/CHANGELOG.md`
+- Runtime data → `.runtime/` (logs, indexes); **never commit** `config.toml`, `fwasset.db`, or `.runtime/`
 
-Tests live in `tests/` and follow the same feature boundaries as source modules.  
-Project notes and task plans are in `specs/`, user-facing documentation in `docs/README.md`, change history in `docs/CHANGELOG.md`, helper scripts in `scripts/`.
-Runtime files belong in `.runtime/`. **Do not commit** local databases, logs, caches, or `config.toml`.
+## Build, Test & Lint Commands
 
-## Build, Test, and Development Commands (构建、测试与开发命令)
-- `uv sync --extra dev` — Install dependencies into `.venv`
-- `uv run fwasset` — Run the desktop application
-- `uv run python -m pytest -q` — Run full test suite
-- `uv run python -m pytest tests/test_asset_index.py -q --no-cov` — Run single test file
-- `.\scripts\test.ps1` — Canonical Windows verification command
+```bash
+uv sync --extra dev                                         # Install dependencies
+uv run fwasset                                               # Run desktop application
+uv run python -m pytest -q                                   # Full test suite
+uv run python -m pytest src/fwasset/tests/test_asset_index.py -q --no-cov  # Single file
+.\scripts\test.ps1                                           # Canonical Windows verification
+```
 
-## Coding Style & Naming Conventions (编码风格与命名规范)
-- Use Python 3.8+ syntax with 4-space indentation.
-- Prefer type hints for new helper functions.
-- Keep UI orchestration separate from core logic.
-- Test files: `test_*.py`
-- View models: clear nouns (e.g. `asset_filter_model.py`)
-- Service modules: `_service.py` suffix
-- Prefer existing helpers in `fwasset.core` and `fwasset.ui` over new abstractions.
+There are **no standalone lint or type-check commands** configured (no ruff, mypy, flake8). Code style is enforced by convention and review. Run `.\scripts\test.ps1` as the canonical gate — it includes coverage >= 80%.
 
-## Testing Guidelines (测试指南)
-- Framework: pytest
-- Minimum coverage: 80% for `src/fwasset` (UI files excluded)
-- Use `@pytest.mark.ui` for display-dependent tests
-- Filter with `-m "not ui"` when needed
+## Coding Style & Conventions
 
-## Task Verification & Git Workflow (任务验证与提交流程)
-**重要规则**：当涉及以下情况时，**必须先通知我人工验证**，等待我明确回复「验证通过」或「可以提交」之后，才能执行 git commit 和更新 `docs/CHANGELOG.md`：
+### Imports & Type Hints
+- Always use `from __future__ import annotations` at the top of source files (enables `X | Y` union syntax on Python 3.8+).
+- Import order: stdlib → third-party → `fwasset.*` local modules.
+- Use `Literal` and `TypedDict` for domain contracts (`core/types.py`). Treat `FirmwareAsset`, `ServiceResult`, `FlashMode` etc. as the canonical data shapes — never add fields without updating the corresponding `TypedDict`.
+- Prefer type hints on all new helper functions and public methods.
+
+### Naming
+- Test files: `test_*.py` in `src/fwasset/tests/`
+- Service modules: `_service.py` suffix (e.g. `scan_service.py`, `flash_service.py`)
+- View models: clear nouns (e.g. `asset_filter_model.py`, `scan_state_model.py`)
+- Private helpers: underscore prefix (`_db_path`, `_build_sidebar`)
+- Constants: `UPPER_SNAKE_CASE` at module top (e.g. `SCHEMA_VERSION`, `FONT_FAMILY`)
+
+### Service Return Convention
+All service functions return a `dict` matching `ServiceResult` shape: `{"ok": bool, "code": str, "message": str, "payload": dict}`. User-facing messages are in **Chinese**. Errors use specific `code` strings (e.g. `"index_unavailable"`, `"scan_failed"`), never bare exceptions.
+
+### UI Patterns
+- **Panel registry**: Operation panels use `@register` decorator + `get_panel(flash_mode)` lookup in `ui/operation_panels/registry.py`. New flash modes only need a new panel file — do not modify `FirmwareListPanel`.
+- **Task queue**: `BaseFlashPanel._run_task()` spawns daemon threads; results are dispatched via `queue.Queue` and polled with `self.after(120, ...)`.
+- **View models**: Extract state into standalone model classes (e.g. `AssetSelectionModel`, `ScanStateModel`). Panels compose models; they do not inherit from them.
+- **Design tokens**: All colors and fonts come from `ui/design_tokens.py`. Never hard-code hex values or font sizes in panel code.
+- **Cancellation**: Use `threading.Event` objects. Create a local `cancel_event` before spawning the worker thread; the thread captures this event in a closure to avoid race conditions.
+
+### Logging & DI
+- Services accept `log_fn=print` as default — callers can inject `logger.info` or similar.
+- File logging goes through `core/logging_utils.py` with output to `.runtime/logs/app.log`.
+
+### Config & External Files
+- `config.toml` — local machine config (gitignored). Template maintained as `config.example.toml`.
+- `firmware_catalog.toml` — firmware type definitions shipped with the app.
+- Runtime directory resolved by `settings.py`: dev → `.runtime/`, frozen → exe sibling `runtime/`, overridable via `FWASSET_RUNTIME_DIR`.
+
+## Testing Conventions
+
+- Framework: pytest. Coverage gate: >= 80% for `src/fwasset` (UI files excluded via `coverage.omit`).
+- Use `@pytest.mark.ui` for display-dependent tests; filter with `-m "not ui"`.
+- Test helpers: module-level factory functions (e.g. `make_asset()`) over `conftest` fixtures for simple data.
+- Mocking: prefer `monkeypatch.setattr` with lambdas over `unittest.mock` objects.
+- Assert service results by key: `assert result["ok"] is True`, `assert result["code"] == "ok"`.
+- Error-path testing: use `pytest.raises(SomeError, match="中文消息")` to verify Chinese error messages.
+
+## Document Naming Conventions
+
+| Type | Directory | Naming | Example |
+|------|-----------|--------|---------|
+| Architecture Decision | `specs/decisions/` | `ADR-NNN-short-name.md` | `ADR-001-ui-core-separation.md` |
+| Task / Plan | `specs/active/` | `TASK-YYYYMMDD-short-name.md` | `TASK-20260505-newtasks.md` |
+| Migration Note | `docs/migrations/` | `MIGRATION-YYYYMMDD-short-name.md` | `MIGRATION-20260518-docs-consolidation.md` |
+| Code Review | `docs/code-review/` | `REVIEW-YYYYMMDD-short-name.md` | `REVIEW-20260518-sidebar-panel.md` |
+
+## Task Verification & Git Workflow
+
+**重要规则**：涉及以下改动时，**必须先通知人工验证**，等待「验证通过」后再 commit：
 
 - UI 相关改动
-- 核心业务逻辑修改
+- 核心业务逻辑修改（`core/` 公共 API、`types.py` TypedDict/Literal、服务返回结构）
 - 固件资产处理、USB 相关流程
 - 性能、安全、配置相关变更
 - 任何重构或新功能
+- 操作面板注册表或 UI 入口变更
+- 数据库 schema 迁移
 
 **流程**：
-1. 完成后明确告诉我「已完成，请人工验证」。
-2. 回复中列出已运行的自动化验证命令和结果；如果我粘贴同一组结果并说明验证通过，可视为人工验收已完成。
-3. 我验证通过并回复后，再生成 Conventional Commit 并提交。
-4. 同时补充 `docs/CHANGELOG.md`。
-5. 如果任务对应 `specs/` 中的 TODO 或技术计划，完成后同步将对应条目标记为已完成；已拆分出的 `src/fwasset/ui/panels/log_panel.py` 不得继续标记为待拆。
+1. 完成后明确告知「已完成，请人工验证」。
+2. 列出已运行的自动化验证命令和结果；人工粘贴同一组结果并确认后，可视为验收通过。
+3. 人工确认后，按 `docs/COMMIT_TEMPLATE.md` 格式生成 Conventional Commit 并提交。
+4. 同步更新 `docs/CHANGELOG.md`。
+5. 如果任务对应 `specs/active/` 中的计划，完成后将对应条目标记为已完成。
 
-## Migration Notes (迁移记录)
-Use `docs/migration note.md` for changes that future agents must understand before editing:
-- File or directory moves, especially documentation moving into `docs/` or review docs moving into `docs/code-review/`
-- Public entry point changes, config/runtime path changes, database/cache schema migrations
-- Compatibility shims, deprecated paths, or follow-up cleanup that should not be guessed from Git history alone
+## Code Review Automation
 
-Do not write migration notes for ordinary bug fixes that only change local implementation details. Keep each note short: date, reason, old path/API, new path/API, compatibility impact, verification command, and rollback or follow-up if relevant.
-
-## 代码审查文档自动化规范 (Code Review Automation)
-每当完成代码重构、修复、重大修改或审查后，请**自动**在 `docs/code-review/` 目录下创建或更新审查文档，并严格使用以下结构。
-
-### 文件命名建议
-- `code-review-YYYYMMDD-序号.md`（例如 `code-review-20260514-01.md`）
-- 或按模块：`review-core-asset-index.md`
-
-### 写作模板（必须严格遵守）
+完成代码重构、修复、重大修改后，**自动**在 `docs/code-review/` 创建 `REVIEW-YYYYMMDD-short-name.md`，严格使用以下模板：
 
 ```markdown
 ---
@@ -91,3 +125,21 @@ Do not write migration notes for ordinary bug fixes that only change local imple
 
 **相关 Commit**： [commit hash]
 ---
+```
+
+**何时触发审查**：完成以下任意场景后，主动告知用户需要 review 并写出 `REVIEW-*` 文档：
+- `core/types.py` 的 TypedDict 或 Literal 新增/修改
+- 服务层 `ServiceResult` 返回结构字段变化
+- 操作面板注册表或 UI 入口变更（`registry.py`、`shell.py`）
+- 扫描、索引、USB 操作等业务流程修改
+- 数据库 schema 迁移（`asset_index.py` SCHEMA_VERSION 变更）
+- 核心模块公共 API 签名变更
+
+## Migration Notes
+
+Use `docs/migrations/` for changes that future agents must understand before editing:
+- File or directory moves
+- Public entry point changes, config/runtime path changes, database schema migrations
+- Compatibility shims, deprecated paths, or follow-up cleanup that cannot be guessed from Git history alone
+
+Do not write migration notes for ordinary bug fixes. Keep each note short: date, reason, old path/API, new path/API, compatibility impact, verification command, and rollback if relevant.

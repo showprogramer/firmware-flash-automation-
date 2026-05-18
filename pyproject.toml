@@ -29,7 +29,7 @@ fwasset = "fwasset.app:main"
 packages = ["src/fwasset"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["src/fwasset/tests"]
 python_files = ["test_*.py"]
 pythonpath = ["src"]
 addopts = "--cov=src/fwasset --cov-report=term-missing --cov-fail-under=80"
