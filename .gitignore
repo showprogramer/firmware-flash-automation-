@@ -1,7 +1,6 @@
 # Internal docs & company-sensitive files
 massagechairproject.md
 specs/project-overview.md
-specs/code-review-*.md
 specs/archive/
 specs/ui-reactor/new_uigemini.py
 config.toml
@@ -26,6 +25,7 @@ htmlcov/
 现有摩众手控UI明细表.xlsx
 Thumbs.db
 .DS_Store
+nul
 
 # IDE
 .vscode/
@@ -37,3 +37,7 @@ dist/
 build/
 *.spec
 !fwasset.spec
+
+# Agent tooling (user-local)
+.claude/settings.local.json
+skills-lock.json
