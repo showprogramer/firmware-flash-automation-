@@ -73,13 +73,14 @@ FirmwareListPanel（只做装配和事件路由）
 - [x] `AutoUsbPanel` 改用独立函数 `asset_usb_flow`/`asset_rom_pkg_files`/`make_bool_var`，减少 `panel_host` 依赖面
 - [x] `FirmwareListPanel._asset_usb_flow` 等方法改为委托到 `asset_helpers` 模块
 - [x] 树展开状态从 `self._tree_expanded` 迁移到 `self._tree_expansion = TreeExpansionModel()`
-- [~] FirmwareListPanel 保留为装配器，筛选/排序/树分组已委托给 AssetFilterModel，选中状态与隐藏判定已委托给 AssetSelectionModel，树展开状态已委托给 TreeExpansionModel，操作面板已通过 PanelHost Protocol 解耦；详情卡和日志区仍待拆
+- [x] 新建 `src/fwasset/ui/panels/log_panel.py`，将日志区拆分为 `LogPanel`
+- [~] FirmwareListPanel 保留为装配器，筛选/排序/树分组已委托给 AssetFilterModel，选中状态与隐藏判定已委托给 AssetSelectionModel，树展开状态已委托给 TreeExpansionModel，操作面板已通过 PanelHost Protocol 解耦；日志区已拆分为 `LogPanel`
 
 **预估工作量：** 3～5 天（可分批渐进迁移，不需要一次重写）
 
 ### 当前状态
 
-第三阶段已完成。`FirmwareListPanel` 的纯业务逻辑已提取为独立可测试函数（`asset_usb_flow`、`asset_rom_pkg_files`、`asset_dir_path`、`asset_primary_file_path`）；树展开状态管理已提取为 `TreeExpansionModel`；操作面板通过 `PanelHost` Protocol 与宿主解耦，`AutoUsbPanel` 直接调用 `asset_helpers` 而非 `panel_host` 方法；`make_bool_var` 提取为公共组件。后续可继续拆分详情卡（DetailPanel）和日志区（LogPanel）。
+第三阶段已完成。`FirmwareListPanel` 的纯业务逻辑已提取为独立可测试函数（`asset_usb_flow`、`asset_rom_pkg_files`、`asset_dir_path`、`asset_primary_file_path`）；树展开状态管理已提取为 `TreeExpansionModel`；操作面板通过 `PanelHost` Protocol 与宿主解耦，`AutoUsbPanel` 直接调用 `asset_helpers` 而非 `panel_host` 方法；`make_bool_var` 提取为公共组件；日志区已拆分为 `src/fwasset/ui/panels/log_panel.py`。
 
 ---
 

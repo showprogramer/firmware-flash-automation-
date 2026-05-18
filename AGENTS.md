@@ -45,6 +45,7 @@ Runtime files belong in `.runtime/`. **Do not commit** local databases, logs, ca
 1. 完成后明确告诉我「已完成，请人工验证」。
 2. 我验证通过并回复后，再生成 Conventional Commit 并提交。
 3. 同时补充 `CHANGELOG.md`。
+4. 如果任务对应 `specs/` 中的 TODO 或技术计划，完成后同步将对应条目标记为已完成；已拆分出的 `src/fwasset/ui/panels/log_panel.py` 不得继续标记为待拆。
 
 ## 代码审查文档自动化规范 (Code Review Automation)
 每当完成代码重构、修复、重大修改或审查后，请**自动**在 `specs/` 目录下创建或更新审查文档，并严格使用以下结构。
