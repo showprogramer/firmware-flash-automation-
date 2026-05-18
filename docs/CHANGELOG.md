@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+### refactor(ui): 全面重构UI为iOS HIG风格设计系统
+
+- 重建设计Token系统：颜色切换为iOS HIG色系（BG_WINDOW/BG_SIDEBAR/COLOR_PRIMARY=#007AFF等），新增TEXT_TERTIARY、TEXT_ON_PRIMARY、SEPARATOR、COLOR_INFO语义色
+- 新增8类设计Token：间距(SPACE_XS~3XL)、圆角(RADIUS_SM~XL)、高度(HEIGHT_SM~XL)、图标(ICON_SM~XL)、布局(SIDEBAR_WIDTH/MAIN_MIN_WIDTH)、字体(FONT_SIZE_DISPLAY/XS/FONT_MONO)
+- 布局比例重构：侧边栏从weight=8/minsize=760改为weight=3/minsize=360，主内容区从weight=0/minsize=320改为weight=5/minsize=480
+- 修复7处硬编码颜色：`#E74C3C`→COLOR_DANGER、`#27AE60`→COLOR_SUCCESS、`#4B5563`→TEXT_SECONDARY、`"white"`→TEXT_ON_PRIMARY
+- 合并Treeview样式：移除无用的`Modern.Treeview`，统一为`Asset.Treeview`（rowheight 40→36，FONT_SIZE_LG→MD）
+- AssetTreeView容器从`tk.Frame`改为`ctk.CTkFrame`，统一组件体系
+- 移除DetailPanel实例化及grid_forget()死代码
+- tool_launch_panel重复按钮合并到shared_actions的include_tool_combo=True
+- 所有硬编码padding/margin/corner_radius/height替换为SPACE/RADIUS/HEIGHT Token
+- section_title降级：FONT_SIZE_LG→MD，颜色TEXT_PRIMARY→TEXT_SECONDARY
+- ops_card去掉border改为纯背景色差分层（iOS grouped风格）
+- HeaderBar badge从`"white"`→TEXT_ON_PRIMARY，类型badge默认色从TEXT_SECONDARY→TEXT_TERTIARY
+- 更新测试：移除已删除的detail_panel引用和apply_treeview_modern_style mock
+
+影响范围:
+- src/fwasset/ui/ 全部16个UI模块文件
+- src/fwasset/tests/test_app_service_smoke.py
+
+验证:
+- `uv run python -m pytest src/fwasset/tests/test_app_service_smoke.py -q --no-cov` → 17 passed
+- 人工验证通过：侧边栏比例3:5、iOS色系、间距圆角统一、无硬编码颜色
+
 ### refactor
 - 新增 `SidebarPanel`，将左侧搜索、类型快速筛选、排序、隐藏开关、扫描按钮和 `AssetTreeView` 装配从 `FirmwareListPanel` 中拆出；`FirmwareListPanel._build_sidebar()` 保留兼容属性并只负责创建和路由侧边栏。
 

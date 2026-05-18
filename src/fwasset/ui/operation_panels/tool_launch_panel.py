@@ -9,12 +9,18 @@ from fwasset.core.tool_discovery import discover_tool_path, launch_tool
 from fwasset.ui.design_tokens import (
     BG_HOVER,
     BG_INPUT,
+    COLOR_DANGER,
     COLOR_PRIMARY,
     COLOR_PRIMARY_HOVER,
     FONT_FAMILY,
     FONT_SIZE_LG,
     FONT_SIZE_MD,
     FONT_SIZE_SM,
+    HEIGHT_LG,
+    RADIUS_SM,
+    SPACE_LG,
+    SPACE_MD,
+    SPACE_SM,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
 )
@@ -32,7 +38,6 @@ class ToolLaunchPanel(BaseOperationPanel):
         tool_name = str(self.asset.get("tool_name", "")) or "烧录工具"
         tool_dir = str(self.asset.get("tool_dir", ""))
 
-        # 获取当前工具路径
         catalog = load_firmware_catalog()
         tool_path = ""
         dir_keywords: list[str] = []
@@ -43,7 +48,6 @@ class ToolLaunchPanel(BaseOperationPanel):
                 dir_keywords = item.get("dir_keywords", [])
                 break
 
-        # 如果没有配置路径，尝试自动发现
         if not tool_path:
             tool_path = discover_tool_path(
                 fw_type,
@@ -52,12 +56,10 @@ class ToolLaunchPanel(BaseOperationPanel):
                 dir_keywords=dir_keywords,
             )
 
-        # 保存工具路径到实例变量（供 _launch_current_tool 使用）
         self._current_tool_path = tool_path
 
-        # 显示当前工具信息
         info_frame = ctk.CTkFrame(self, fg_color="transparent")
-        info_frame.pack(fill="x", padx=20, pady=(16, 8))
+        info_frame.pack(fill="x", padx=SPACE_LG, pady=(SPACE_LG, SPACE_SM))
 
         ctk.CTkLabel(
             info_frame,
@@ -66,7 +68,7 @@ class ToolLaunchPanel(BaseOperationPanel):
         ).pack(anchor="w")
 
         path_text = tool_path if tool_path else "未配置工具路径"
-        path_color = TEXT_SECONDARY if tool_path else "#E74C3C"
+        path_color = TEXT_SECONDARY if tool_path else COLOR_DANGER
         self.tool_path_label = ctk.CTkLabel(
             info_frame,
             text=f"路径: {path_text}",
@@ -74,37 +76,24 @@ class ToolLaunchPanel(BaseOperationPanel):
             text_color=path_color,
             wraplength=360,
         )
-        self.tool_path_label.pack(anchor="w", pady=(4, 0))
+        self.tool_path_label.pack(anchor="w", pady=(SPACE_SM, 0))
 
-        # 按钮区域
         btn_frame = ctk.CTkFrame(self, fg_color="transparent")
-        btn_frame.pack(fill="x", padx=20, pady=(8, 12))
+        btn_frame.pack(fill="x", padx=SPACE_LG, pady=(SPACE_SM, SPACE_MD))
 
         ctk.CTkButton(
             btn_frame,
             text="打开烧录工具",
-            height=48,
-            corner_radius=8,
+            height=HEIGHT_LG,
+            corner_radius=RADIUS_SM,
             font=(FONT_FAMILY, FONT_SIZE_LG, "bold"),
             fg_color=COLOR_PRIMARY,
             hover_color=COLOR_PRIMARY_HOVER,
             state="normal" if tool_path else "disabled",
             command=self._launch_current_tool,
-        ).pack(fill="x", pady=(0, 8))
+        ).pack(fill="x", pady=(0, SPACE_SM))
 
-        build_handoff_actions(self, self.asset, self._panel_host, include_tool_combo=False)
-
-        ctk.CTkButton(
-            self,
-            text="打开工具 + 打开程序目录",
-            height=40,
-            corner_radius=8,
-            font=(FONT_FAMILY, FONT_SIZE_MD, "bold"),
-            fg_color=BG_INPUT,
-            text_color=TEXT_PRIMARY,
-            hover_color=BG_HOVER,
-            command=self._launch_tool_and_open_asset_dir,
-        ).pack(fill="x", padx=20, pady=(6, 0))
+        build_handoff_actions(self, self.asset, self._panel_host, include_tool_combo=True)
 
         if not tool_path:
             ctk.CTkLabel(
@@ -114,7 +103,7 @@ class ToolLaunchPanel(BaseOperationPanel):
                 justify="left",
                 font=(FONT_FAMILY, FONT_SIZE_SM),
                 text_color=TEXT_SECONDARY,
-            ).pack(anchor="w", padx=20, pady=(0, 12))
+            ).pack(anchor="w", padx=SPACE_LG, pady=(0, SPACE_MD))
 
     def _launch_current_tool(self):
         """启动当前选中的工具。"""

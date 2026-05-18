@@ -7,10 +7,12 @@ import customtkinter as ctk
 from fwasset.core.types import FirmwareAsset
 from fwasset.ui.design_tokens import (
     BG_CARD,
-    BORDER_COLOR,
     FONT_FAMILY,
     FONT_SIZE_MD,
     FONT_SIZE_SM,
+    RADIUS_LG,
+    SPACE_LG,
+    SPACE_SM,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
 )
@@ -34,12 +36,12 @@ class DetailPanel(ctk.CTkFrame):
 
     def __init__(self, master, **kwargs):
         fg = kwargs.pop("fg_color", BG_CARD)
-        super().__init__(master, fg_color=fg, corner_radius=12, border_width=1, border_color=BORDER_COLOR, **kwargs)
+        super().__init__(master, fg_color=fg, corner_radius=RADIUS_LG, **kwargs)
         section_title(self, "资源详情")
         self.detail_values: dict[str, ctk.CTkLabel] = {}
         for label_text, key in DETAIL_FIELDS:
             row = ctk.CTkFrame(self, fg_color="transparent")
-            row.pack(fill="x", padx=20, pady=4)
+            row.pack(fill="x", padx=SPACE_LG, pady=SPACE_SM)
             ctk.CTkLabel(
                 row,
                 text=label_text,
@@ -57,7 +59,7 @@ class DetailPanel(ctk.CTkFrame):
                 font=(FONT_FAMILY, FONT_SIZE_MD),
                 text_color=TEXT_PRIMARY,
             )
-            value.pack(side="left", fill="x", expand=True, padx=(8, 0))
+            value.pack(side="left", fill="x", expand=True, padx=(SPACE_SM, 0))
             self.detail_values[key] = value
 
     def update_from_asset(self, asset: FirmwareAsset | None) -> None:

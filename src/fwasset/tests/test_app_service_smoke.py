@@ -194,14 +194,6 @@ def _mk_asset_stub(monkeypatch):
         panel.header_bar.update_from_asset_calls.append(asset or {})
     panel.header_bar.update_from_asset = _header_update
     panel.header_bar.clear = lambda: None
-    panel.detail_panel = FakeWidget()
-    panel.detail_panel.update_from_asset_calls = []
-
-    def _detail_update(asset=None):
-        panel.detail_panel.update_from_asset_calls.append(asset or {})
-    panel.detail_panel.update_from_asset = _detail_update
-    panel.detail_panel.clear = lambda: None
-    panel.detail_panel.grid_forget = lambda: None
     panel.log_panel = FakeWidget()
     panel.log_panel.write = lambda msg: None
     panel.after = lambda _ms, _fn: None
@@ -427,7 +419,6 @@ def test_asset_select_updates_detail_panel(monkeypatch):
 
     last_asset = panel.header_bar.update_from_asset_calls[-1]
     assert last_asset.get("model") == "L36"
-    assert panel.detail_panel.update_from_asset_calls[-1].get("firmware_label") == "手控UI"
     assert last_asset.get("firmware_label") == "手控UI"
 
 
@@ -628,7 +619,6 @@ def test_shell_hosts_single_asset_panel(monkeypatch):
 
     monkeypatch.setattr(ctk, "CTk", FakeAppBase)
     monkeypatch.setattr(ctk, "CTkFrame", FakeWidget)
-    monkeypatch.setattr(shell_module, "apply_treeview_modern_style", lambda: None)
 
     class FakeAssetPanel(FakeWidget):
         def __init__(self, master):

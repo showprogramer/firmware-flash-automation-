@@ -34,12 +34,24 @@ from fwasset.ui.design_tokens import (
     BG_HOVER,
     BG_INPUT,
     BORDER_COLOR,
+    COLOR_DANGER,
     COLOR_PRIMARY,
     COLOR_PRIMARY_HOVER,
+    COLOR_SUCCESS,
     FONT_FAMILY,
     FONT_SIZE_LG,
     FONT_SIZE_MD,
     FONT_SIZE_SM,
+    HEIGHT_LG,
+    HEIGHT_MD,
+    HEIGHT_SM,
+    RADIUS_LG,
+    RADIUS_SM,
+    SPACE_LG,
+    SPACE_MD,
+    SPACE_SM,
+    SPACE_XL,
+    TEXT_ON_PRIMARY,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
 )
@@ -68,9 +80,8 @@ class ToolCenterPanel(ctk.CTkToplevel):
         
     def _build_ui(self):
         """构建界面."""
-        # 顶部标题栏
         header = ctk.CTkFrame(self, fg_color="transparent")
-        header.pack(fill="x", padx=20, pady=(16, 12))
+        header.pack(fill="x", padx=SPACE_XL, pady=(SPACE_LG, SPACE_SM))
         
         ctk.CTkLabel(
             header,
@@ -79,42 +90,41 @@ class ToolCenterPanel(ctk.CTkToplevel):
             text_color=TEXT_PRIMARY,
         ).pack(side="left")
         
-        # 自动发现按钮
         ctk.CTkButton(
             header,
             text="自动发现工具",
             width=120,
-            height=32,
+            height=HEIGHT_SM,
             fg_color=COLOR_PRIMARY,
             hover_color=COLOR_PRIMARY_HOVER,
+            corner_radius=RADIUS_SM,
             command=self._auto_discover,
-        ).pack(side="right", padx=(8, 0))
+        ).pack(side="right", padx=(SPACE_SM, 0))
         
-        # 打开tools文件夹按钮
         ctk.CTkButton(
             header,
             text="打开tools文件夹",
             width=130,
-            height=32,
+            height=HEIGHT_SM,
             fg_color=BG_INPUT,
             text_color=TEXT_PRIMARY,
             hover_color=BG_HOVER,
+            corner_radius=RADIUS_SM,
             command=self._open_tools_folder,
         ).pack(side="right")
         
-        # 说明文字
         self.hint_label = ctk.CTkLabel(
             self,
             text='提示: 工具中心支持先打开工具再找程序。搜索工具名/类型，找到后直接点"启动"。',
             font=(FONT_FAMILY, FONT_SIZE_SM),
             text_color=TEXT_SECONDARY,
         )
-        self.hint_label.pack(anchor="w", padx=20, pady=(0, 12))
+        self.hint_label.pack(anchor="w", padx=SPACE_XL, pady=(0, SPACE_SM))
 
         self.search_entry = ctk.CTkEntry(
             self,
-            height=36,
-            corner_radius=8,
+            height=HEIGHT_LG,
+            corner_radius=RADIUS_SM,
             placeholder_text="搜索工具名 / 固件类型 / 目录关键词",
             textvariable=self.search_var,
             fg_color=BG_CARD,
@@ -122,27 +132,26 @@ class ToolCenterPanel(ctk.CTkToplevel):
             border_color=BORDER_COLOR,
             font=(FONT_FAMILY, FONT_SIZE_MD),
         )
-        self.search_entry.pack(fill="x", padx=20, pady=(0, 12))
+        self.search_entry.pack(fill="x", padx=SPACE_XL, pady=(0, SPACE_SM))
 
-        self.quick_frame = ctk.CTkFrame(self, fg_color=BG_CARD, corner_radius=10, border_width=1, border_color=BORDER_COLOR)
-        self.quick_frame.pack(fill="x", padx=20, pady=(0, 12))
+        self.quick_frame = ctk.CTkFrame(self, fg_color=BG_CARD, corner_radius=RADIUS_LG, border_width=0)
+        self.quick_frame.pack(fill="x", padx=SPACE_XL, pady=(0, SPACE_SM))
         
-        # 工具列表区域
         self.tools_frame = ctk.CTkScrollableFrame(
             self,
             fg_color="transparent",
         )
-        self.tools_frame.pack(fill="both", expand=True, padx=20, pady=(0, 12))
+        self.tools_frame.pack(fill="both", expand=True, padx=SPACE_XL, pady=(0, SPACE_SM))
         
-        # 底部按钮栏
         footer = ctk.CTkFrame(self, fg_color="transparent")
-        footer.pack(fill="x", padx=20, pady=(0, 16))
+        footer.pack(fill="x", padx=SPACE_XL, pady=(0, SPACE_LG))
         
         ctk.CTkButton(
             footer,
             text="关闭",
             width=100,
-            height=36,
+            height=HEIGHT_MD,
+            corner_radius=RADIUS_SM,
             command=self.destroy,
         ).pack(side="right")
         
@@ -156,7 +165,6 @@ class ToolCenterPanel(ctk.CTkToplevel):
     
     def _load_tools(self):
         """加载工具配置列表."""
-        # 只加载 tool_launch 模式的固件类型
         fw_types = enabled_firmware_types()
         self.tool_configs = []
         for item in fw_types:
@@ -209,14 +217,13 @@ class ToolCenterPanel(ctk.CTkToplevel):
             text="常用 / 最近启动",
             font=(FONT_FAMILY, FONT_SIZE_MD, "bold"),
             text_color=TEXT_PRIMARY,
-        ).pack(anchor="w", padx=14, pady=(12, 6))
+        ).pack(anchor="w", padx=SPACE_LG - 4, pady=(SPACE_MD, SPACE_SM))
 
         favorite_configs = self._ordered_usage_configs("favorites", filtered_configs)
         recent_configs = self._ordered_usage_configs("recent", filtered_configs)
         self._render_quick_section("常用工具", favorite_configs, empty_text="点击工具行右侧星标加入常用。")
         self._render_quick_section("最近使用", recent_configs, empty_text="启动工具后会自动出现在这里。")
         
-        # 创建每个工具的配置行
         for idx, config in enumerate(filtered_configs):
             self._create_tool_row(idx, config)
 
@@ -240,7 +247,7 @@ class ToolCenterPanel(ctk.CTkToplevel):
 
     def _render_quick_section(self, title: str, configs: list[dict], *, empty_text: str):
         section = ctk.CTkFrame(self.quick_frame, fg_color="transparent")
-        section.pack(fill="x", padx=10, pady=(0, 8))
+        section.pack(fill="x", padx=SPACE_SM, pady=(0, SPACE_SM))
         ctk.CTkLabel(
             section,
             text=title,
@@ -248,7 +255,7 @@ class ToolCenterPanel(ctk.CTkToplevel):
             anchor="w",
             font=(FONT_FAMILY, FONT_SIZE_SM, "bold"),
             text_color=TEXT_SECONDARY,
-        ).pack(side="left", padx=(4, 8))
+        ).pack(side="left", padx=(4, SPACE_SM))
         button_area = ctk.CTkFrame(section, fg_color="transparent")
         button_area.pack(side="left", fill="x", expand=True)
         if not configs:
@@ -264,9 +271,10 @@ class ToolCenterPanel(ctk.CTkToplevel):
                 button_area,
                 text=config["label"],
                 width=126,
-                height=32,
+                height=HEIGHT_SM,
                 fg_color=COLOR_PRIMARY,
                 hover_color=COLOR_PRIMARY_HOVER,
+                corner_radius=RADIUS_SM,
                 command=lambda c=config: self._launch_tool(c),
             ).grid(row=idx // 4, column=idx % 4, sticky="ew", padx=4, pady=4)
 
@@ -291,21 +299,17 @@ class ToolCenterPanel(ctk.CTkToplevel):
         launch_path = config.get("resolved_path") or config.get("tool_path", "")
         has_path = bool(launch_path)
         
-        # 卡片容器
         card = ctk.CTkFrame(
             self.tools_frame,
             fg_color=BG_CARD,
-            corner_radius=10,
-            border_width=1,
-            border_color=BORDER_COLOR if has_path else "#E74C3C",
+            corner_radius=RADIUS_LG,
+            border_width=0,
         )
-        card.pack(fill="x", pady=6, padx=4)
+        card.pack(fill="x", pady=SPACE_SM, padx=4)
         
-        # 左侧信息区
         info = ctk.CTkFrame(card, fg_color="transparent")
-        info.pack(side="left", fill="both", expand=True, padx=16, pady=12)
+        info.pack(side="left", fill="both", expand=True, padx=SPACE_LG, pady=SPACE_MD)
         
-        # 工具名称
         name_row = ctk.CTkFrame(info, fg_color="transparent")
         name_row.pack(fill="x")
         
@@ -316,19 +320,17 @@ class ToolCenterPanel(ctk.CTkToplevel):
             text_color=TEXT_PRIMARY,
         ).pack(side="left")
         
-        # 状态标签
         status_text = "可启动" if has_path else "未找到"
-        status_color = "#27AE60" if has_path else "#E74C3C"
+        status_color = COLOR_SUCCESS if has_path else COLOR_DANGER
         ctk.CTkLabel(
             name_row,
             text=status_text,
             font=(FONT_FAMILY, FONT_SIZE_SM),
             text_color=status_color,
-        ).pack(side="left", padx=(12, 0))
+        ).pack(side="left", padx=(SPACE_MD, 0))
         
-        # 工具路径
         path_text = launch_path or "点击右侧按钮配置工具路径"
-        path_color = TEXT_SECONDARY if has_path else "#E74C3C"
+        path_color = TEXT_SECONDARY if has_path else COLOR_DANGER
         path_label = ctk.CTkLabel(
             info,
             text=path_text,
@@ -338,44 +340,45 @@ class ToolCenterPanel(ctk.CTkToplevel):
         )
         path_label.pack(anchor="w", pady=(4, 0))
         
-        # 右侧按钮区
         btn_frame = ctk.CTkFrame(card, fg_color="transparent")
-        btn_frame.pack(side="right", padx=16, pady=12)
+        btn_frame.pack(side="right", padx=SPACE_LG, pady=SPACE_MD)
 
+        is_fav = self._is_favorite(config["key"])
         favorite_btn = ctk.CTkButton(
             btn_frame,
-            text="★" if self._is_favorite(config["key"]) else "☆",
+            text="\u2605" if is_fav else "\u2606",
             width=70,
-            height=28,
-            fg_color=COLOR_PRIMARY if self._is_favorite(config["key"]) else BG_INPUT,
-            text_color="white" if self._is_favorite(config["key"]) else TEXT_PRIMARY,
-            hover_color=COLOR_PRIMARY_HOVER if self._is_favorite(config["key"]) else BG_HOVER,
+            height=HEIGHT_SM,
+            fg_color=COLOR_PRIMARY if is_fav else BG_INPUT,
+            text_color=TEXT_ON_PRIMARY if is_fav else TEXT_PRIMARY,
+            hover_color=COLOR_PRIMARY_HOVER if is_fav else BG_HOVER,
+            corner_radius=RADIUS_SM,
             command=lambda c=config: self._toggle_favorite(c),
         )
-        favorite_btn.pack(pady=(0, 6))
+        favorite_btn.pack(pady=(0, SPACE_SM))
         
-        # 浏览按钮
         browse_btn = ctk.CTkButton(
             btn_frame,
             text="浏览...",
             width=70,
-            height=32,
+            height=HEIGHT_MD,
             fg_color=BG_INPUT,
             text_color=TEXT_PRIMARY,
             hover_color=BG_HOVER,
+            corner_radius=RADIUS_SM,
             command=lambda c=config, l=path_label, ca=card: self._browse_tool(c, l, ca),
         )
-        browse_btn.pack(pady=(0, 6))
+        browse_btn.pack(pady=(0, SPACE_SM))
         
-        # 启动按钮
         launch_btn = ctk.CTkButton(
             btn_frame,
             text="启动",
             width=70,
-            height=32,
+            height=HEIGHT_MD,
             fg_color=COLOR_PRIMARY if has_path else BG_INPUT,
             hover_color=COLOR_PRIMARY_HOVER if has_path else BG_HOVER,
             state="normal" if has_path else "disabled",
+            corner_radius=RADIUS_SM,
             command=lambda c=config: self._launch_tool(c),
         )
         launch_btn.pack()
@@ -400,15 +403,11 @@ class ToolCenterPanel(ctk.CTkToplevel):
         if not file_path:
             return
         
-        # 更新配置
         config["tool_path"] = file_path
         config["resolved_path"] = file_path
         
-        # 更新UI
         path_label.configure(text=file_path, text_color=TEXT_SECONDARY)
-        card.configure(border_color=BORDER_COLOR)
         
-        # 更新对应行的按钮状态
         for widget in self.tool_widgets:
             if widget["config"]["key"] == config["key"]:
                 widget["launch_btn"].configure(
@@ -418,7 +417,6 @@ class ToolCenterPanel(ctk.CTkToplevel):
                 )
                 break
         
-        # 保存到配置
         self._save_tool_path(config["key"], file_path)
         self._update_status()
         self._render_tools()
@@ -470,7 +468,6 @@ class ToolCenterPanel(ctk.CTkToplevel):
                     config["tool_path"] = found_path
                     config["resolved_path"] = found_path
         
-        # 保存发现的配置
         if discovered:
             save_tool_paths_to_catalog(discovered)
             self.status_label.configure(text=f"发现并保存了 {len(discovered)} 个工具配置")

@@ -4,7 +4,19 @@ from tkinter import messagebox
 
 import customtkinter as ctk
 
-from fwasset.ui.design_tokens import BG_HOVER, BG_INPUT, FONT_FAMILY, FONT_SIZE_MD, TEXT_SECONDARY
+from fwasset.ui.design_tokens import (
+    BG_HOVER,
+    BG_INPUT,
+    FONT_FAMILY,
+    FONT_SIZE_MD,
+    FONT_SIZE_SM,
+    HEIGHT_LG,
+    RADIUS_SM,
+    SPACE_LG,
+    SPACE_MD,
+    TEXT_PRIMARY,
+    TEXT_SECONDARY,
+)
 from fwasset.ui.operation_panels.base import BaseOperationPanel
 from fwasset.ui.operation_panels.registry import register
 from fwasset.ui.operation_panels.shared_actions import build_handoff_actions
@@ -22,17 +34,17 @@ class ManualDocPanel(BaseOperationPanel):
             wraplength=360,
             font=(FONT_FAMILY, FONT_SIZE_MD),
             text_color=TEXT_SECONDARY,
-        ).pack(anchor="w", padx=20, pady=(16, 12))
+        ).pack(anchor="w", padx=SPACE_LG, pady=(SPACE_LG, SPACE_MD))
         ctk.CTkButton(
             self,
             text="查看说明",
-            height=40,
-            corner_radius=8,
+            height=HEIGHT_LG,
+            corner_radius=RADIUS_SM,
             fg_color=BG_INPUT,
             text_color=TEXT_PRIMARY,
             hover_color=BG_HOVER,
             command=lambda: self._show_manual_doc(self.asset),
-        ).pack(fill="x", padx=20, pady=(0, 12))
+        ).pack(fill="x", padx=SPACE_LG, pady=(0, SPACE_MD))
         build_handoff_actions(self, self.asset, self._panel_host)
 
     def _show_manual_doc(self, asset):

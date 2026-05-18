@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import customtkinter as ctk
 
-from fwasset.ui.design_tokens import BG_APP
+from fwasset.ui.design_tokens import BG_WINDOW
 from fwasset.ui.firmware_list_panel import FirmwareListPanel
-from fwasset.ui.shared_widgets import apply_treeview_modern_style
 
 
 DEFAULT_WINDOW_WIDTH = 1400
@@ -19,9 +18,7 @@ class UnifiedFlashPlatform(ctk.CTk):
         super().__init__()
         self.title("按摩椅程序资产管理系统 | Massage Chair Firmware Asset Manager")
         self._apply_startup_geometry()
-        self.configure(fg_color=BG_APP)
-
-        apply_treeview_modern_style()
+        self.configure(fg_color=BG_WINDOW)
 
         self.container = ctk.CTkFrame(self, fg_color="transparent")
         self.container.pack(fill="both", expand=True)

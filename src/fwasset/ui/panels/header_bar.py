@@ -8,8 +8,12 @@ from fwasset.ui.design_tokens import (
     FONT_FAMILY,
     FONT_SIZE_MD,
     FONT_SIZE_XL,
+    RADIUS_SM,
+    SPACE_LG,
+    SPACE_SM,
+    TEXT_ON_PRIMARY,
     TEXT_PRIMARY,
-    TEXT_SECONDARY,
+    TEXT_TERTIARY,
 )
 
 
@@ -26,14 +30,14 @@ class HeaderBar(ctk.CTkFrame):
             font=(FONT_FAMILY, FONT_SIZE_XL, "bold"),
             text_color=TEXT_PRIMARY,
         )
-        self.model_label.pack(side="left", padx=(0, 12))
+        self.model_label.pack(side="left", padx=(0, SPACE_LG))
         self.version_badge = ctk.CTkLabel(
             title_box,
             text="-",
             fg_color=COLOR_PRIMARY,
-            corner_radius=6,
+            corner_radius=RADIUS_SM,
             font=(FONT_FAMILY, FONT_SIZE_MD, "bold"),
-            text_color="white",
+            text_color=TEXT_ON_PRIMARY,
             padx=12,
             pady=4,
         )
@@ -41,14 +45,14 @@ class HeaderBar(ctk.CTkFrame):
         self.type_badge = ctk.CTkLabel(
             title_box,
             text="未选择",
-            fg_color=TEXT_SECONDARY,
-            corner_radius=6,
+            fg_color=TEXT_TERTIARY,
+            corner_radius=RADIUS_SM,
             font=(FONT_FAMILY, FONT_SIZE_MD, "bold"),
-            text_color="white",
+            text_color=TEXT_ON_PRIMARY,
             padx=12,
             pady=4,
         )
-        self.type_badge.pack(side="left", padx=8)
+        self.type_badge.pack(side="left", padx=SPACE_SM)
 
     def update_from_asset(self, asset: FirmwareAsset | None) -> None:
         if asset is None:
@@ -64,4 +68,4 @@ class HeaderBar(ctk.CTkFrame):
     def clear(self) -> None:
         self.model_label.configure(text="-")
         self.version_badge.configure(text="-")
-        self.type_badge.configure(text="未选择", fg_color=TEXT_SECONDARY)
+        self.type_badge.configure(text="未选择", fg_color=TEXT_TERTIARY)

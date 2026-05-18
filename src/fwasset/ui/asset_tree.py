@@ -8,7 +8,17 @@ from typing import Callable
 import customtkinter as ctk
 
 from fwasset.core.types import FirmwareAsset
-from fwasset.ui.design_tokens import BG_CARD, BG_SIDEBAR, FONT_FAMILY, FONT_SIZE_LG, TEXT_PRIMARY
+from fwasset.ui.design_tokens import (
+    BG_CARD,
+    BG_SIDEBAR,
+    COLOR_PRIMARY,
+    FONT_FAMILY,
+    FONT_SIZE_MD,
+    HEIGHT_LG,
+    RADIUS_SM,
+    TEXT_PRIMARY,
+    TEXT_SECONDARY,
+)
 
 
 def _resolve(token):
@@ -41,7 +51,7 @@ class AssetTreeView:
         self._node_key_by_iid: dict[str, str] = {}
         self._iid_by_asset_idx: dict[int, str] = {}
 
-        self.frame = tk.Frame(master, bg=_resolve(BG_SIDEBAR), highlightthickness=0)
+        self.frame = ctk.CTkFrame(master, corner_radius=0, fg_color=BG_SIDEBAR)
         self.frame.grid_columnconfigure(0, weight=1)
         self.frame.grid_rowconfigure(0, weight=1)
 
@@ -57,11 +67,11 @@ class AssetTreeView:
         self.tree.heading("#0", text="系列 / 型号", anchor="w")
         self.tree.heading("program_dir", text="程序目录", anchor="w")
         self.tree.heading("version", text="版本", anchor="w")
-        self.tree.column("#0", width=320, minwidth=220, stretch=True)
-        self.tree.column("program_dir", width=280, minwidth=180, stretch=True)
-        self.tree.column("version", width=150, minwidth=110, stretch=False)
-        self.tree.tag_configure("group", foreground=_resolve(TEXT_PRIMARY), font=(FONT_FAMILY, FONT_SIZE_LG, "bold"))
-        self.tree.tag_configure("hidden", foreground="#4B5563")
+        self.tree.column("#0", width=300, minwidth=200, stretch=True)
+        self.tree.column("program_dir", width=240, minwidth=150, stretch=True)
+        self.tree.column("version", width=120, minwidth=80, stretch=False)
+        self.tree.tag_configure("group", foreground=_resolve(TEXT_PRIMARY), font=(FONT_FAMILY, FONT_SIZE_MD, "bold"))
+        self.tree.tag_configure("hidden", foreground=_resolve(TEXT_SECONDARY))
 
         y_scroll = ttk.Scrollbar(self.frame, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=y_scroll.set)
@@ -79,13 +89,14 @@ class AssetTreeView:
             style = ttk.Style(self.frame)
             style.configure(
                 "Asset.Treeview",
-                rowheight=40,
-                font=(FONT_FAMILY, FONT_SIZE_LG),
+                rowheight=36,
+                font=(FONT_FAMILY, FONT_SIZE_MD),
                 background=_resolve(BG_CARD),
                 fieldbackground=_resolve(BG_CARD),
                 foreground=_resolve(TEXT_PRIMARY),
             )
-            style.configure("Asset.Treeview.Heading", font=(FONT_FAMILY, FONT_SIZE_LG, "bold"))
+            style.configure("Asset.Treeview.Heading", font=(FONT_FAMILY, FONT_SIZE_MD, "bold"))
+            style.map("Asset.Treeview", background=[("selected", _resolve(COLOR_PRIMARY))], foreground=[("selected", "white")])
         except tk.TclError:
             pass
 

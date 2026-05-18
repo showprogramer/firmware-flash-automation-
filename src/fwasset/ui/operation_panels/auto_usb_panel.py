@@ -19,6 +19,12 @@ from fwasset.ui.design_tokens import (
     FONT_SIZE_LG,
     FONT_SIZE_MD,
     FONT_SIZE_SM,
+    HEIGHT_LG,
+    HEIGHT_MD,
+    RADIUS_SM,
+    SPACE_LG,
+    SPACE_MD,
+    SPACE_SM,
     TEXT_PRIMARY,
     TEXT_SECONDARY,
 )
@@ -44,13 +50,13 @@ class AutoUsbPanel(BaseOperationPanel):
             ctk.CTkButton(
                 self,
                 text="一键智能刷机",
-                height=48,
-                corner_radius=8,
+                height=HEIGHT_LG,
+                corner_radius=RADIUS_SM,
                 font=(FONT_FAMILY, FONT_SIZE_LG, "bold"),
                 fg_color=COLOR_PRIMARY,
                 hover_color=COLOR_PRIMARY_HOVER,
                 command=self._one_click_handcontrol,
-            ).pack(fill="x", padx=20, pady=(10, 8))
+            ).pack(fill="x", padx=SPACE_LG, pady=(SPACE_MD, SPACE_SM))
             for title, command in [
                 ("1. 清理垃圾文件", self._clean_usb),
                 ("2. 格式化 FAT32", self._format_usb),
@@ -60,14 +66,14 @@ class AutoUsbPanel(BaseOperationPanel):
                 ctk.CTkButton(
                     self,
                     text=title,
-                    height=36,
+                    height=HEIGHT_MD,
                     anchor="w",
-                    corner_radius=6,
+                    corner_radius=RADIUS_SM,
                     fg_color=BG_INPUT,
                     text_color=TEXT_PRIMARY,
                     hover_color=BG_HOVER,
                     command=command,
-                ).pack(fill="x", padx=20, pady=3)
+                ).pack(fill="x", padx=SPACE_LG, pady=SPACE_SM)
             return
 
         if usb_flow == "paired_files":
@@ -83,7 +89,7 @@ class AutoUsbPanel(BaseOperationPanel):
                 justify="left",
                 font=(FONT_FAMILY, FONT_SIZE_MD),
                 text_color=TEXT_SECONDARY,
-            ).pack(anchor="w", padx=20, pady=(16, 12))
+            ).pack(anchor="w", padx=SPACE_LG, pady=(SPACE_LG, SPACE_MD))
             return
 
         ctk.CTkLabel(
@@ -93,30 +99,30 @@ class AutoUsbPanel(BaseOperationPanel):
             justify="left",
             font=(FONT_FAMILY, FONT_SIZE_MD),
             text_color=TEXT_SECONDARY,
-        ).pack(anchor="w", padx=20, pady=(16, 12))
+        ).pack(anchor="w", padx=SPACE_LG, pady=(SPACE_LG, SPACE_MD))
 
     def _build_directory_copy_usb_ops(self):
         """构建目录复制刷机操作区。"""
         self.format_first = make_bool_var(self, True)
         self.eject_after = make_bool_var(self, True)
         options_row = ctk.CTkFrame(self, fg_color="transparent")
-        options_row.pack(fill="x", padx=20, pady=(10, 8))
+        options_row.pack(fill="x", padx=SPACE_LG, pady=(SPACE_MD, SPACE_SM))
         ctk.CTkCheckBox(
             options_row, text="格式化", variable=self.format_first, font=(FONT_FAMILY, FONT_SIZE_SM)
         ).pack(side="left")
         ctk.CTkCheckBox(
             options_row, text="完成后弹出", variable=self.eject_after, font=(FONT_FAMILY, FONT_SIZE_SM)
-        ).pack(side="left", padx=10)
+        ).pack(side="left", padx=SPACE_SM)
         ctk.CTkButton(
             self,
             text="执行目录刷机流程",
-            height=48,
-            corner_radius=8,
+            height=HEIGHT_LG,
+            corner_radius=RADIUS_SM,
             font=(FONT_FAMILY, FONT_SIZE_LG, "bold"),
             fg_color=COLOR_PRIMARY,
             hover_color=COLOR_PRIMARY_HOVER,
             command=self._run_directory_flash,
-        ).pack(fill="x", padx=20, pady=(8, 12))
+        ).pack(fill="x", padx=SPACE_LG, pady=(SPACE_SM, SPACE_MD))
         ctk.CTkLabel(
             self,
             text="该资源按目录复制到 U 盘，仅适用于音乐文件资源。",
@@ -124,7 +130,7 @@ class AutoUsbPanel(BaseOperationPanel):
             justify="left",
             font=(FONT_FAMILY, FONT_SIZE_SM),
             text_color=TEXT_SECONDARY,
-        ).pack(anchor="w", padx=20, pady=(0, 12))
+        ).pack(anchor="w", padx=SPACE_LG, pady=(0, SPACE_MD))
 
     # -- USB 操作方法 --
 

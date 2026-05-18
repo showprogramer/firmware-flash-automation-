@@ -11,8 +11,7 @@ import customtkinter as ctk
 from fwasset.core.logging_utils import FileLogger
 from fwasset.core.usb_ops import get_usb_drives
 from fwasset.ui.design_tokens import (
-    BG_APP,
-    BG_CARD,
+    BG_WINDOW,
     BG_HOVER,
     BG_INPUT,
     BG_SIDEBAR,
@@ -21,6 +20,14 @@ from fwasset.ui.design_tokens import (
     FONT_FAMILY,
     FONT_SIZE_LG,
     FONT_SIZE_MD,
+    HEIGHT_MD,
+    HEIGHT_LG,
+    ICON_LG,
+    RADIUS_SM,
+    SIDEBAR_WIDTH,
+    SPACE_LG,
+    SPACE_SM,
+    SPACE_XL,
     TEXT_PRIMARY,
 )
 
@@ -32,15 +39,15 @@ class BaseFlashPanel(ctk.CTkFrame):
     task_error_title_suffix = "失败"
 
     def __init__(self, master):
-        super().__init__(master, fg_color=BG_APP)
+        super().__init__(master, fg_color=BG_WINDOW)
         self.usb_drive = tk.StringVar(value="")
         self._task_queue: queue.Queue = queue.Queue()
         self._busy = False
         self._polling_active = False
         self._file_logger = FileLogger()
 
-        self.grid_columnconfigure(0, weight=0, minsize=320)
-        self.grid_columnconfigure(1, weight=1)
+        self.grid_columnconfigure(0, weight=3, minsize=360)
+        self.grid_columnconfigure(1, weight=5)
         self.grid_rowconfigure(0, weight=1)
 
     def activate(self):
@@ -52,7 +59,7 @@ class BaseFlashPanel(ctk.CTkFrame):
     def deactivate(self):
         self._polling_active = False
 
-    def _build_sidebar_frame(self, width: int = 320) -> ctk.CTkFrame:
+    def _build_sidebar_frame(self, width: int = SIDEBAR_WIDTH) -> ctk.CTkFrame:
         sidebar = ctk.CTkFrame(self, width=width, corner_radius=0, fg_color=BG_SIDEBAR)
         sidebar.grid(row=0, column=0, sticky="nsew")
         sidebar.grid_propagate(False)
@@ -60,13 +67,13 @@ class BaseFlashPanel(ctk.CTkFrame):
 
     def _build_brand_header(self, parent, title: str = "程序资产管理系统"):
         brand_frame = ctk.CTkFrame(parent, fg_color="transparent")
-        brand_frame.pack(fill="x", padx=24, pady=(32, 16))
+        brand_frame.pack(fill="x", padx=SPACE_XL, pady=(SPACE_LG, SPACE_SM))
         ctk.CTkLabel(
             brand_frame,
             text="⚡",
-            font=(FONT_FAMILY, 24),
+            font=(FONT_FAMILY, ICON_LG),
             text_color=COLOR_PRIMARY,
-        ).pack(side="left", padx=(0, 10))
+        ).pack(side="left", padx=(0, SPACE_SM))
         ctk.CTkLabel(
             brand_frame,
             text=title,
@@ -76,28 +83,28 @@ class BaseFlashPanel(ctk.CTkFrame):
 
     def _build_main_container(self) -> ctk.CTkFrame:
         main = ctk.CTkFrame(self, fg_color="transparent", corner_radius=0)
-        main.grid(row=0, column=1, sticky="nsew", padx=32, pady=32)
+        main.grid(row=0, column=1, sticky="nsew", padx=SPACE_XL, pady=SPACE_XL)
         main.grid_columnconfigure(0, weight=1)
         main.grid_rowconfigure(2, weight=1)
         return main
 
     def _build_usb_selector_row(self, parent, refresh_command=None):
         row = ctk.CTkFrame(parent, fg_color="transparent")
-        row.pack(fill="x", padx=20, pady=10)
+        row.pack(fill="x", padx=SPACE_LG, pady=SPACE_SM)
         self.usb_menu = ctk.CTkComboBox(
             row,
             variable=self.usb_drive,
             values=[""],
             width=120,
-            height=36,
-            corner_radius=6,
+            height=HEIGHT_LG,
+            corner_radius=RADIUS_SM,
         )
-        self.usb_menu.pack(side="left", padx=(0, 10))
+        self.usb_menu.pack(side="left", padx=(0, SPACE_SM))
         ctk.CTkButton(
             row,
             text="刷新",
             width=60,
-            height=36,
+            height=HEIGHT_LG,
             fg_color=BG_INPUT,
             text_color=TEXT_PRIMARY,
             hover_color=BG_HOVER,

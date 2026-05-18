@@ -19,15 +19,18 @@ from fwasset.ui.asset_tree import AssetTreeView
 from fwasset.ui.base_panel import BaseFlashPanel
 from fwasset.ui.design_tokens import (
     BG_CARD,
-    BORDER_COLOR,
     FONT_FAMILY,
     FONT_SIZE_LG,
     FONT_SIZE_MD,
+    RADIUS_LG,
+    SPACE_LG,
+    SPACE_MD,
+    SPACE_SM,
+    SPACE_XL,
     TEXT_PRIMARY,
 )
 from fwasset.ui.operation_panels import get_panel
 from fwasset.ui.operation_panels.disabled_panel import DisabledPanel
-from fwasset.ui.panels.detail_panel import DetailPanel
 from fwasset.ui.panels.header_bar import HeaderBar
 from fwasset.ui.panels.log_panel import LogPanel
 from fwasset.ui.panels.sidebar_panel import SidebarPanel
@@ -63,8 +66,8 @@ class FirmwareListPanel(BaseFlashPanel):
         self._tree_expansion = TreeExpansionModel()
         self.scan_state_model = ScanStateModel()
 
-        self.grid_columnconfigure(0, weight=8, minsize=760)
-        self.grid_columnconfigure(1, weight=0, minsize=320)
+        self.grid_columnconfigure(0, weight=3, minsize=360)
+        self.grid_columnconfigure(1, weight=5, minsize=480)
         self._reload_hidden_items()
         self._build_sidebar()
         self._build_main_view()
@@ -159,25 +162,21 @@ class FirmwareListPanel(BaseFlashPanel):
         main.grid_rowconfigure(1, weight=1)
         main.grid_rowconfigure(2, weight=0)
         self.header_bar = HeaderBar(main)
-        self.header_bar.grid(row=0, column=0, sticky="ew", pady=(0, 24))
+        self.header_bar.grid(row=0, column=0, sticky="ew", pady=(0, SPACE_LG))
         cards_container = ctk.CTkFrame(main, fg_color="transparent")
-        cards_container.grid(row=1, column=0, sticky="nsew", pady=(0, 24))
+        cards_container.grid(row=1, column=0, sticky="nsew", pady=(0, SPACE_LG))
         cards_container.grid_columnconfigure(0, weight=1)
         cards_container.grid_columnconfigure(1, weight=0)
         cards_container.grid_rowconfigure(0, weight=1)
 
-        self.detail_panel = DetailPanel(cards_container)
-        self.detail_panel.grid(row=0, column=0, sticky="nsew", padx=(0, 12))
-
         self.ops_card = ctk.CTkFrame(
-            cards_container, fg_color=BG_CARD, corner_radius=12,
-            border_width=1, border_color=BORDER_COLOR,
+            cards_container, fg_color=BG_CARD, corner_radius=RADIUS_LG,
+            border_width=0,
         )
-        self.detail_panel.grid_forget()
         self.ops_card.grid(row=0, column=0, sticky="nsew")
         section_title(self.ops_card, "操作区")
         self.ops_body = ctk.CTkFrame(self.ops_card, fg_color="transparent")
-        self.ops_body.pack(fill="both", expand=True, padx=0, pady=(0, 10))
+        self.ops_body.pack(fill="both", expand=True, padx=0, pady=(0, SPACE_SM))
         self._render_operation_panel(None)
 
         self.log_panel = LogPanel(main)
@@ -428,7 +427,6 @@ class FirmwareListPanel(BaseFlashPanel):
 
     def _clear_selection(self):
         self.header_bar.clear()
-        self.detail_panel.clear()
         self._render_operation_panel(None)
 
     def _select_asset(self, idx: int):
@@ -442,7 +440,6 @@ class FirmwareListPanel(BaseFlashPanel):
 
         asset = self.assets[idx]
         self.header_bar.update_from_asset(asset)
-        self.detail_panel.update_from_asset(asset)
         self._render_operation_panel(asset)
         self._log(f"已选择: {asset.get('model', '')} {asset.get('version', '')} [{asset.get('firmware_label', '')}]")
 
@@ -495,7 +492,7 @@ class FirmwareListPanel(BaseFlashPanel):
             ctk.CTkLabel(
                 self.ops_body, text="选择资源后显示对应操作",
                 font=(FONT_FAMILY, FONT_SIZE_LG), text_color=TEXT_PRIMARY,
-            ).pack(anchor="w", padx=20, pady=20)
+            ).pack(anchor="w", padx=SPACE_LG, pady=SPACE_XL)
             return
 
         self._render_selected_detail_summary(asset)
@@ -507,7 +504,7 @@ class FirmwareListPanel(BaseFlashPanel):
 
     def _render_selected_detail_summary(self, asset: FirmwareAsset):
         summary = ctk.CTkFrame(self.ops_body, fg_color="transparent")
-        summary.pack(fill="x", padx=20, pady=(12, 12))
+        summary.pack(fill="x", padx=SPACE_LG, pady=(SPACE_MD, SPACE_MD))
         for label_text, value_text in [
             ("方式", asset_flash_mode(asset) or "-"),
             ("目录", str(asset.get("path", "") or "-")),

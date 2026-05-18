@@ -8,6 +8,12 @@ from fwasset.ui.design_tokens import (
     BG_HOVER,
     FONT_FAMILY,
     FONT_SIZE_MD,
+    FONT_MONO,
+    HEIGHT_SM,
+    RADIUS_LG,
+    RADIUS_SM,
+    SPACE_LG,
+    SPACE_MD,
     TEXT_PRIMARY,
 )
 from fwasset.ui.shared_widgets import section_title
@@ -17,26 +23,27 @@ class LogPanel(ctk.CTkFrame):
     """Collapsible log panel extracted from FirmwareListPanel."""
 
     def __init__(self, master, **kwargs):
-        super().__init__(master, corner_radius=12, fg_color=BG_CARD, **kwargs)
+        super().__init__(master, corner_radius=RADIUS_LG, fg_color=BG_CARD, **kwargs)
         self._collapsed = True
         section_title(self, "运行日志")
         self.log_text = ctk.CTkTextbox(
             self,
-            font=("Consolas", FONT_SIZE_MD),
+            font=(FONT_MONO, FONT_SIZE_MD),
             fg_color=BG_INPUT,
-            corner_radius=8,
+            corner_radius=RADIUS_SM,
         )
         self.log_toggle_btn = ctk.CTkButton(
             self,
             text="展开日志",
             width=96,
-            height=30,
+            height=HEIGHT_SM,
             fg_color=BG_INPUT,
             text_color=TEXT_PRIMARY,
             hover_color=BG_HOVER,
+            corner_radius=RADIUS_SM,
             command=self.toggle,
         )
-        self.log_toggle_btn.pack(anchor="e", padx=20, pady=(0, 10))
+        self.log_toggle_btn.pack(anchor="e", padx=SPACE_LG, pady=(0, SPACE_MD))
         self._apply_collapsed_state()
 
     def set_collapsed(self, collapsed: bool) -> None:
@@ -56,5 +63,5 @@ class LogPanel(ctk.CTkFrame):
                 self.log_text.pack_forget()
             self.log_toggle_btn.configure(text="展开日志")
         else:
-            self.log_text.pack(fill="both", expand=True, padx=20, pady=(0, 20))
+            self.log_text.pack(fill="both", expand=True, padx=SPACE_LG, pady=(0, SPACE_LG))
             self.log_toggle_btn.configure(text="折叠日志")
