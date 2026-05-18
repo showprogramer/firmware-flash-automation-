@@ -39,5 +39,4 @@ build/
 !fwasset.spec
 
 # Agent tooling (user-local)
-.claude/settings.local.json
-skills-lock.json
+.claude/
