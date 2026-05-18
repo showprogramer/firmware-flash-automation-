@@ -29,7 +29,9 @@
 - 验证日期：2026-05-18
 - 验证人：人工
 - 验证结果：通过
+- 验证命令：`uv run python -m pytest src/fwasset/tests/test_app_service_smoke.py -q --no-cov` → 17 passed
+- 人工验证：布局比例3:5正确、iOS色系生效、间距圆角统一、无硬编码颜色
 - 对应版本：未发布
 
-**相关 Commit**： 待提交
+**相关 Commit**： 79bc16f
 ---
