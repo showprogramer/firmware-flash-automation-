@@ -19,22 +19,18 @@ from fwasset.ui.asset_tree import AssetTreeView
 from fwasset.ui.base_panel import BaseFlashPanel
 from fwasset.ui.design_tokens import (
     BG_CARD,
-    BG_HOVER,
-    BG_INPUT,
     BORDER_COLOR,
-    COLOR_PRIMARY,
     FONT_FAMILY,
     FONT_SIZE_LG,
     FONT_SIZE_MD,
-    FONT_SIZE_SM,
     TEXT_PRIMARY,
-    TEXT_SECONDARY,
 )
 from fwasset.ui.operation_panels import get_panel
 from fwasset.ui.operation_panels.disabled_panel import DisabledPanel
 from fwasset.ui.panels.detail_panel import DetailPanel
 from fwasset.ui.panels.header_bar import HeaderBar
 from fwasset.ui.panels.log_panel import LogPanel
+from fwasset.ui.panels.sidebar_panel import SidebarPanel
 from fwasset.ui.shared_widgets import section_title, make_bool_var
 from fwasset.ui.view_models.asset_filter_model import AssetFilterModel
 from fwasset.ui.view_models.asset_selection_model import AssetSelectionModel
@@ -77,24 +73,6 @@ class FirmwareListPanel(BaseFlashPanel):
         self.show_hidden_var.trace_add("write", lambda *_: self._filter_assets())
         self.after(100, self._load_cached_assets)
 
-    def _build_brand_header_with_tools(self, parent, title: str = "程序资产管理系统"):
-        from fwasset.ui.design_tokens import BG_INPUT, BG_HOVER, COLOR_PRIMARY, FONT_FAMILY, FONT_SIZE_LG, TEXT_PRIMARY
-
-        brand_frame = ctk.CTkFrame(parent, fg_color="transparent")
-        brand_frame.pack(fill="x", padx=24, pady=(24, 12))
-
-        left = ctk.CTkFrame(brand_frame, fg_color="transparent")
-        left.pack(side="left")
-
-        ctk.CTkLabel(left, text="⚡", font=(FONT_FAMILY, 24), text_color=COLOR_PRIMARY).pack(side="left", padx=(0, 10))
-        ctk.CTkLabel(left, text=title, font=(FONT_FAMILY, FONT_SIZE_LG, "bold"), text_color=TEXT_PRIMARY).pack(side="left")
-
-        ctk.CTkButton(
-            brand_frame, text="🔧 工具中心", width=100, height=32,
-            fg_color=BG_INPUT, text_color=TEXT_PRIMARY, hover_color=BG_HOVER,
-            command=self._open_tool_center,
-        ).pack(side="right")
-
     def _open_tool_center(self):
         ToolCenterPanel(self.winfo_toplevel(), log_fn=self._log)
 
@@ -123,65 +101,29 @@ class FirmwareListPanel(BaseFlashPanel):
         super().deactivate()
 
     def _build_sidebar(self):
-        sidebar = self._build_sidebar_frame(width=760)
-        self._build_brand_header_with_tools(sidebar, title="固件资源列表")
-
-        search_sort_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
-        search_sort_frame.pack(fill="x", padx=20, pady=(0, 10))
-
-        search_box = ctk.CTkEntry(
-            search_sort_frame, height=36, corner_radius=8,
-            placeholder_text="搜索 型号/版本/类型/目录",
-            textvariable=self.search_var, fg_color=BG_CARD,
-            border_width=1, border_color=BORDER_COLOR,
-            font=(FONT_FAMILY, FONT_SIZE_MD),
-        )
-        search_box.pack(side="left", fill="x", expand=True, padx=(0, 8))
-
-        quick_values = ["先选择固件类型", "全部类型", *self._type_label_to_key.keys()]
-        self.type_quick_menu = ctk.CTkOptionMenu(
-            search_sort_frame, values=quick_values, variable=self.type_quick_var,
-            width=150, height=36, fg_color=BG_CARD, text_color=TEXT_PRIMARY,
-            button_color=BG_CARD, button_hover_color=BG_HOVER,
-            font=(FONT_FAMILY, FONT_SIZE_MD), command=self._select_single_type_filter,
-        )
-        self.type_quick_menu.pack(side="left", padx=(0, 8))
-
-        self.sort_menu = ctk.CTkOptionMenu(
-            search_sort_frame, values=["默认(名称)", "按型号", "按版本"],
-            variable=self.sort_key_var, width=100, height=36, corner_radius=8,
-            fg_color=BG_CARD, text_color=TEXT_PRIMARY,
-            button_color=BG_CARD, button_hover_color=BG_HOVER,
-            font=(FONT_FAMILY, FONT_SIZE_MD),
-            command=lambda _value: self._filter_assets(),
-        )
-        self.sort_menu.pack(side="left", padx=(0, 8))
-
-        ctk.CTkButton(
-            search_sort_frame, text="清空", width=58, height=36,
-            fg_color=BG_INPUT, text_color=TEXT_PRIMARY, hover_color=BG_HOVER,
-            command=self._clear_type_filters,
-        ).pack(side="left", padx=(0, 8))
-        ctk.CTkCheckBox(
-            search_sort_frame, text="显示隐藏", variable=self.show_hidden_var,
-            font=(FONT_FAMILY, FONT_SIZE_SM), text_color=TEXT_SECONDARY,
-        ).pack(side="left", padx=(0, 8))
-        ctk.CTkButton(
-            search_sort_frame, text="扫描根目录", fg_color=BG_INPUT,
-            text_color=TEXT_PRIMARY, hover_color=BG_HOVER, width=96, height=36,
-            command=self._on_scan_button_click,
-        ).pack(side="right")
-        self.scan_btn = search_sort_frame.winfo_children()[-1]
-
-        self.asset_tree = AssetTreeView(
-            sidebar,
+        self.sidebar_panel = SidebarPanel(
+            self,
+            search_var=self.search_var,
+            sort_key_var=self.sort_key_var,
+            show_hidden_var=self.show_hidden_var,
+            type_quick_var=self.type_quick_var,
+            type_label_to_key=self._type_label_to_key,
+            on_open_tool_center=self._open_tool_center,
+            on_select_single_type_filter=self._select_single_type_filter,
+            on_filter_assets=self._filter_assets,
+            on_clear_type_filters=self._clear_type_filters,
+            on_scan_button_click=self._on_scan_button_click,
             on_select_asset=self._select_asset,
             on_open_asset=self._open_asset_path,
             on_context_menu=self._show_hidden_context_menu,
             on_node_open=self._mark_tree_node_open,
             on_node_close=self._mark_tree_node_closed,
         )
-        self.asset_tree.pack(fill="both", expand=True, padx=12, pady=(0, 8))
+        self.sidebar_panel.grid(row=0, column=0, sticky="nsew")
+        self.scan_btn = self.sidebar_panel.scan_btn
+        self.type_quick_menu = self.sidebar_panel.type_quick_menu
+        self.sort_menu = self.sidebar_panel.sort_menu
+        self.asset_tree = self.sidebar_panel.asset_tree
 
     def _select_all_type_filters(self):
         for var in self.type_filter_vars.values():

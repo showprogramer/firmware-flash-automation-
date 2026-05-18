@@ -74,13 +74,14 @@ FirmwareListPanel（只做装配和事件路由）
 - [x] `FirmwareListPanel._asset_usb_flow` 等方法改为委托到 `asset_helpers` 模块
 - [x] 树展开状态从 `self._tree_expanded` 迁移到 `self._tree_expansion = TreeExpansionModel()`
 - [x] 新建 `src/fwasset/ui/panels/log_panel.py`，将日志区拆分为 `LogPanel`
-- [~] FirmwareListPanel 保留为装配器，筛选/排序/树分组已委托给 AssetFilterModel，选中状态与隐藏判定已委托给 AssetSelectionModel，树展开状态已委托给 TreeExpansionModel，操作面板已通过 PanelHost Protocol 解耦；日志区已拆分为 `LogPanel`
+- [x] 新建 `src/fwasset/ui/panels/sidebar_panel.py`，将左侧搜索、类型筛选、扫描按钮和资源树装配拆分为 `SidebarPanel`
+- [~] FirmwareListPanel 保留为装配器，筛选/排序/树分组已委托给 AssetFilterModel，选中状态与隐藏判定已委托给 AssetSelectionModel，树展开状态已委托给 TreeExpansionModel，操作面板已通过 PanelHost Protocol 解耦；左侧栏和日志区已拆分为独立 Panel
 
 **预估工作量：** 3～5 天（可分批渐进迁移，不需要一次重写）
 
 ### 当前状态
 
-第三阶段已完成。`FirmwareListPanel` 的纯业务逻辑已提取为独立可测试函数（`asset_usb_flow`、`asset_rom_pkg_files`、`asset_dir_path`、`asset_primary_file_path`）；树展开状态管理已提取为 `TreeExpansionModel`；操作面板通过 `PanelHost` Protocol 与宿主解耦，`AutoUsbPanel` 直接调用 `asset_helpers` 而非 `panel_host` 方法；`make_bool_var` 提取为公共组件；日志区已拆分为 `src/fwasset/ui/panels/log_panel.py`。
+第三阶段已完成。`FirmwareListPanel` 的纯业务逻辑已提取为独立可测试函数（`asset_usb_flow`、`asset_rom_pkg_files`、`asset_dir_path`、`asset_primary_file_path`）；树展开状态管理已提取为 `TreeExpansionModel`；操作面板通过 `PanelHost` Protocol 与宿主解耦，`AutoUsbPanel` 直接调用 `asset_helpers` 而非 `panel_host` 方法；`make_bool_var` 提取为公共组件；日志区已拆分为 `src/fwasset/ui/panels/log_panel.py`；左侧搜索、类型筛选、扫描按钮和资源树装配已拆分为 `src/fwasset/ui/panels/sidebar_panel.py`。
 
 ---
 
@@ -164,8 +165,8 @@ def _filter_assets(self):
 
 - [ ] 在 `scan_firmware_assets()` 中加入 mtime 比对逻辑（与 `scan_meta` 表对比）
 - [ ] 新增 `scan_single_directory(model_dir: str)` 函数，支持局部刷新
-- [ ] `_run_task` 扫描任务加入 `cancel_event: threading.Event` 参数
-- [ ] UI 扫描按钮在扫描中变为"取消"状态
+- [x] `_run_task` 扫描任务加入 `cancel_event: threading.Event` 参数
+- [x] UI 扫描按钮在扫描中变为"取消"状态
 - [ ] （可选，低优先级）集成 `watchdog` 实现后台自动检测变更
 
 **预估工作量：** mtime 跳过 0.5 天；取消机制 1 天；watchdog 3 天
@@ -417,3 +418,12 @@ for cfg in type_configs:
 - `FirmwareListPanel` 仍保留 `_scan_cancel_event` 兼容层，当前测试和潜在外部调用无需同步大改；后续可在确认无依赖后删除兼容属性。
 - Issue 3 已完成的扫描取消链路保持不变：扫描中再次点击按钮触发取消，不打开目录选择器；后台任务继续捕获本次扫描创建的 `cancel_event`。
 - 当前自动化验证：`uv run python -m pytest tests\test_scan_state_model.py tests\test_app_service_smoke.py -q --no-cov`，22 passed。
+
+---
+
+## 2026-05-18 更新记录：Issue 1 SidebarPanel 拆分
+
+- Issue 1 继续推进：新增 `SidebarPanel`，将左侧搜索框、类型快速筛选、排序菜单、隐藏开关、扫描按钮和 `AssetTreeView` 装配从 `FirmwareListPanel` 中拆出。
+- `FirmwareListPanel._build_sidebar()` 现在只负责创建 `SidebarPanel` 并接回 `scan_btn`、`type_quick_menu`、`sort_menu`、`asset_tree` 兼容属性，现有调用路径保持不变。
+- 同步 Issue 3 清单状态：扫描取消事件和扫描中按钮状态已完成；mtime 跳过与局部刷新仍待后续处理。
+- 当前自动化验证：`uv run python -m pytest tests\test_sidebar_panel.py tests\test_app_service_smoke.py -q --no-cov`，18 passed。

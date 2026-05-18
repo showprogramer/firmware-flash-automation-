@@ -7,7 +7,7 @@ This is a Python desktop application for managing firmware assets. Source code l
 - Console entry point → `fwasset.app:main`
 
 Tests live in `tests/` and follow the same feature boundaries as source modules.  
-Project notes and task plans are in `specs/`, user-facing documentation in `README.md`, helper scripts in `scripts/`.  
+Project notes and task plans are in `specs/`, user-facing documentation in `docs/README.md`, change history in `docs/CHANGELOG.md`, helper scripts in `scripts/`.
 Runtime files belong in `.runtime/`. **Do not commit** local databases, logs, caches, or `config.toml`.
 
 ## Build, Test, and Development Commands (构建、测试与开发命令)
@@ -33,7 +33,7 @@ Runtime files belong in `.runtime/`. **Do not commit** local databases, logs, ca
 - Filter with `-m "not ui"` when needed
 
 ## Task Verification & Git Workflow (任务验证与提交流程)
-**重要规则**：当涉及以下情况时，**必须先通知我人工验证**，等待我明确回复「验证通过」或「可以提交」之后，才能执行 git commit 和更新 CHANGELOG：
+**重要规则**：当涉及以下情况时，**必须先通知我人工验证**，等待我明确回复「验证通过」或「可以提交」之后，才能执行 git commit 和更新 `docs/CHANGELOG.md`：
 
 - UI 相关改动
 - 核心业务逻辑修改
@@ -43,12 +43,21 @@ Runtime files belong in `.runtime/`. **Do not commit** local databases, logs, ca
 
 **流程**：
 1. 完成后明确告诉我「已完成，请人工验证」。
-2. 我验证通过并回复后，再生成 Conventional Commit 并提交。
-3. 同时补充 `CHANGELOG.md`。
-4. 如果任务对应 `specs/` 中的 TODO 或技术计划，完成后同步将对应条目标记为已完成；已拆分出的 `src/fwasset/ui/panels/log_panel.py` 不得继续标记为待拆。
+2. 回复中列出已运行的自动化验证命令和结果；如果我粘贴同一组结果并说明验证通过，可视为人工验收已完成。
+3. 我验证通过并回复后，再生成 Conventional Commit 并提交。
+4. 同时补充 `docs/CHANGELOG.md`。
+5. 如果任务对应 `specs/` 中的 TODO 或技术计划，完成后同步将对应条目标记为已完成；已拆分出的 `src/fwasset/ui/panels/log_panel.py` 不得继续标记为待拆。
+
+## Migration Notes (迁移记录)
+Use `docs/migration note.md` for changes that future agents must understand before editing:
+- File or directory moves, especially documentation moving into `docs/` or review docs moving into `docs/code-review/`
+- Public entry point changes, config/runtime path changes, database/cache schema migrations
+- Compatibility shims, deprecated paths, or follow-up cleanup that should not be guessed from Git history alone
+
+Do not write migration notes for ordinary bug fixes that only change local implementation details. Keep each note short: date, reason, old path/API, new path/API, compatibility impact, verification command, and rollback or follow-up if relevant.
 
 ## 代码审查文档自动化规范 (Code Review Automation)
-每当完成代码重构、修复、重大修改或审查后，请**自动**在 `specs/` 目录下创建或更新审查文档，并严格使用以下结构。
+每当完成代码重构、修复、重大修改或审查后，请**自动**在 `docs/code-review/` 目录下创建或更新审查文档，并严格使用以下结构。
 
 ### 文件命名建议
 - `code-review-YYYYMMDD-序号.md`（例如 `code-review-20260514-01.md`）

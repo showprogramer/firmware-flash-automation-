@@ -3,6 +3,15 @@
 ## Unreleased
 
 ### refactor
+- 新增 `SidebarPanel`，将左侧搜索、类型快速筛选、排序、隐藏开关、扫描按钮和 `AssetTreeView` 装配从 `FirmwareListPanel` 中拆出；`FirmwareListPanel._build_sidebar()` 保留兼容属性并只负责创建和路由侧边栏。
+
+### docs
+- 补充 `AGENTS.md` 的人工验证、`docs/CHANGELOG.md`、`docs/code-review/` 与 `docs/migration note.md` 使用规则；新增迁移记录，明确文档目录迁移后的维护位置。
+
+### test
+- 新增 `tests/test_sidebar_panel.py`，覆盖侧边栏扫描按钮和资源树回调契约；本轮验证通过 `uv run python -m pytest tests\test_sidebar_panel.py tests\test_app_service_smoke.py tests\test_operation_panels.py -q --no-cov` -> `31 passed`，`.\scripts\test.ps1` -> `189 passed`，总覆盖率 `84.45%`。
+
+### refactor
 - 提取扫描状态管理为 `ScanStateModel`，将扫描开始、取消请求、完成清理从 `FirmwareListPanel` 中拆出，并保留 `_scan_cancel_event` 兼容层以降低既有调用影响。
 
 ### test
