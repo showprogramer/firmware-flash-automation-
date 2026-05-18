@@ -63,6 +63,11 @@ ui/                          # GUI 层（CustomTkinter）
 ├── asset_tree.py            # 资产树组件
 ├── design_tokens.py         # 设计系统（颜色/字体，亮暗主题）
 ├── shared_widgets.py        # 可复用组件
+├── panels/                  # 主面板子组件
+│   ├── sidebar_panel.py     # 侧边栏（搜索、筛选、扫描、树视图）
+│   ├── detail_panel.py      # 选中条目详情
+│   ├── header_bar.py        # 工具栏
+│   └── log_panel.py         # 日志面板
 ├── operation_panels/        # 操作面板（注册模式，按 flash_mode 动态加载）
 │   ├── registry.py          # @register 装饰器 + get_panel() 查找
 │   ├── host_types.py        # PanelHost Protocol（依赖倒置）
@@ -74,6 +79,7 @@ ui/                          # GUI 层（CustomTkinter）
 └── view_models/             # 视图模型
     ├── asset_filter_model.py   # 筛选、排序、分组
     ├── asset_selection_model.py # 选择状态与隐藏项追踪
+    ├── scan_state_model.py      # 扫描生命周期与取消状态
     └── tree_expansion_model.py  # 树节点展开/折叠状态
 ```
 
@@ -98,9 +104,6 @@ uv sync --extra dev
 
 # 运行应用（开发模式）
 uv run fwasset
-
-# 或直接运行
-.\.venv\Scripts\python.exe run.py
 ```
 
 ### 打包为 exe
@@ -186,10 +189,10 @@ Copy-Item config.example.toml config.toml
 .\scripts\test.ps1
 
 # 跳过 UI 相关测试（无桌面环境时）
-uv run pytest -m "not ui" -q
+uv run python -m pytest -m "not ui" -q
 
 # 仅运行核心逻辑测试
-uv run pytest tests/core/ -q
+uv run python -m pytest src/fwasset/tests/test_asset_index.py -q --no-cov
 ```
 
 测试框架：pytest + pytest-cov + hypothesis。UI 测试标记为 `@pytest.mark.ui`，在 CI 或 headless 环境中可通过 `-m "not ui"` 跳过。
