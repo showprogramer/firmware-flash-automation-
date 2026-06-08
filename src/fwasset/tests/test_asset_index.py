@@ -28,6 +28,10 @@ def make_asset(
     firmware_type: str = "mainboard",
     model: str = "L36",
     directory_name: str = "mainboard_v1",
+    category: str = "",
+    platform: str = "",
+    scheme_name: str = "",
+    scheme_path: str = "",
 ) -> FirmwareAsset:
     model_dir = base / f"{model} test"
     asset_dir = model_dir / directory_name
@@ -49,6 +53,10 @@ def make_asset(
         "tool_path": "D:/tools/writer.exe",
         "tool_dir": "writer",
         "label": f"{model} V1.0.0 [{directory_name}]",
+        "category": category,
+        "platform": platform,
+        "scheme_name": scheme_name,
+        "scheme_path": scheme_path,
     }
 
 
@@ -158,7 +166,8 @@ def test_schema_version_mismatch_raises_chinese_recovery_message(tmp_path: Path)
         init_asset_index(db_path)
 
 
-def test_schema_version_one_migrates_usb_flow_column(tmp_path: Path):
+def test_schema_version_one_migrates_to_v3(tmp_path: Path):
+    """v1 database (no usb_flow, no category/platform/scheme) should auto-migrate to v3."""
     db_path = tmp_path / "fwasset.db"
     import sqlite3
 
@@ -198,3 +207,81 @@ def test_schema_version_one_migrates_usb_flow_column(tmp_path: Path):
     with sqlite3.connect(db_path) as conn:
         columns = [row[1] for row in conn.execute("PRAGMA table_info(assets)").fetchall()]
     assert "usb_flow" in columns
+    assert "category" in columns
+    assert "platform" in columns
+    assert "scheme_name" in columns
+    assert "scheme_path" in columns
+
+
+def test_schema_version_two_migrates_to_v3(tmp_path: Path):
+    """v2 database (has usb_flow but no category/platform/scheme) should auto-migrate to v3."""
+    db_path = tmp_path / "fwasset.db"
+    import sqlite3
+
+    with sqlite3.connect(db_path) as conn:
+        conn.executescript(
+            """
+            CREATE TABLE schema_meta (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
+            INSERT INTO schema_meta(key, value) VALUES('schema_version', '2');
+            CREATE TABLE assets (
+                path TEXT PRIMARY KEY,
+                series TEXT NOT NULL,
+                model TEXT NOT NULL,
+                model_directory_name TEXT NOT NULL,
+                model_directory_path TEXT NOT NULL,
+                firmware_type TEXT NOT NULL,
+                firmware_label TEXT NOT NULL,
+                flash_mode TEXT NOT NULL,
+                usb_flow TEXT NOT NULL DEFAULT '',
+                version TEXT NOT NULL,
+                directory_name TEXT NOT NULL,
+                files_json TEXT NOT NULL,
+                modified_time REAL NOT NULL,
+                scanned_at REAL NOT NULL,
+                tool_name TEXT NOT NULL,
+                tool_path TEXT NOT NULL,
+                tool_dir TEXT NOT NULL,
+                label TEXT NOT NULL
+            );
+            """
+        )
+
+    init_asset_index(db_path)
+
+    assert schema_version(db_path) == SCHEMA_VERSION
+    with sqlite3.connect(db_path) as conn:
+        columns = [row[1] for row in conn.execute("PRAGMA table_info(assets)").fetchall()]
+    assert "category" in columns
+    assert "platform" in columns
+    assert "scheme_name" in columns
+    assert "scheme_path" in columns
+
+
+def test_query_assets_by_category_and_scheme(tmp_path: Path):
+    """query_assets should support filtering by category, platform and scheme_name."""
+    db_path = tmp_path / "fwasset.db"
+    common_asset = make_asset(tmp_path, model="L36", directory_name="common_main", category="common")
+    custom_asset = make_asset(
+        tmp_path,
+        model="L36",
+        directory_name="custom_main",
+        category="custom",
+        scheme_name="以色列-Royal-Z9",
+        scheme_path="/some/path/以色列-Royal-Z9",
+    )
+    save_assets([common_asset, custom_asset], str(tmp_path), db_path)
+
+    common_results = query_assets(path=db_path, category="common")
+    assert len(common_results) == 1
+    assert common_results[0]["directory_name"] == "common_main"
+
+    custom_results = query_assets(path=db_path, category="custom")
+    assert len(custom_results) == 1
+    assert custom_results[0]["scheme_name"] == "以色列-Royal-Z9"
+
+    scheme_results = query_assets(path=db_path, scheme_name="以色列")
+    assert len(scheme_results) == 1
+    assert scheme_results[0]["category"] == "custom"

@@ -11,7 +11,7 @@ from fwasset.core.sort_config import SortKey, apply_sort
 from fwasset.core.types import FirmwareAsset
 
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 HiddenItemType = Literal["model_directory", "firmware_type", "asset"]
 
 
@@ -65,7 +65,11 @@ def init_asset_index(path: str | Path | None = None) -> None:
                     tool_name TEXT NOT NULL,
                     tool_path TEXT NOT NULL,
                     tool_dir TEXT NOT NULL,
-                    label TEXT NOT NULL
+                    label TEXT NOT NULL,
+                    category TEXT NOT NULL DEFAULT '',
+                    platform TEXT NOT NULL DEFAULT '',
+                    scheme_name TEXT NOT NULL DEFAULT '',
+                    scheme_path TEXT NOT NULL DEFAULT ''
                 );
                 CREATE INDEX IF NOT EXISTS idx_assets_type ON assets(firmware_type);
                 CREATE INDEX IF NOT EXISTS idx_assets_model ON assets(model);
@@ -90,13 +94,24 @@ def init_asset_index(path: str | Path | None = None) -> None:
                 )
                 return
             current_version = int(current["value"])
-            if current_version == 1 and SCHEMA_VERSION == 2:
+            if current_version == 1:
                 conn.execute("ALTER TABLE assets ADD COLUMN usb_flow TEXT NOT NULL DEFAULT ''")
+                current_version = 2
                 conn.execute(
-                    "UPDATE schema_meta SET value = ? WHERE key = 'schema_version'",
-                    (str(SCHEMA_VERSION),),
+                    "UPDATE schema_meta SET value = '2' WHERE key = 'schema_version'"
                 )
-                return
+            if current_version == 2:
+                conn.execute("ALTER TABLE assets ADD COLUMN category TEXT NOT NULL DEFAULT ''")
+                conn.execute("ALTER TABLE assets ADD COLUMN platform TEXT NOT NULL DEFAULT ''")
+                conn.execute("ALTER TABLE assets ADD COLUMN scheme_name TEXT NOT NULL DEFAULT ''")
+                conn.execute("ALTER TABLE assets ADD COLUMN scheme_path TEXT NOT NULL DEFAULT ''")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_category ON assets(category)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_platform ON assets(platform)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_scheme ON assets(scheme_name)")
+                current_version = 3
+                conn.execute(
+                    "UPDATE schema_meta SET value = '3' WHERE key = 'schema_version'"
+                )
             if current_version != SCHEMA_VERSION:
                 raise AssetIndexError(
                     f"本地资产索引版本不兼容：当前 {current['value']}，需要 {SCHEMA_VERSION}。请重新扫描生成。"
@@ -128,12 +143,14 @@ def save_assets(
             INSERT INTO assets (
                 path, series, model, model_directory_name, model_directory_path,
                 firmware_type, firmware_label, flash_mode, usb_flow, version, directory_name,
-                files_json, modified_time, scanned_at, tool_name, tool_path, tool_dir, label
+                files_json, modified_time, scanned_at, tool_name, tool_path, tool_dir, label,
+                category, platform, scheme_name, scheme_path
             )
             VALUES (
                 :path, :series, :model, :model_directory_name, :model_directory_path,
                 :firmware_type, :firmware_label, :flash_mode, :usb_flow, :version, :directory_name,
-                :files_json, :modified_time, :scanned_at, :tool_name, :tool_path, :tool_dir, :label
+                :files_json, :modified_time, :scanned_at, :tool_name, :tool_path, :tool_dir, :label,
+                :category, :platform, :scheme_name, :scheme_path
             )
             """,
             asset_rows,
@@ -171,6 +188,9 @@ def query_assets(
     path: str | Path | None = None,
     sort_key: SortKey | str = SortKey.PATH,
     ascending: bool = True,
+    category: str = "",
+    scheme_name: str = "",
+    platform: str = "",
 ) -> list[FirmwareAsset]:
     init_asset_index(path)
     clauses: list[str] = []
@@ -180,6 +200,15 @@ def query_assets(
         placeholders = ", ".join("?" for _ in selected_types)
         clauses.append(f"firmware_type IN ({placeholders})")
         params.extend(selected_types)
+    if category.strip():
+        clauses.append("category = ?")
+        params.append(category.strip())
+    if platform.strip():
+        clauses.append("platform = ?")
+        params.append(platform.strip())
+    if scheme_name.strip():
+        clauses.append("lower(scheme_name) LIKE ?")
+        params.append(f"%{scheme_name.strip().lower()}%")
     if keyword.strip():
         pattern = f"%{keyword.strip().lower()}%"
         clauses.append(
@@ -192,9 +221,11 @@ def query_assets(
                 OR lower(model_directory_name) LIKE ?
                 OR lower(path) LIKE ?
                 OR lower(flash_mode) LIKE ?
+                OR lower(scheme_name) LIKE ?
+                OR lower(platform) LIKE ?
             )"""
         )
-        params.extend([pattern] * 8)
+        params.extend([pattern] * 10)
     sql = "SELECT * FROM assets"
     if clauses:
         sql += " WHERE " + " AND ".join(clauses)
@@ -332,6 +363,10 @@ def _asset_to_row(asset: FirmwareAsset, scanned_at: float) -> dict[str, object]:
         "tool_path": str(asset.get("tool_path", "")),
         "tool_dir": str(asset.get("tool_dir", "")),
         "label": str(asset.get("label", "")),
+        "category": str(asset.get("category", "")),
+        "platform": str(asset.get("platform", "")),
+        "scheme_name": str(asset.get("scheme_name", "")),
+        "scheme_path": str(asset.get("scheme_path", "")),
     }
 
 
@@ -342,6 +377,7 @@ def _row_to_asset(row: sqlite3.Row) -> FirmwareAsset:
         files = []
     if not isinstance(files, list):
         files = []
+    keys = row.keys()
     return {
         "series": str(row["series"]),
         "firmware_type": str(row["firmware_type"]),  # type: ignore[typeddict-item]
@@ -360,4 +396,8 @@ def _row_to_asset(row: sqlite3.Row) -> FirmwareAsset:
         "tool_path": str(row["tool_path"]),
         "tool_dir": str(row["tool_dir"]),
         "label": str(row["label"]),
+        "category": str(row["category"]) if "category" in keys else "",
+        "platform": str(row["platform"]) if "platform" in keys else "",
+        "scheme_name": str(row["scheme_name"]) if "scheme_name" in keys else "",
+        "scheme_path": str(row["scheme_path"]) if "scheme_path" in keys else "",
     }

@@ -12,7 +12,15 @@ from fwasset.core.settings import (
     SCAN_VERSION_PATTERNS,
 )
 from fwasset.core.firmware_catalog import DEFAULT_FIRMWARE_CATALOG_PATH, enabled_firmware_types
+from fwasset.core.platform_config import load_platform_config
+from fwasset.core.scheme_config import discover_schemes, scheme_for_path
 from fwasset.core.types import FirmwareAsset, HandcontrolFolder
+
+# 通用/定制 的一级目录名
+_COMMON_DIR = "通用"
+_CUSTOM_DIR = "定制"
+# 双机芯平台的专属子目录名（在通用区内部）
+_DUAL_CORE_DIR = "双机芯-上3D-下2D"
 
 
 def _match_first_group(text: str, patterns: list[str]) -> str:
@@ -164,6 +172,11 @@ def scan_firmware_assets(
         raise NotADirectoryError(f"扫描根目录不是目录: {root}")
 
     type_configs = enabled_firmware_types(Path(catalog_path) if catalog_path else DEFAULT_FIRMWARE_CATALOG_PATH)
+
+    # --- 读取 TOML 配置（有则读，没有则向后兼容留空）---
+    platform_defaults = load_platform_config(root_path)
+    schemes = discover_schemes(root_path)
+
     results: list[FirmwareAsset] = []
     errors: list[str] = []
 
@@ -200,6 +213,12 @@ def scan_firmware_assets(
         series = guess_series_from_model_or_path(model, str(model_directory))
         files = sorted(filenames)
         label = f"{model}  {version or '-'}  [{folder_path.name}]  {cfg['label']}"
+
+        # --- 推断 category / platform / scheme ---
+        category, platform, scheme_name, scheme_path = _infer_asset_context(
+            root_path, folder_path, schemes
+        )
+
         results.append(
             {
                 "series": series,
@@ -219,11 +238,59 @@ def scan_firmware_assets(
                 "tool_path": cfg["tool_path"],
                 "tool_dir": cfg.get("tool_dir", ""),
                 "label": label,
+                "category": category,
+                "platform": platform,
+                "scheme_name": scheme_name,
+                "scheme_path": scheme_path,
             }
         )
 
     results.sort(key=lambda item: (item["path"], item["firmware_type"]))
     return results, errors
+
+
+def _infer_asset_context(
+    root_path: Path,
+    folder_path: Path,
+    schemes: list,
+) -> tuple[str, str, str, str]:
+    """
+    根据资产路径推断 (category, platform, scheme_name, scheme_path)。
+
+    规则：
+    - 路径相对 root 的第一段是 '通用' → category='common'
+    - 路径相对 root 的第一段是 '定制' → category='custom'，向 scheme_for_path 查询方案
+    - 在 '通用/双机芯-上3D-下2D/' 下 → platform='双机芯-上3D-下2D'
+    - 其他通用区 → platform=''
+    - 旧目录（无法推断）→ 全部留空字符串（向后兼容）
+    """
+    try:
+        rel_parts = folder_path.relative_to(root_path).parts
+    except ValueError:
+        return "", "", "", ""
+
+    if not rel_parts:
+        return "", "", "", ""
+
+    first = rel_parts[0]
+
+    if first == _COMMON_DIR:
+        # 在通用区
+        category = "common"
+        # 检查是否在双机芯专属子目录下
+        platform = _DUAL_CORE_DIR if (len(rel_parts) > 1 and rel_parts[1] == _DUAL_CORE_DIR) else ""
+        return category, platform, "", ""
+
+    if first == _CUSTOM_DIR:
+        # 在定制区，查找所属方案
+        category = "custom"
+        scheme = scheme_for_path(schemes, folder_path)
+        if scheme is not None:
+            return category, scheme.platform, scheme.name, str(scheme.path)
+        return category, "", "", ""
+
+    # 旧目录结构（既不是 通用 也不是 定制），向后兼容留空
+    return "", "", "", ""
 
 
 def parse_rom_filename(name: str) -> tuple[str, str]:

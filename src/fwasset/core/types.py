@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Any, Literal, TypedDict
 
 
@@ -107,3 +109,8 @@ class FirmwareAsset(TypedDict):
     tool_path: str
     tool_dir: str
     label: str
+    # --- L36 新目录结构字段（向后兼容：旧目录留空字符串）---
+    category: Literal["common", "custom", ""]   # 通用 / 定制
+    platform: str      # 整机平台，如 "双机芯-上3D-下2D"；默认平台留 ""
+    scheme_name: str   # 定制方案名，如 "以色列-Royal-Z9"；通用区为 ""
+    scheme_path: str   # 定制方案根目录绝对路径；通用区为 ""
