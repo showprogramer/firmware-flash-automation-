@@ -1,7 +1,7 @@
 # UI 重设计方案：工作台模式
 
 > 日期：2026-06-06
-> 状态：待确认
+> 状态：已完成
 > 前置：types.py / asset_index.py / file_scan.py 的 Schema v3 改造已完成
 
 ## 效果图预览

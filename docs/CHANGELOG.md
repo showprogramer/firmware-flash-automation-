@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### refactor(ui): 全面重写 UI 为方案工作台模式
+
+- 移除原有的 `FirmwareListPanel`、`AssetTreeView` 等老旧 UI 组件。
+- 新增 `WorkbenchPanel` 和 `SchemeWorkbenchModel`，完全改版为以「方案」为中心的工作台界面。
+- 引入「型号智能切换与搜索」、「双驱分区导航树」（通用模块区与定制方案区）和「多维关键字搜索」能力。
+- 详情区（右侧面板）支持「模块卡片流」并排展示同类型模块多变体，以及双击卡片图标直接在资源管理器打开对应文件夹。
+- 修复扫描和读取本地资产索引时的 payload 匹配错误，并补充在未设置扫描目录时自动弹出目录选择对话框的功能。
+
+### test
+- 删除并废弃了 `test_asset_filter_model.py` 等与被移除旧 UI 组件强耦合的大量无用测试。
+- 更新并重构 `test_app_service_smoke.py` 与 `test_operation_panels.py`，确保其适配全新的 `WorkbenchPanel` 和 `module_card.py` 结构。
+
 ### refactor(ui): 全面重构UI为iOS HIG风格设计系统
 
 - 重建设计Token系统：颜色切换为iOS HIG色系（BG_WINDOW/BG_SIDEBAR/COLOR_PRIMARY=#007AFF等），新增TEXT_TERTIARY、TEXT_ON_PRIMARY、SEPARATOR、COLOR_INFO语义色
