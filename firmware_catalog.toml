@@ -14,11 +14,10 @@ key = "segmented_screen"
 label = "断码屏手控"
 dir_keywords = ["断码屏", "断码屏亚克力手控"]
 file_extensions = [".rom", ".pkg", ".zip", ".bin"]
-flash_mode = "auto_usb"
-usb_flow = "paired_files"
-tool_name = "断码屏手控流程"
+flash_mode = "tool_launch"
+tool_name = "断码屏手控烧录工具"
 tool_path = ""
-tool_dir = ""
+tool_dir = "断码屏手控"
 enabled = true
 
 [[firmware_types]]

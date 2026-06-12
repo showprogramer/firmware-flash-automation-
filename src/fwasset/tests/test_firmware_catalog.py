@@ -71,7 +71,9 @@ def test_default_catalog_assigns_explicit_usb_flows():
     rows = {item["key"]: item for item in enabled_firmware_types()}
 
     assert rows["handcontrol_ui"]["usb_flow"] == "paired_files"
-    assert rows["segmented_screen"]["usb_flow"] == "paired_files"
+    # 断码屏手控走烧录工具（非U盘流程）——与普通手控UI区分开。
+    assert rows["segmented_screen"]["flash_mode"] == "tool_launch"
+    assert rows["segmented_screen"]["usb_flow"] == ""
     assert rows["music_bt"]["flash_mode"] == "tool_launch"
     assert rows["music_bt"]["usb_flow"] == ""
     assert rows["music_files"]["flash_mode"] == "auto_usb"
