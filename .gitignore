@@ -40,3 +40,5 @@ build/
 
 # Agent tooling (user-local)
 .claude/
+.opencode/
+skills-lock.json

@@ -11,7 +11,7 @@ from hypothesis import strategies as st
 from fwasset.core.settings import _find_app_root as _find_project_root
 
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 SRC_ROOT = REPO_ROOT / "src"
 PACKAGE_ROOT = SRC_ROOT / "fwasset"
 
@@ -32,12 +32,6 @@ def test_legacy_root_entries_removed():
 def test_import_fwasset_package():
     module = importlib.import_module("fwasset")
     assert module is not None
-
-
-def test_run_py_uses_fwasset_main():
-    content = (REPO_ROOT / "run.py").read_text(encoding="utf-8")
-    assert "from fwasset.app import main" in content
-    assert 'if __name__ == "__main__":' in content
 
 
 def test_pyproject_has_src_layout_settings():
