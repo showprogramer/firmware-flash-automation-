@@ -7,8 +7,6 @@ import customtkinter as ctk
 from fwasset.core.firmware_catalog import load_firmware_catalog
 from fwasset.core.tool_discovery import discover_tool_path, launch_tool
 from fwasset.ui.design_tokens import (
-    BG_HOVER,
-    BG_INPUT,
     COLOR_DANGER,
     COLOR_PRIMARY,
     COLOR_PRIMARY_HOVER,
@@ -21,12 +19,10 @@ from fwasset.ui.design_tokens import (
     SPACE_LG,
     SPACE_MD,
     SPACE_SM,
-    TEXT_PRIMARY,
     TEXT_SECONDARY,
 )
 from fwasset.ui.operation_panels.base import BaseOperationPanel
 from fwasset.ui.operation_panels.registry import register
-from fwasset.ui.operation_panels.shared_actions import build_handoff_actions
 
 
 @register("tool_launch")
@@ -93,7 +89,7 @@ class ToolLaunchPanel(BaseOperationPanel):
             command=self._launch_current_tool,
         ).pack(fill="x", pady=(0, SPACE_SM))
 
-        build_handoff_actions(self, self.asset, self._panel_host, include_tool_combo=True)
+        # 精简操作区：不再渲染复制路径 / U 盘那一排（双击行即可开目录）。
 
         if not tool_path:
             ctk.CTkLabel(

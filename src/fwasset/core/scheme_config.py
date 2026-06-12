@@ -26,38 +26,72 @@ class SchemeConfig:
 
 def discover_schemes(model_root: Path) -> list[SchemeConfig]:
     """
-    扫描型号根目录下 `定制/` 子目录中的所有定制方案。
+    扫描根目录及其子目录下 `定制/` 子目录中的所有定制方案。
+
+    支持两种目录层级：
+    - model_root/定制/...   （型号根目录就是结构化根目录）
+    - model_root/型号名/定制/...  （型号根目录包含多个型号子目录）
+
     每个含有 `方案配置.toml` 的子目录视为一个方案。
     子目录不含 TOML 时，也识别为方案但元数据留默认值（向后兼容）。
     `定制/单模块变体/` 目录跳过（不是整机方案）。
     """
-    custom_root = model_root / _CUSTOM_DIR_NAME
-    if not custom_root.exists() or not custom_root.is_dir():
-        return []
-
     results: list[SchemeConfig] = []
-    for scheme_dir in sorted(custom_root.iterdir()):
-        if not scheme_dir.is_dir():
-            continue
-        # 跳过单模块变体汇总目录
-        if scheme_dir.name in ("单模块变体",):
-            continue
+    seen_paths: set[str] = set()
 
-        toml_path = scheme_dir / _SCHEME_CONFIG_FILENAME
-        name = scheme_dir.name
-        platform = ""
+    # 收集所有包含 定制 子目录的路径
+    custom_dirs: list[Path] = []
 
-        if toml_path.exists() and tomllib is not None:
-            try:
-                with open(toml_path, "rb") as f:
-                    data = tomllib.load(f)
-                name = str(data.get("name", scheme_dir.name)).strip() or scheme_dir.name
-                platform = str(data.get("platform", "")).strip()
-            except Exception:
-                pass
+    # 直接子目录：model_root/定制
+    direct = model_root / _CUSTOM_DIR_NAME
+    if direct.exists() and direct.is_dir():
+        custom_dirs.append(direct)
 
-        results.append(SchemeConfig(name=name, platform=platform, path=scheme_dir))
+    # 间接子目录：model_root/*/定制 （型号目录定性结构）
+    try:
+        for child in model_root.iterdir():
+            if child.is_dir() and not _is_excluded_dir(child.name):
+                candidate = child / _CUSTOM_DIR_NAME
+                if candidate.exists() and candidate.is_dir():
+                    custom_dirs.append(candidate)
+    except OSError:
+        pass
+
+    for custom_root in custom_dirs:
+        for scheme_dir in sorted(custom_root.iterdir()):
+            if not scheme_dir.is_dir():
+                continue
+            # 跳过单模块变体汇总目录
+            if scheme_dir.name in ("单模块变体",):
+                continue
+
+            # 去重：避免扫描根目录包含多个型号时重复
+            scheme_key = str(scheme_dir.resolve())
+            if scheme_key in seen_paths:
+                continue
+            seen_paths.add(scheme_key)
+
+            toml_path = scheme_dir / _SCHEME_CONFIG_FILENAME
+            name = scheme_dir.name
+            platform = ""
+
+            if toml_path.exists() and tomllib is not None:
+                try:
+                    with open(toml_path, "rb") as f:
+                        data = tomllib.load(f)
+                    name = str(data.get("name", scheme_dir.name)).strip() or scheme_dir.name
+                    platform = str(data.get("platform", "")).strip()
+                except Exception:
+                    pass
+
+            results.append(SchemeConfig(name=name, platform=platform, path=scheme_dir))
     return results
+
+
+def _is_excluded_dir(name: str) -> bool:
+    """判断目录名是否应被跳过（临时、备份等）。"""
+    lower = name.lower()
+    return any(kw in lower for kw in ("backup", "-back", "旧", "temp", "tmp"))
 
 
 def scheme_for_path(schemes: list[SchemeConfig], asset_path: Path) -> SchemeConfig | None:

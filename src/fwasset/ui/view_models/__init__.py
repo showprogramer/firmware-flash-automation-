@@ -1,8 +1,9 @@
 """View-model helpers for UI panels."""
 
-from fwasset.ui.view_models.asset_filter_model import AssetFilterModel
-from fwasset.ui.view_models.asset_selection_model import AssetSelectionModel
 from fwasset.ui.view_models.scan_state_model import ScanStateModel
-from fwasset.ui.view_models.tree_expansion_model import TreeExpansionModel
+from fwasset.ui.view_models.scheme_workbench_model import SchemeWorkbenchModel
 
-__all__ = ["AssetFilterModel", "AssetSelectionModel", "ScanStateModel", "TreeExpansionModel"]
+__all__ = [
+    "ScanStateModel",
+    "SchemeWorkbenchModel",
+]

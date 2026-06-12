@@ -209,23 +209,26 @@ def query_assets(
     if scheme_name.strip():
         clauses.append("lower(scheme_name) LIKE ?")
         params.append(f"%{scheme_name.strip().lower()}%")
-    if keyword.strip():
-        pattern = f"%{keyword.strip().lower()}%"
-        clauses.append(
-            """(
-                lower(series) LIKE ?
-                OR lower(model) LIKE ?
-                OR lower(version) LIKE ?
-                OR lower(firmware_label) LIKE ?
-                OR lower(directory_name) LIKE ?
-                OR lower(model_directory_name) LIKE ?
-                OR lower(path) LIKE ?
-                OR lower(flash_mode) LIKE ?
-                OR lower(scheme_name) LIKE ?
-                OR lower(platform) LIKE ?
-            )"""
-        )
-        params.extend([pattern] * 10)
+    # 空格分词：每个词都要命中（任意字段 OR），词间 AND。
+    # 这样 "手控 V13" = (任意字段含"手控") AND (任意字段含"V13")，
+    # 解决"既想搜模块、又想搜版本号"。单个词时退化为原来的跨字段模糊。
+    keyword_fields = (
+        "series",
+        "model",
+        "version",
+        "firmware_label",
+        "directory_name",
+        "model_directory_name",
+        "path",
+        "flash_mode",
+        "scheme_name",
+        "platform",
+    )
+    for token in keyword.split():
+        pattern = f"%{token.lower()}%"
+        ors = " OR ".join(f"lower({field}) LIKE ?" for field in keyword_fields)
+        clauses.append(f"({ors})")
+        params.extend([pattern] * len(keyword_fields))
     sql = "SELECT * FROM assets"
     if clauses:
         sql += " WHERE " + " AND ".join(clauses)

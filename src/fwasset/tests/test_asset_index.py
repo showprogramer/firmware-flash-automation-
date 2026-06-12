@@ -99,6 +99,38 @@ def test_query_assets_by_keyword_and_type(tmp_path: Path):
     assert query_assets("no-match", firmware_types=["mainboard"], path=db_path) == []
 
 
+def test_query_assets_keyword_is_space_tokenized_AND(tmp_path: Path):
+    """多词搜索：空格分词，每个词都要命中（任意字段），词间 AND。
+
+    解决"既想搜手控、又想搜版本号"——把'手控 V13'当两个独立约束。
+    """
+    db_path = tmp_path / "fwasset.db"
+    # 同型号下两个手控变体，版本不同
+    hc_v12 = make_asset(tmp_path, firmware_type="handcontrol_ui", model="L36", directory_name="手控UI-A")
+    hc_v12["version"] = "V12"
+    hc_v12["firmware_label"] = "手控UI"
+    hc_v13 = make_asset(tmp_path, firmware_type="handcontrol_ui", model="L36", directory_name="手控UI-B")
+    hc_v13["version"] = "V13"
+    hc_v13["firmware_label"] = "手控UI"
+    mainboard = make_asset(tmp_path, firmware_type="mainboard", model="L36", directory_name="主板程序")
+    mainboard["version"] = "V13"  # 同样含 V13，但不是手控
+    save_assets([hc_v12, hc_v13, mainboard], str(tmp_path), db_path)
+
+    # "手控 V13" → 只命中 手控UI-B（手控 AND V13），不含 V12 手控、不含 V13 主板
+    got = query_assets("手控 V13", path=db_path)
+    assert [a["directory_name"] for a in got] == ["手控UI-B"]
+
+    # 词序无关："V13 手控" 同结果
+    got2 = query_assets("V13 手控", path=db_path)
+    assert [a["directory_name"] for a in got2] == ["手控UI-B"]
+
+    # 单词仍跨字段模糊匹配（向后兼容）
+    assert {a["directory_name"] for a in query_assets("手控", path=db_path)} == {"手控UI-A", "手控UI-B"}
+
+    # 多个空格 / 首尾空格不影响
+    assert [a["directory_name"] for a in query_assets("  手控   V13  ", path=db_path)] == ["手控UI-B"]
+
+
 def test_query_assets_supports_sort_key_and_direction(tmp_path: Path):
     db_path = tmp_path / "fwasset.db"
     assets = [

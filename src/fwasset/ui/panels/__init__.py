@@ -1,8 +1,9 @@
-"""UI panels extracted from FirmwareListPanel for separation of concerns."""
+"""UI panels: reusable building blocks for the workbench view."""
 
-from fwasset.ui.panels.detail_panel import DetailPanel
-from fwasset.ui.panels.header_bar import HeaderBar
+from fwasset.ui.panels.data_grid_panel import DataGridPanel
 from fwasset.ui.panels.log_panel import LogPanel
-from fwasset.ui.panels.sidebar_panel import SidebarPanel
 
-__all__ = ["DetailPanel", "HeaderBar", "LogPanel", "SidebarPanel"]
+__all__ = [
+    "DataGridPanel",
+    "LogPanel",
+]

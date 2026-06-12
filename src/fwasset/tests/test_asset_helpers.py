@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from fwasset.core.asset_helpers import asset_dir_path, asset_flash_mode, asset_primary_file_path, asset_rom_pkg_files, asset_usb_flow
+from fwasset.core.asset_helpers import asset_dir_path, asset_flash_mode, asset_primary_file_name, asset_primary_file_path, asset_rom_pkg_files, asset_usb_flow
 
 
 def _asset(**overrides) -> dict:
@@ -34,7 +34,16 @@ def test_asset_usb_flow_returns_configured_flow():
 
 def test_asset_usb_flow_infer_paired_files_from_type():
     assert asset_usb_flow(_asset(firmware_type="handcontrol_ui", usb_flow="")) == "paired_files"
-    assert asset_usb_flow(_asset(firmware_type="segmented_screen", usb_flow="")) == "paired_files"
+
+
+def test_asset_usb_flow_segmented_screen_is_not_usb():
+    """断码屏手控走烧录工具，不是U盘流程——区别于普通手控UI。"""
+    assert asset_usb_flow(_asset(firmware_type="segmented_screen", usb_flow="")) == ""
+
+
+def test_asset_flash_mode_forces_segmented_screen_to_tool_launch():
+    """断码屏即便残留 auto_usb 配置，也强制走烧录工具。"""
+    assert asset_flash_mode(_asset(firmware_type="segmented_screen", flash_mode="auto_usb")) == "tool_launch"
 
 
 def test_asset_usb_flow_infer_directory_copy_from_music():
@@ -104,3 +113,19 @@ def test_asset_primary_file_path_uses_dir_when_no_files():
     asset = _asset(path="D:/root/L36/主板/V1.0", files=[])
     result = asset_primary_file_path(asset)
     assert Path(result) == Path("D:/root/L36/主板/V1.0")
+
+
+def test_asset_primary_file_name_returns_filename_only():
+    asset = _asset(path="D:/root/L36/主板/V1.0", files=["readme.txt", "YJ_3DMain_L36_V40.bin"])
+    assert asset_primary_file_name(asset) == "YJ_3DMain_L36_V40.bin"
+
+
+def test_asset_primary_file_name_prefers_rom_for_handcontrol():
+    """手控 rom/pkg 配对：固定显示 rom 名称（用户要求）。"""
+    asset = _asset(path="D:/root/L36/手控UI/A", files=["hc_v13.pkg", "hc_v13.rom"])
+    assert asset_primary_file_name(asset) == "hc_v13.rom"
+
+
+def test_asset_primary_file_name_empty_when_no_files():
+    asset = _asset(path="D:/root/L36/主板/V1.0", files=[])
+    assert asset_primary_file_name(asset) == ""

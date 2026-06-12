@@ -3,7 +3,7 @@ from __future__ import annotations
 import customtkinter as ctk
 
 from fwasset.ui.design_tokens import BG_WINDOW
-from fwasset.ui.firmware_list_panel import FirmwareListPanel
+from fwasset.ui.workbench_panel import WorkbenchPanel
 
 
 DEFAULT_WINDOW_WIDTH = 1400
@@ -25,7 +25,7 @@ class UnifiedFlashPlatform(ctk.CTk):
         self.container.grid_rowconfigure(0, weight=1)
         self.container.grid_columnconfigure(0, weight=1)
 
-        self.asset_panel = FirmwareListPanel(self.container)
+        self.asset_panel = WorkbenchPanel(self.container)
         self.asset_panel.grid(row=0, column=0, sticky="nsew")
         self.asset_panel.activate()
 

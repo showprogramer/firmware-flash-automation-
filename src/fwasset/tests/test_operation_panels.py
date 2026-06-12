@@ -70,10 +70,13 @@ class TestBaseOperationPanel:
         import inspect
 
         sig = inspect.signature(BaseOperationPanel.__init__)
-        params = list(sig.parameters.keys())
+        params = sig.parameters
         assert "asset" in params
         assert "log_fn" in params
         assert "panel_host" in params
+        # asset/log_fn/panel_host are keyword-only; callers must pass them by name.
+        for name in ("asset", "log_fn", "panel_host"):
+            assert params[name].kind is inspect.Parameter.KEYWORD_ONLY
 
 
 class TestPanelClasses:
@@ -106,6 +109,9 @@ class TestPanelClasses:
 
             def _refresh_usb(self):
                 pass
+
+            def get_global_usb_drive(self):
+                return "E:"
 
             def _log(self, msg):
                 pass
@@ -172,19 +178,25 @@ class TestSharedActions:
 
 
 class TestIntegration:
-    """Integration test: verify FirmwareListPanel uses the registry."""
+    """Integration test: verify the workbench panel dispatches via the registry."""
 
-    def test_firmware_list_panel_imports_registry(self):
-        """FirmwareListPanel should import get_panel from operation_panels."""
+    def test_workbench_panel_imports_registry(self):
+        """WorkbenchPanel should import get_panel from operation_panels."""
         from pathlib import Path
 
-        source = (Path(__file__).parent.parent / "src" / "fwasset" / "ui" / "firmware_list_panel.py").read_text(encoding="utf-8")
+        source = (Path(__file__).parent.parent / "ui" / "workbench_panel.py").read_text(encoding="utf-8")
         assert "get_panel" in source
-        assert "DisabledPanel" in source
 
-    def test_render_operation_panel_uses_registry(self):
-        """_render_operation_panel should use get_panel to dispatch."""
+    def test_workbench_panel_constructs_panel_with_keyword_args(self):
+        """WorkbenchPanel must build panels with keyword-only asset/log_fn/panel_host.
+
+        Guards against the regression where the panel was constructed positionally
+        (PanelClass(container, asset, panel_host=self)), which raised TypeError.
+        """
         from pathlib import Path
 
-        source = (Path(__file__).parent.parent / "src" / "fwasset" / "ui" / "firmware_list_panel.py").read_text(encoding="utf-8")
-        assert "PanelClass = get_panel" in source
+        source = (Path(__file__).parent.parent / "ui" / "workbench_panel.py").read_text(encoding="utf-8")
+        assert "PanelClass(" in source
+        assert "asset=asset" in source
+        assert "log_fn=" in source
+        assert "panel_host=self" in source

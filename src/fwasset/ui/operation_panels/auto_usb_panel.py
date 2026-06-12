@@ -9,10 +9,7 @@ from fwasset.core.asset_helpers import asset_rom_pkg_files, asset_usb_flow
 from fwasset.core.services.flash_service import run_one_click
 from fwasset.core.services.music_flash_service import run_music_flash
 from fwasset.core.types import FirmwareAsset
-from fwasset.core.usb_ops import clean_usb, copy_to_usb, eject_usb, format_usb
 from fwasset.ui.design_tokens import (
-    BG_HOVER,
-    BG_INPUT,
     COLOR_PRIMARY,
     COLOR_PRIMARY_HOVER,
     FONT_FAMILY,
@@ -20,12 +17,10 @@ from fwasset.ui.design_tokens import (
     FONT_SIZE_MD,
     FONT_SIZE_SM,
     HEIGHT_LG,
-    HEIGHT_MD,
     RADIUS_SM,
     SPACE_LG,
     SPACE_MD,
     SPACE_SM,
-    TEXT_PRIMARY,
     TEXT_SECONDARY,
 )
 from fwasset.ui.operation_panels.base import BaseOperationPanel
@@ -38,8 +33,8 @@ class AutoUsbPanel(BaseOperationPanel):
     """auto_usb 类型操作面板：U 盘刷机流程。"""
 
     def build(self):
-        self._panel_host._build_usb_selector_row(self)
-        self._panel_host._refresh_usb()
+        # 精简操作区：不再内嵌 U 盘选择器与 1/2/3/4 分步按钮（用户嫌杂）。
+        # 盘符统一取全局选择（工具中心/设置）；双击行即可开目录。
         usb_flow = asset_usb_flow(self.asset)
         if usb_flow == "directory_copy":
             self._build_directory_copy_usb_ops()
@@ -49,7 +44,7 @@ class AutoUsbPanel(BaseOperationPanel):
         if usb_flow == "paired_files" and rom_file and pkg_file:
             ctk.CTkButton(
                 self,
-                text="一键智能刷机",
+                text="一键烧录",
                 height=HEIGHT_LG,
                 corner_radius=RADIUS_SM,
                 font=(FONT_FAMILY, FONT_SIZE_LG, "bold"),
@@ -57,23 +52,6 @@ class AutoUsbPanel(BaseOperationPanel):
                 hover_color=COLOR_PRIMARY_HOVER,
                 command=self._one_click_handcontrol,
             ).pack(fill="x", padx=SPACE_LG, pady=(SPACE_MD, SPACE_SM))
-            for title, command in [
-                ("1. 清理垃圾文件", self._clean_usb),
-                ("2. 格式化 FAT32", self._format_usb),
-                ("3. 复制文件到 U 盘", self._copy_to_usb),
-                ("4. 安全弹出", self._eject_usb),
-            ]:
-                ctk.CTkButton(
-                    self,
-                    text=title,
-                    height=HEIGHT_MD,
-                    anchor="w",
-                    corner_radius=RADIUS_SM,
-                    fg_color=BG_INPUT,
-                    text_color=TEXT_PRIMARY,
-                    hover_color=BG_HOVER,
-                    command=command,
-                ).pack(fill="x", padx=SPACE_LG, pady=SPACE_SM)
             return
 
         if usb_flow == "paired_files":
@@ -134,39 +112,16 @@ class AutoUsbPanel(BaseOperationPanel):
 
     # -- USB 操作方法 --
 
-    def _clean_usb(self):
-        drive = self._panel_host.usb_drive.get().strip()
+    def _resolve_drive(self) -> str:
+        """取全局选择的 U 盘盘符；为空则提示并返回空串。"""
+        drive = (self._panel_host.get_global_usb_drive() or "").strip()
         if not drive:
-            return
-        self._panel_host._run_task("清理", lambda log_fn: clean_usb(drive, log_fn))
-
-    def _format_usb(self):
-        drive = self._panel_host.usb_drive.get().strip()
-        if not drive or not messagebox.askyesno("格式化", f"确认格式化 {drive}?"):
-            return
-        self._panel_host._run_task("格式化", lambda log_fn: format_usb(drive, log_fn))
-
-    def _copy_to_usb(self):
-        asset = self._panel_host._selected_asset()
-        drive = self._panel_host.usb_drive.get().strip()
-        if not asset or not drive:
-            return
-        rom_file, pkg_file = asset_rom_pkg_files(asset)
-        if not rom_file or not pkg_file:
-            return
-        rom_path = str(Path(asset["path"]) / rom_file)
-        pkg_path = str(Path(asset["path"]) / pkg_file)
-        self._panel_host._run_task("复制", lambda log_fn: copy_to_usb(rom_path, pkg_path, drive, log_fn))
-
-    def _eject_usb(self):
-        drive = self._panel_host.usb_drive.get().strip()
-        if not drive:
-            return
-        self._panel_host._run_task("弹出", lambda log_fn: eject_usb(drive, log_fn))
+            messagebox.showwarning("未选择 U 盘", "请先在工具中心选择目标 U 盘后再烧录。")
+        return drive
 
     def _one_click_handcontrol(self):
         asset = self._panel_host._selected_asset()
-        drive = self._panel_host.usb_drive.get().strip()
+        drive = self._resolve_drive()
         if not asset or not drive:
             return
         rom_file, pkg_file = asset_rom_pkg_files(asset)
@@ -181,7 +136,7 @@ class AutoUsbPanel(BaseOperationPanel):
 
     def _run_directory_flash(self):
         asset = self._panel_host._selected_asset()
-        drive = self._panel_host.usb_drive.get().strip()
+        drive = self._resolve_drive()
         if not asset or not drive:
             return
         format_first = bool(getattr(self, "format_first", make_bool_var(self, True)).get())

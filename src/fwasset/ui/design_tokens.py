@@ -77,3 +77,42 @@ FONT_XL = FONT_SIZE_XL
 FONT_LG = FONT_SIZE_LG
 FONT_MD = FONT_SIZE_MD
 FONT_SM = FONT_SIZE_SM
+
+def apply_ttk_theme():
+    """Apply CustomTkinter-compatible flat theme to ttk widgets (like Treeview)."""
+    import tkinter.ttk as ttk
+    
+    style = ttk.Style()
+    style.theme_use("default")
+    
+    mode = ctk.get_appearance_mode()
+    
+    bg = BG_CARD[1] if mode == "Dark" else BG_CARD[0]
+    fg = TEXT_PRIMARY[1] if mode == "Dark" else TEXT_PRIMARY[0]
+    select_bg = COLOR_PRIMARY[1] if mode == "Dark" else COLOR_PRIMARY[0]
+    select_fg = TEXT_ON_PRIMARY[1] if mode == "Dark" else TEXT_ON_PRIMARY[0]
+    header_bg = BG_WINDOW[1] if mode == "Dark" else BG_WINDOW[0]
+    
+    style.configure(
+        "Treeview",
+        background=bg,
+        foreground=fg,
+        rowheight=36,
+        fieldbackground=bg,
+        borderwidth=0,
+        font=(FONT_FAMILY, FONT_SIZE_MD)
+    )
+    style.map(
+        "Treeview",
+        background=[("selected", select_bg)],
+        foreground=[("selected", select_fg)]
+    )
+    style.configure(
+        "Treeview.Heading",
+        background=header_bg,
+        foreground=fg,
+        relief="flat",
+        borderwidth=0,
+        font=(FONT_FAMILY, FONT_SIZE_MD, "bold")
+    )
+    style.map("Treeview.Heading", background=[("active", header_bg)])

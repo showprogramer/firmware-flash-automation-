@@ -1,11 +1,9 @@
-from fwasset.ui.firmware_list_panel import FirmwareListPanel as App
-from fwasset.ui import shell
-from fwasset.ui.shell import UnifiedFlashPlatform
+from fwasset.ui.shell import UnifiedFlashPlatform as App
 
 
 def main():
-    shell.main()
-
+    app = App()
+    app.mainloop()
 
 if __name__ == "__main__":
     main()

@@ -258,8 +258,8 @@ def _infer_asset_context(
     根据资产路径推断 (category, platform, scheme_name, scheme_path)。
 
     规则：
-    - 路径相对 root 的第一段是 '通用' → category='common'
-    - 路径相对 root 的第一段是 '定制' → category='custom'，向 scheme_for_path 查询方案
+    - 路径相对 root 中包含 '通用' 段 → category='common'
+    - 路径相对 root 中包含 '定制' 段 → category='custom'，向 scheme_for_path 查询方案
     - 在 '通用/双机芯-上3D-下2D/' 下 → platform='双机芯-上3D-下2D'
     - 其他通用区 → platform=''
     - 旧目录（无法推断）→ 全部留空字符串（向后兼容）
@@ -272,16 +272,26 @@ def _infer_asset_context(
     if not rel_parts:
         return "", "", "", ""
 
-    first = rel_parts[0]
+    # 查找路径中 通用/定制 段的位置，支持多级嵌套
+    # 如根目录/型号目录/通用/... 或 根目录/通用/... 两种
+    common_idx = None
+    custom_idx = None
+    for i, part in enumerate(rel_parts):
+        if part == _COMMON_DIR:
+            common_idx = i
+            break
+        if part == _CUSTOM_DIR:
+            custom_idx = i
+            break
 
-    if first == _COMMON_DIR:
+    if common_idx is not None:
         # 在通用区
         category = "common"
         # 检查是否在双机芯专属子目录下
-        platform = _DUAL_CORE_DIR if (len(rel_parts) > 1 and rel_parts[1] == _DUAL_CORE_DIR) else ""
+        platform = _DUAL_CORE_DIR if (len(rel_parts) > common_idx + 1 and rel_parts[common_idx + 1] == _DUAL_CORE_DIR) else ""
         return category, platform, "", ""
 
-    if first == _CUSTOM_DIR:
+    if custom_idx is not None:
         # 在定制区，查找所属方案
         category = "custom"
         scheme = scheme_for_path(schemes, folder_path)
