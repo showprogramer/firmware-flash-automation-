@@ -10,6 +10,18 @@
 - 从文件名和目录路径中自动提取产品型号与版本号，支持正则可配置。
 - 资产数据持久化到 SQLite 索引库 (`fwasset.db`)，支持增量扫描与缓存加载。
 
+### 通用/定制资产管理
+- **通用模块**：所有型号共享的固件程序，位于 `通用/` 目录下。
+- **定制方案**：特定客户或地区的定制程序，位于 `定制/方案名/` 目录下。
+- **回源机制**：定制方案缺少某模块时，自动使用通用区中的默认程序（目录名含 `_默认` 后缀）。
+- **平台配置**：通过 `平台配置.toml` 定义不同平台的默认模块变体。
+
+### 整机模块固定层级
+- 按烧录习惯固定展示顺序：主板程序 → 手控UI → 蓝牙程序 → 语音程序 → 快捷键程序 → 3D机芯板程序 → 2D机芯板程序 → 腿部程序。
+- 大部分机型包含这 7 个模块，但并非所有型号都完整，缺失的模块不显示。
+- 单变体模块折叠为一行，多变体模块展开显示所有变体。
+- 来源标签清晰标识：定制专属 / 通用默认。
+
 ### 多模式刷机流程
 - **USB 自动刷写 (`auto_usb`)**：支持配对文件模式（ROM+PKG）和音乐文件整目录拷贝模式，集成 U 盘插入检测、垃圾文件清理、自动拷贝与校验。
 - **外部工具拉起 (`tool_launch`)**：自动发现 `tool_root` 下的烧录工具（`.exe`/`.bat`），支持模糊匹配与收藏/最近使用追踪。
@@ -30,57 +42,57 @@
 - 应用内嵌日志查看面板，实时滚动显示运行日志。
 
 ### 用户体验
-- 左侧资产树按 系列 → 型号 → 资产 三级分组，支持自然排序。
+- 左侧资产树按 通用模块 / 定制方案 分组，支持自然排序。
 - 关键字搜索、固件类型筛选、隐藏已刷资产。
 - 支持亮色/暗色主题切换。
 
 ## 项目架构
 
 ```
-core/                        # 业务逻辑层（无 UI 依赖）
-├── settings.py              # TOML 配置加载、路径解析、默认值
-├── firmware_catalog.py      # 固件类型注册表解析
-├── file_scan.py             # 目录扫描、类型匹配、型号/版本提取
-├── asset_index.py           # SQLite 资产索引（CRUD、查询、隐藏）
-├── asset_helpers.py         # 资产属性辅助（usb_flow、ROM/PKG 文件）
-├── tool_discovery.py        # 工具路径自动发现（模糊匹配）
-├── tool_usage.py            # 工具收藏/最近使用追踪（JSON）
-├── usb_ops.py               # USB 底层操作（检测、清理、拷贝、格式化、弹出、修复）
-├── diagnostics.py           # 诊断包构建（ZIP）
-├── logging_utils.py         # 线程安全文件日志
-├── sort_config.py           # 自然排序
-└── services/                # 服务编排层
-    ├── scan_service.py      # 扫描 → 入库 → 缓存加载
-    ├── flash_service.py     # 一键 USB 刷写流程
-    ├── music_flash_service.py  # 音乐文件整目录刷写
-    └── usb_repair_service.py   # USB 健康诊断与驱动修复
-
-ui/                          # GUI 层（CustomTkinter）
-├── shell.py                 # 主窗口
-├── base_panel.py            # 基类面板（任务队列、轮询、USB 选择、日志）
-├── firmware_list_panel.py   # 主面板（侧边栏、详情、操作区）
-├── tool_center_panel.py     # 工具中心窗口
-├── asset_tree.py            # 资产树组件
-├── design_tokens.py         # 设计系统（颜色/字体，亮暗主题）
-├── shared_widgets.py        # 可复用组件
-├── panels/                  # 主面板子组件
-│   ├── sidebar_panel.py     # 侧边栏（搜索、筛选、扫描、树视图）
-│   ├── detail_panel.py      # 选中条目详情
-│   ├── header_bar.py        # 工具栏
-│   └── log_panel.py         # 日志面板
-├── operation_panels/        # 操作面板（注册模式，按 flash_mode 动态加载）
-│   ├── registry.py          # @register 装饰器 + get_panel() 查找
-│   ├── host_types.py        # PanelHost Protocol（依赖倒置）
-│   ├── auto_usb_panel.py    # USB 刷写面板
-│   ├── tool_launch_panel.py # 外部工具启动面板
-│   ├── manual_doc_panel.py  # 文档说明面板
-│   ├── disabled_panel.py    # 禁用类型占位
-│   └── shared_actions.py    # 通用按钮操作
-└── view_models/             # 视图模型
-    ├── asset_filter_model.py   # 筛选、排序、分组
-    ├── asset_selection_model.py # 选择状态与隐藏项追踪
-    ├── scan_state_model.py      # 扫描生命周期与取消状态
-    └── tree_expansion_model.py  # 树节点展开/折叠状态
+src/fwasset/                 # 主包
+├── app.py                   # 应用入口
+├── core/                    # 业务逻辑层（无 UI 依赖）
+│   ├── settings.py          # TOML 配置加载、路径解析、默认值
+│   ├── firmware_catalog.py  # 固件类型注册表解析
+│   ├── file_scan.py         # 目录扫描、类型匹配、型号/版本提取
+│   ├── asset_index.py       # SQLite 资产索引（CRUD、查询、隐藏）
+│   ├── asset_helpers.py     # 资产属性辅助（usb_flow、ROM/PKG 文件）
+│   ├── platform_config.py   # 平台配置.toml 加载（多平台默认模块变体）
+│   ├── scheme_config.py     # 定制方案配置.toml 加载
+│   ├── tool_discovery.py    # 工具路径自动发现（模糊匹配）
+│   ├── tool_usage.py        # 工具收藏/最近使用追踪（JSON）
+│   ├── usb_ops.py           # USB 底层操作（检测、清理、拷贝、格式化、弹出、修复）
+│   ├── diagnostics.py       # 诊断包构建（ZIP）
+│   ├── logging_utils.py     # 线程安全文件日志
+│   ├── sort_config.py       # 自然排序
+│   └── services/            # 服务编排层
+│       ├── scan_service.py      # 扫描 → 入库 → 缓存加载
+│       ├── flash_service.py     # 一键 USB 刷写流程
+│       ├── music_flash_service.py  # 音乐文件整目录刷写
+│       └── usb_repair_service.py   # USB 健康诊断与驱动修复
+├── ui/                      # GUI 层（CustomTkinter）
+│   ├── shell.py             # 主窗口
+│   ├── base_panel.py        # 基类面板（任务队列、轮询、USB 选择、日志）
+│   ├── workbench_panel.py   # 工作台面板（侧边栏 + 数据网格 + 操作区 + 日志）
+│   ├── tool_center_panel.py # 工具中心窗口
+│   ├── design_tokens.py     # 设计系统（颜色/字体，亮暗主题）
+│   ├── shared_widgets.py    # 可复用组件
+│   ├── panels/              # 主面板子组件
+│   │   ├── data_grid_panel.py   # 数据网格（ttk.Treeview 可展开树）
+│   │   └── log_panel.py         # 日志面板
+│   ├── operation_panels/    # 操作面板（注册模式，按 flash_mode 动态加载）
+│   │   ├── registry.py          # @register 装饰器 + get_panel() 查找
+│   │   ├── host_types.py        # PanelHost Protocol（依赖倒置）
+│   │   ├── base.py              # BaseOperationPanel 基类
+│   │   ├── auto_usb_panel.py    # USB 刷写面板
+│   │   ├── tool_launch_panel.py # 外部工具启动面板
+│   │   ├── manual_doc_panel.py  # 文档说明面板
+│   │   ├── disabled_panel.py    # 禁用类型占位
+│   │   └── shared_actions.py    # 通用按钮操作
+│   └── view_models/         # 视图模型
+│       ├── scheme_workbench_model.py  # 工作台数据模型（型号/模块/方案/变体）
+│       └── scan_state_model.py        # 扫描生命周期与取消状态
+└── tests/                   # 测试文件
 ```
 
 ### 关键设计模式
@@ -89,6 +101,8 @@ ui/                          # GUI 层（CustomTkinter）
 - **PanelHost Protocol**：操作面板依赖 `PanelHost` 协议而非具体类，实现依赖倒置，便于单独测试。
 - **后台任务队列**：耗时操作在守护线程中执行，通过 `queue.Queue` + 120ms 定时轮询将结果投递回 UI 线程，避免界面卡顿。
 - **SQLite 索引**：资产扫描结果持久化到 `fwasset.db`，支持增量扫描与跨启动缓存。数据库含 schema 版本迁移机制。
+- **通用/定制回源**：定制方案缺少某模块时，根据 `平台配置.toml` 中的默认变体配置，自动回源到通用区的对应程序。
+- **整机模块固定层级**：按烧录习惯固定展示顺序（大部分机型包含 7 个模块，但非完整），单变体折叠为一行，多变体展开显示所有变体。
 
 ## 安装与运行
 
@@ -158,6 +172,61 @@ Copy-Item config.example.toml config.toml
 | `tool_dir` | 工具所在子目录（相对于 `tool_root`） |
 | `enabled` | 是否启用该类型 |
 
+### `平台配置.toml` — 平台默认模块变体
+
+位于固件根目录，定义不同平台的默认模块变体配置：
+
+```toml
+[[platform]]
+name = "标准单机芯3D"
+[platform.defaults]
+主板程序 = "量产_默认"
+手控UI = "量产中性_默认"
+蓝牙程序 = "中文-通用_默认"
+```
+
+### `定制/方案名/方案配置.toml` — 定制方案元数据
+
+位于每个定制方案目录下，定义方案名称和所属平台：
+
+```toml
+name = "葡萄牙-凡强"
+platform = "标准单机芯3D"
+```
+
+### 目录结构示例
+
+```
+L36程序/
+├── 平台配置.toml                    # 平台默认模块变体配置
+├── 通用/                            # 通用模块（所有型号共享）
+│   ├── 主板程序/
+│   │   └── 量产_默认/               # 默认变体（定制回源用）
+│   ├── 手控UI/
+│   │   └── 量产中性_默认/
+│   ├── 蓝牙程序/
+│   │   ├── 中文-通用_默认/
+│   │   ├── 英文-通用/
+│   │   └── 英文-增加2参数/
+│   ├── 语音程序/
+│   ├── 快捷键程序/
+│   ├── 3D机芯板程序/
+│   └── 腿部程序/
+└── 定制/                            # 定制方案（特定客户/地区）
+    ├── 葡萄牙-凡强/
+    │   ├── 方案配置.toml            # 方案元数据
+    │   ├── 主板程序/                # 定制专属程序
+    │   ├── 快捷键/
+    │   ├── 手控UI/
+    │   ├── 蓝牙程序/                # 可能包含多个变体
+    │   │   ├── L36 蓝牙-二首音乐/
+    │   │   └── L36 蓝牙-葡萄牙语/
+    │   └── 语音程序/
+    └── 以色列-Royal-Z9/
+        ├── 方案配置.toml
+        └── ...
+```
+
 ## 烧录模式
 
 | 模式 | 说明 | 适用固件 |
@@ -166,6 +235,27 @@ Copy-Item config.example.toml config.toml
 | `tool_launch` | 自动发现并拉起外部烧录工具（如 ISP 工具） | 主板、语音、快捷键、机芯板等 |
 | `manual_doc` | 展示操作说明文档，不执行自动化 | 占座提醒 |
 | `disabled` | 该类型暂不提供操作 | 老化程序 |
+
+### 手控 UI 烧录流程 (`auto_usb` + `paired_files`)
+
+1. 检测 U 盘盘符
+2. 清理 U 盘根目录下的旧 ROM/PKG 文件
+3. 复制新的 ROM + PKG 文件到 U 盘根目录
+4. 自动弹出 U 盘
+5. 用户将 U 盘插入手控器，完成刷写
+
+### 音乐文件烧录流程 (`auto_usb` + `directory_copy`)
+
+1. 检测 U 盘盘符
+2. 可选：格式化 U 盘
+3. 复制整个音乐目录到 U 盘
+4. 自动弹出 U 盘
+
+### 外部工具烧录流程 (`tool_launch`)
+
+1. 自动发现对应类型的烧录工具
+2. 启动外部烧录工具
+3. 用户在工具中手动选择固件文件进行烧录
 
 ## 运行时目录
 
@@ -202,6 +292,7 @@ uv run python -m pytest src/fwasset/tests/test_asset_index.py -q --no-cov
 - **Python** >= 3.8
 - **CustomTkinter** — 现代 Tkinter GUI 框架
 - **psutil** — U 盘/磁盘分区检测
-- **openpyxl** — Excel 读写
 - **SQLite** — 资产索引持久化
+- **tomllib** / **tomli** — TOML 配置文件解析
 - **uv** — 依赖与虚拟环境管理
+- **hatchling** — 构建系统

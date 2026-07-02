@@ -41,7 +41,7 @@ class ModuleCardData:
     is_fallback: bool              # 是否是回源模块
 
 
-# 整机标准模块的固定展示顺序（按烧录习惯）
+# 整机标准模块的固定展示顺序（按烧录习惯，大部分机型包含这些模块）
 STANDARD_MODULE_ORDER = [
     "主板程序",
     "手控UI",
@@ -66,7 +66,7 @@ class ModuleVariant:
 
 @dataclass
 class ModuleRow:
-    """七程序固定层级中的一行（一个模块类型）。"""
+    """整机模块固定层级中的一行（一个模块类型）。"""
     label: str                     # 模块中文名，如 "手控UI"
     source_kind: str               # 该模块整体来源：custom / common
     source_label: str              # 行级来源文案
@@ -326,7 +326,7 @@ class SchemeWorkbenchModel:
     def get_scheme_module_tree(
         self, model_name: str, scheme_name: str, keyword: str = ""
     ) -> list[ModuleRow]:
-        """返回整机"七程序固定层级"。
+        """返回整机"模块固定层级"。
 
         把 get_scheme_modules 的扁平卡片按模块类型（firmware_label）归组：
         - 每个模块一行（ModuleRow），多变体（如手控UI 3 份）收在该行的 variants 下，
@@ -334,6 +334,7 @@ class SchemeWorkbenchModel:
         - 行级来源：只要该模块有任一"定制专属"变体即视为 custom，否则 common。
         - 用户文案只用「定制专属」/「通用默认」，绝不出现"回源"。
         - 行顺序按 STANDARD_MODULE_ORDER；不在标准列表里的模块（如接线图）排在最后。
+        - 大部分机型包含 7 个标准模块，但非完整，缺失的模块不显示。
         """
         cards = self.get_scheme_modules(model_name, scheme_name, keyword)
 

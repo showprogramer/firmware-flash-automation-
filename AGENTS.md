@@ -34,7 +34,7 @@ There are **no standalone lint or type-check commands** configured (no ruff, myp
 
 | TypedDict | Key Fields |
 |-----------|------------|
-| `FirmwareAsset` | `series`, `model`, `version`, `firmware_type`, `firmware_label`, `flash_mode`, `usb_flow`, `path`, `directory_name`, `model_directory_name`, `model_directory_path`, `files: list[str]`, `modified_time: float`, `tool_name`, `tool_path`, `tool_dir`, `label` |
+| `FirmwareAsset` | `series`, `model`, `version`, `firmware_type`, `firmware_label`, `flash_mode`, `usb_flow`, `path`, `directory_name`, `model_directory_name`, `model_directory_path`, `files: list[str]`, `modified_time: float`, `tool_name`, `tool_path`, `tool_dir`, `label`, `category` ("common"/"custom"/""), `platform`, `scheme_name`, `scheme_path` |
 | `ServiceResult` | `ok: bool`, `code: str`, `message: str`, `payload: dict[str, Any]` |
 | `HandcontrolFolder` | `path`, `rom_file`, `pkg_file`, `model`, `version`, `label` |
 | `ToolRegistration` | `name`, `path`, `directory` |
@@ -49,7 +49,7 @@ There are **no standalone lint or type-check commands** configured (no ruff, myp
 
 ## Database Schema (`core/asset_index.py`)
 
-`SCHEMA_VERSION = 2`. Tables: `assets` (PK: `path`), `hidden_items` (PK: `path`), `scan_meta` (PK: `root_dir`), `schema_meta`. Indexes on `firmware_type`, `model`, `model_directory_path`. Migration v1→v2 adds `usb_flow` column. `files_json` stores the file list as JSON.
+`SCHEMA_VERSION = 3`. Tables: `assets` (PK: `path`), `hidden_items` (PK: `path`), `scan_meta` (PK: `root_dir`), `schema_meta`. Indexes on `firmware_type`, `model`, `model_directory_path`, `category`, `platform`, `scheme_name`. Migration v1→v2 adds `usb_flow` column, v2→v3 adds `category`, `platform`, `scheme_name`, `scheme_path` columns. `files_json` stores the file list as JSON.
 
 ## Service Layer Conventions
 
@@ -91,6 +91,7 @@ Defines 20 firmware type entries. Each entry maps `dir_keywords` (Chinese string
 - **View models**: standalone classes (e.g. `AssetSelectionModel`, `ScanStateModel`). Panels compose models; they do not inherit from them.
 - **Design tokens**: All colors and fonts from `ui/design_tokens.py`. Tokens use light/dark tuples: `("light-value", "dark-value")`. Layout constants: `SIDEBAR_WIDTH=400`, `MAIN_MIN_WIDTH=600`. Font: `Segoe UI` / `Consolas`. Never hard-code hex values or font sizes.
 - **Cancellation**: Use `threading.Event`. Create local `cancel_event` before spawning worker thread; capture in closure.
+- **整机模块固定层级**: 按烧录习惯固定展示顺序（主板程序 → 手控UI → 蓝牙程序 → 语音程序 → 快捷键程序 → 3D机芯板程序 → 2D机芯板程序 → 腿部程序），大部分机型包含这些模块但非完整，缺失的模块不显示。单变体折叠为一行，多变体展开显示所有变体。
 
 ### Sorting
 `SortKey` enum (`sort_config.py`): `PATH` (natural), `MODEL` (prefix+number+suffix), `VERSION` (semver-like). Used by `query_assets()` and `apply_sort()`.
@@ -98,6 +99,8 @@ Defines 20 firmware type entries. Each entry maps `dir_keywords` (Chinese string
 ### Config & External Files
 - `config.toml` — local machine config (gitignored). Template: `config.example.toml`. Sections: `[paths]`, `[usb]`, `[scan]`, `[music]`.
 - `firmware_catalog.toml` — firmware type definitions shipped with the app.
+- `平台配置.toml` — platform default module variant configuration (located in firmware root directory).
+- `定制/方案名/方案配置.toml` — custom scheme metadata (name, platform).
 - Runtime dir: dev → `.runtime/`, frozen → `runtime/`, overridable via `FWASSET_RUNTIME_DIR`.
 - Config loaded via `load_toml_config()` → returns `(data, status, error)` where status is `"ok"`, `"missing"`, or `"parser_missing"`.
 

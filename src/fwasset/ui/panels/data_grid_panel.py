@@ -16,11 +16,12 @@ from fwasset.ui.view_models.scheme_workbench_model import (
 
 
 class DataGridPanel(ctk.CTkFrame):
-    """整机七程序固定层级的可展开树。
+    """整机模块固定层级的可展开树。
 
     顶层 = 模块类型行（ModuleRow），多变体（如手控UI 3 份）收在该行的子节点下，
     绝不在顶层铺平。来源列只显示「定制专属 / 通用默认」，绝不出现"回源"。
     选中变体子节点才回传 ModuleVariant；选中多变体父行不选具体变体（等用户展开）。
+    大部分机型包含 7 个标准模块，但非完整，缺失的模块不显示。
     """
 
     # iid 前缀：区分模块父行与变体子行
@@ -65,7 +66,7 @@ class DataGridPanel(ctk.CTkFrame):
 
     # --- 渲染 ---
     def populate_tree(self, rows: list[ModuleRow]) -> None:
-        """渲染整机七程序固定层级。"""
+        """渲染整机模块固定层级。"""
         self.tree.delete(*self.tree.get_children())
         self._variant_map.clear()
 
