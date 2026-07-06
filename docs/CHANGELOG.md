@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### refactor(ui): Step D 工作台查询体验收尾
+
+- 型号入口从单一下拉改为平铺按钮 + 「更多型号」收纳，保留独立搜索框，兼顾新人浏览和老手快速检索。
+- 树表将「来源」列改名为更易理解的「程序归属」，展示 `定制专属` / `通用默认`，并保留交替行底色、单变体折叠、多变体展开。
+- 树表列名进一步调整为 `程序类型 / 程序名称 / 版本 / 程序归属 / 程序文件`；当程序名称与程序类型重复时显示 `默认`，避免 `主板程序 / 主板程序` 这类重复阅读。
+- 树表表头对齐方式改为跟随内容列：文本列左对齐，版本/归属状态列居中，避免表头居中但内容左对齐的割裂感。
+- 操作区新增「已选」摘要，并统一为 `grid` 布局，避免选中行后与旧占位内容混用布局管理器。
+- 将工作台视觉进一步对齐 Fluent 桌面工具：固定窄侧栏、把型号/搜索移入主区顶部筛选条、收敛大面积蓝字、为表格/操作区/日志区增加细边界并压缩底部空白。
+- 删除树表「方式」列：除非手控 UI（非断码屏）走一键烧录，其余主要依赖烧录工具，表格层无需重复展示烧录方式。
+- 删除左侧栏底部「工具中心」按钮，底部仅保留「扫描目录」；U 盘未选提示不再引导到工具中心。
+- 新增 `test_workbench_panel_helpers.py` 与树表程序归属/列名测试，锁定型号收纳规则、归属展示文案和程序命名语义。
+
+验证:
+- `.\.venv\Scripts\python.exe -m pytest -m "not ui" -q --no-cov` -> `173 passed, 29 deselected`
+- `.\.venv\Scripts\python.exe -m pytest src\fwasset\tests\test_workbench_panel_helpers.py src\fwasset\tests\test_data_grid_panel.py src\fwasset\tests\test_operation_panels.py -q --no-cov` -> `32 passed`
+- `python -m py_compile src\fwasset\ui\design_tokens.py src\fwasset\ui\workbench_panel.py src\fwasset\ui\panels\data_grid_panel.py src\fwasset\ui\panels\log_panel.py src\fwasset\ui\operation_panels\auto_usb_panel.py src\fwasset\ui\operation_panels\tool_launch_panel.py` -> passed
+
 ### refactor(ui): 全面重写 UI 为方案工作台模式
 
 - 移除原有的 `FirmwareListPanel`、`AssetTreeView` 等老旧 UI 组件。

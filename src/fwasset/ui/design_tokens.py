@@ -6,30 +6,30 @@ import customtkinter as ctk
 # iOS HIG Design Tokens
 # ==========================================
 
-# --- Background Layers (iOS: window → sidebar → card → input) ---
-BG_WINDOW = ("#F2F2F7", "#000000")
-BG_SIDEBAR = ("#FFFFFF", "#1C1C1E")
-BG_CARD = ("#FFFFFF", "#2C2C2E")
-BG_HOVER = ("#F2F2F7", "#3A3A3C")
-BG_INPUT = ("#F2F2F7", "#1C1C1E")
+# --- Background Layers (Fluent desktop: window -> rail -> surface -> field) ---
+BG_WINDOW = ("#F3F6FB", "#111214")
+BG_SIDEBAR = ("#F8FAFD", "#1A1B1E")
+BG_CARD = ("#FFFFFF", "#25262A")
+BG_HOVER = ("#EAF1FB", "#303136")
+BG_INPUT = ("#FFFFFF", "#1F2024")
 
 # --- Semantic Colors (iOS HIG system colors) ---
-COLOR_PRIMARY = ("#007AFF", "#0A84FF")
-COLOR_PRIMARY_HOVER = ("#0066CC", "#409CFF")
+COLOR_PRIMARY = ("#2563EB", "#60A5FA")
+COLOR_PRIMARY_HOVER = ("#1D4ED8", "#93C5FD")
 COLOR_SUCCESS = ("#34C759", "#30D158")
 COLOR_WARNING = ("#FF9500", "#FF9F0A")
 COLOR_DANGER = ("#FF3B30", "#FF453A")
 COLOR_INFO = ("#5AC8FA", "#64D2FF")
 
 # --- Text Hierarchy ---
-TEXT_PRIMARY = ("#000000", "#FFFFFF")
-TEXT_SECONDARY = ("#8E8E93", "#8E8E93")
-TEXT_TERTIARY = ("#C7C7CC", "#48484A")
+TEXT_PRIMARY = ("#111827", "#F9FAFB")
+TEXT_SECONDARY = ("#4B5563", "#CBD5E1")
+TEXT_TERTIARY = ("#8A94A6", "#7C8494")
 TEXT_ON_PRIMARY = ("#FFFFFF", "#FFFFFF")
 
 # --- Borders & Separators ---
-BORDER_COLOR = ("#E5E5EA", "#38383A")
-SEPARATOR = ("#C6C6C8", "#48484A")
+BORDER_COLOR = ("#D9E1EC", "#3B3D44")
+SEPARATOR = ("#E3E8F0", "#3B3D44")
 
 # --- Font System ---
 FONT_FAMILY = "Segoe UI"
@@ -69,7 +69,7 @@ ICON_LG = 24
 ICON_XL = 32
 
 # --- Layout Constants ---
-SIDEBAR_WIDTH = 400
+SIDEBAR_WIDTH = 248
 MAIN_MIN_WIDTH = 600
 
 # --- Legacy aliases (deprecated, use FONT_SIZE_* instead) ---
@@ -91,13 +91,15 @@ def apply_ttk_theme():
     fg = TEXT_PRIMARY[1] if mode == "Dark" else TEXT_PRIMARY[0]
     select_bg = COLOR_PRIMARY[1] if mode == "Dark" else COLOR_PRIMARY[0]
     select_fg = TEXT_ON_PRIMARY[1] if mode == "Dark" else TEXT_ON_PRIMARY[0]
-    header_bg = BG_WINDOW[1] if mode == "Dark" else BG_WINDOW[0]
+    hover_bg = BG_HOVER[1] if mode == "Dark" else BG_HOVER[0]
+    header_bg = BG_CARD[1] if mode == "Dark" else BG_CARD[0]
+    border = SEPARATOR[1] if mode == "Dark" else SEPARATOR[0]
     
     style.configure(
         "Treeview",
         background=bg,
         foreground=fg,
-        rowheight=36,
+        rowheight=34,
         fieldbackground=bg,
         borderwidth=0,
         font=(FONT_FAMILY, FONT_SIZE_MD)
@@ -113,6 +115,8 @@ def apply_ttk_theme():
         foreground=fg,
         relief="flat",
         borderwidth=0,
+        padding=(10, 8),
         font=(FONT_FAMILY, FONT_SIZE_MD, "bold")
     )
     style.map("Treeview.Heading", background=[("active", header_bg)])
+    style.configure("Vertical.TScrollbar", troughcolor=bg, background=border, borderwidth=0, arrowcolor=hover_bg)

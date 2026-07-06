@@ -6,6 +6,7 @@ from fwasset.ui.design_tokens import (
     BG_CARD,
     BG_INPUT,
     BG_HOVER,
+    BORDER_COLOR,
     FONT_FAMILY,
     FONT_SIZE_MD,
     FONT_MONO,
@@ -23,7 +24,14 @@ class LogPanel(ctk.CTkFrame):
     """Collapsible log panel extracted from FirmwareListPanel."""
 
     def __init__(self, master, **kwargs):
-        super().__init__(master, corner_radius=RADIUS_LG, fg_color=BG_CARD, **kwargs)
+        super().__init__(
+            master,
+            corner_radius=RADIUS_LG,
+            fg_color=BG_CARD,
+            border_width=1,
+            border_color=BORDER_COLOR,
+            **kwargs,
+        )
         self._collapsed = True
         section_title(self, "运行日志")
         self.log_text = ctk.CTkTextbox(

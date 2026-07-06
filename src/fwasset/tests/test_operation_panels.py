@@ -156,6 +156,13 @@ class TestPanelClasses:
         assert hasattr(AutoUsbPanel, "build")
         assert issubclass(AutoUsbPanel, BaseOperationPanel)
 
+    def test_auto_usb_missing_drive_message_does_not_reference_tool_center(self):
+        """The USB warning should not point users to the removed tool center button."""
+        import inspect
+
+        source = inspect.getsource(AutoUsbPanel._resolve_drive)
+        assert "工具中心" not in source
+
 class _FakeBoolVar:
     def __init__(self, value=True):
         self._value = value

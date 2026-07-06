@@ -34,7 +34,7 @@ class AutoUsbPanel(BaseOperationPanel):
 
     def build(self):
         # 精简操作区：不再内嵌 U 盘选择器与 1/2/3/4 分步按钮（用户嫌杂）。
-        # 盘符统一取全局选择（工具中心/设置）；双击行即可开目录。
+        # 盘符统一取全局选择；双击行即可开目录。
         usb_flow = asset_usb_flow(self.asset)
         if usb_flow == "directory_copy":
             self._build_directory_copy_usb_ops()
@@ -116,7 +116,7 @@ class AutoUsbPanel(BaseOperationPanel):
         """取全局选择的 U 盘盘符；为空则提示并返回空串。"""
         drive = (self._panel_host.get_global_usb_drive() or "").strip()
         if not drive:
-            messagebox.showwarning("未选择 U 盘", "请先在工具中心选择目标 U 盘后再烧录。")
+            messagebox.showwarning("未选择 U 盘", "请先选择目标 U 盘后再烧录。")
         return drive
 
     def _one_click_handcontrol(self):

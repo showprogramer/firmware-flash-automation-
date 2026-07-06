@@ -11,14 +11,14 @@ from fwasset.ui.design_tokens import (
     COLOR_PRIMARY,
     COLOR_PRIMARY_HOVER,
     FONT_FAMILY,
-    FONT_SIZE_LG,
     FONT_SIZE_MD,
     FONT_SIZE_SM,
-    HEIGHT_LG,
+    HEIGHT_MD,
     RADIUS_SM,
     SPACE_LG,
     SPACE_MD,
     SPACE_SM,
+    TEXT_PRIMARY,
     TEXT_SECONDARY,
 )
 from fwasset.ui.operation_panels.base import BaseOperationPanel
@@ -54,40 +54,41 @@ class ToolLaunchPanel(BaseOperationPanel):
 
         self._current_tool_path = tool_path
 
-        info_frame = ctk.CTkFrame(self, fg_color="transparent")
-        info_frame.pack(fill="x", padx=SPACE_LG, pady=(SPACE_LG, SPACE_SM))
+        action_row = ctk.CTkFrame(self, fg_color="transparent")
+        action_row.pack(fill="x", padx=SPACE_LG, pady=(SPACE_SM, SPACE_SM))
+        action_row.grid_columnconfigure(0, weight=1)
 
         ctk.CTkLabel(
-            info_frame,
-            text=f"工具类型: {tool_name}",
+            action_row,
+            text=tool_name,
             font=(FONT_FAMILY, FONT_SIZE_MD, "bold"),
-        ).pack(anchor="w")
+            text_color=TEXT_PRIMARY,
+        ).grid(row=0, column=0, sticky="w", padx=(0, SPACE_MD))
 
         path_text = tool_path if tool_path else "未配置工具路径"
         path_color = TEXT_SECONDARY if tool_path else COLOR_DANGER
-        self.tool_path_label = ctk.CTkLabel(
-            info_frame,
-            text=f"路径: {path_text}",
-            font=(FONT_FAMILY, FONT_SIZE_SM),
-            text_color=path_color,
-            wraplength=360,
-        )
-        self.tool_path_label.pack(anchor="w", pady=(SPACE_SM, 0))
-
-        btn_frame = ctk.CTkFrame(self, fg_color="transparent")
-        btn_frame.pack(fill="x", padx=SPACE_LG, pady=(SPACE_SM, SPACE_MD))
 
         ctk.CTkButton(
-            btn_frame,
+            action_row,
             text="打开烧录工具",
-            height=HEIGHT_LG,
+            width=150,
+            height=HEIGHT_MD,
             corner_radius=RADIUS_SM,
-            font=(FONT_FAMILY, FONT_SIZE_LG, "bold"),
+            font=(FONT_FAMILY, FONT_SIZE_MD, "bold"),
             fg_color=COLOR_PRIMARY,
             hover_color=COLOR_PRIMARY_HOVER,
             state="normal" if tool_path else "disabled",
             command=self._launch_current_tool,
-        ).pack(fill="x", pady=(0, SPACE_SM))
+        ).grid(row=0, column=1, sticky="e")
+
+        self.tool_path_label = ctk.CTkLabel(
+            self,
+            text=path_text,
+            font=(FONT_FAMILY, FONT_SIZE_SM),
+            text_color=path_color,
+            wraplength=760,
+        )
+        self.tool_path_label.pack(anchor="w", padx=SPACE_LG, pady=(0, SPACE_SM))
 
         # 精简操作区：不再渲染复制路径 / U 盘那一排（双击行即可开目录）。
 

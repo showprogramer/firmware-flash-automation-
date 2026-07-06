@@ -7,7 +7,15 @@ from tkinter import ttk
 import customtkinter as ctk
 
 from fwasset.core.asset_helpers import asset_primary_file_name
-from fwasset.ui.design_tokens import BG_CARD
+from fwasset.ui.design_tokens import (
+    BG_CARD,
+    BG_HOVER,
+    BORDER_COLOR,
+    RADIUS_LG,
+    SEPARATOR,
+    TEXT_PRIMARY,
+    TEXT_SECONDARY,
+)
 from fwasset.ui.view_models.scheme_workbench_model import (
     ModuleCardData,
     ModuleRow,
@@ -15,11 +23,17 @@ from fwasset.ui.view_models.scheme_workbench_model import (
 )
 
 
+def _token_value(token: str | tuple[str, str]) -> str:
+    if isinstance(token, tuple):
+        return token[1] if ctk.get_appearance_mode() == "Dark" else token[0]
+    return token
+
+
 class DataGridPanel(ctk.CTkFrame):
     """整机模块固定层级的可展开树。
 
     顶层 = 模块类型行（ModuleRow），多变体（如手控UI 3 份）收在该行的子节点下，
-    绝不在顶层铺平。来源列只显示「定制专属 / 通用默认」，绝不出现"回源"。
+    绝不在顶层铺平。程序归属列只显示「定制专属 / 通用默认」，绝不出现"回源"。
     选中变体子节点才回传 ModuleVariant；选中多变体父行不选具体变体（等用户展开）。
     大部分机型包含 7 个标准模块，但非完整，缺失的模块不显示。
     """
@@ -28,7 +42,14 @@ class DataGridPanel(ctk.CTkFrame):
     _MOD_PREFIX = "mod::"
 
     def __init__(self, master, on_selection_changed, on_log, **kwargs):
-        super().__init__(master, fg_color=BG_CARD, corner_radius=0, **kwargs)
+        super().__init__(
+            master,
+            fg_color=BG_CARD,
+            corner_radius=RADIUS_LG,
+            border_width=1,
+            border_color=BORDER_COLOR,
+            **kwargs,
+        )
 
         self._on_selection_changed = on_selection_changed
         self._on_log = on_log
@@ -38,48 +59,70 @@ class DataGridPanel(ctk.CTkFrame):
         columns = ("variant", "version", "source", "program")
         self.tree = ttk.Treeview(self, columns=columns, show="tree headings", selectmode="browse")
 
-        # #0 列承载模块类型（父）/ 变体名（子）+ 展开箭头
-        self.tree.heading("#0", text="模块类型")
-        self.tree.heading("variant", text="变体名称")
-        self.tree.heading("version", text="版本")
-        self.tree.heading("source", text="来源")
-        self.tree.heading("program", text="程序名称")
+        # #0 列承载程序类型（父）/ 程序名（子）+ 展开箭头
+        self.tree.heading("#0", text="程序类型", anchor="w")
+        self.tree.heading("variant", text="程序名称", anchor="w")
+        self.tree.heading("version", text="版本", anchor="center")
+        self.tree.heading("source", text="程序归属", anchor="center")
+        self.tree.heading("program", text="程序文件", anchor="w")
 
-        self.tree.column("#0", width=200, minwidth=160)
-        self.tree.column("variant", width=200, minwidth=140)
-        self.tree.column("version", width=80, minwidth=60)
-        self.tree.column("source", width=110, minwidth=90)
-        self.tree.column("program", width=220, minwidth=140)
+        self.tree.column("#0", width=190, minwidth=150)
+        self.tree.column("variant", width=230, minwidth=160)
+        self.tree.column("version", width=92, minwidth=72, anchor="center")
+        self.tree.column("source", width=128, minwidth=104, anchor="center")
+        self.tree.column("program", width=310, minwidth=180)
 
-        # 来源标签着色：蓝(定制) / 灰(通用)
-        self.tree.tag_configure("custom", foreground="#0a66c2")
-        self.tree.tag_configure("common", foreground="#6b6b6b")
+        self._configure_tags()
 
         self.scrollbar = ttk.Scrollbar(self, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=self.scrollbar.set)
 
-        self.tree.pack(side="left", fill="both", expand=True)
-        self.scrollbar.pack(side="right", fill="y")
+        self.tree.pack(side="left", fill="both", expand=True, padx=1, pady=1)
+        self.scrollbar.pack(side="right", fill="y", pady=1)
 
         self.tree.bind("<<TreeviewSelect>>", self._on_tree_select)
         self.tree.bind("<Double-1>", self._on_tree_double_click)
 
     # --- 渲染 ---
+    def _configure_tags(self) -> None:
+        """Configure semantic row tags for ownership and alternating backgrounds."""
+        bg = _token_value(BG_CARD)
+        alt_bg = _token_value(BG_HOVER)
+        normal_fg = _token_value(TEXT_PRIMARY)
+        muted_fg = _token_value(TEXT_SECONDARY)
+        for source, fg in (("custom", normal_fg), ("common", normal_fg), ("neutral", muted_fg)):
+            for parity, row_bg in (("even", bg), ("odd", alt_bg)):
+                self.tree.tag_configure(f"{source}_{parity}", foreground=fg, background=row_bg)
+        self.tree.tag_configure("parent_even", foreground=normal_fg, background=_token_value(SEPARATOR))
+        self.tree.tag_configure("parent_odd", foreground=normal_fg, background=_token_value(SEPARATOR))
+
+    def _row_tags(self, source_kind: str, row_index: int) -> tuple[str]:
+        source = source_kind if source_kind in {"custom", "common"} else "neutral"
+        parity = "odd" if row_index % 2 else "even"
+        return (f"{source}_{parity}",)
+
+    def _source_text(self, label: str) -> str:
+        if label == "定制专属":
+            return "定制专属"
+        if label == "通用默认":
+            return "通用默认"
+        return label
+
     def populate_tree(self, rows: list[ModuleRow]) -> None:
         """渲染整机模块固定层级。"""
         self.tree.delete(*self.tree.get_children())
         self._variant_map.clear()
 
-        for row in rows:
+        for row_index, row in enumerate(rows):
             mod_iid = f"{self._MOD_PREFIX}{row.label}"
 
-            # 单变体模块：折叠成一行叶子。版本/来源/模式直接落在模块行上；
-            # 变体名仅在 == 模块类型名时留空（消除 `主板程序/主板程序` 真重复），
+            # 单变体模块：折叠成一行叶子。版本/归属/程序文件直接落在模块行上；
+            # 程序名仅在 == 程序类型名时显示「默认」（消除 `主板程序/主板程序` 真重复），
             # 若变体名有区分信息（如 `主板程序-减少灯光`）则照常显示，否则看不出是哪一份。
             if len(row.variants) == 1:
                 variant = row.variants[0]
                 asset = variant.asset
-                variant_text = "" if variant.name == row.label else variant.name
+                variant_text = "默认" if variant.name == row.label else variant.name
                 self.tree.insert(
                     "",
                     "end",
@@ -88,10 +131,10 @@ class DataGridPanel(ctk.CTkFrame):
                     values=(
                         variant_text,
                         variant.version or "-",
-                        variant.source_label,
+                        self._source_text(variant.source_label),
                         asset_primary_file_name(asset),
                     ),
-                    tags=(variant.source_kind,),
+                    tags=self._row_tags(variant.source_kind, row_index),
                 )
                 self._variant_map[mod_iid] = variant
                 continue
@@ -102,11 +145,11 @@ class DataGridPanel(ctk.CTkFrame):
                 "end",
                 iid=mod_iid,
                 text=row.label,
-                values=("", "", row.source_label, ""),
-                tags=(row.source_kind,),
+                values=("", "", self._source_text(row.source_label), ""),
+                tags=self._row_tags(row.source_kind, row_index),
                 open=True,
             )
-            for variant in row.variants:
+            for child_index, variant in enumerate(row.variants, start=1):
                 asset = variant.asset
                 child_iid = str(asset.get("path", "")) or f"{mod_iid}::{variant.name}"
                 self._variant_map[child_iid] = variant
@@ -118,10 +161,10 @@ class DataGridPanel(ctk.CTkFrame):
                     values=(
                         variant.name,
                         variant.version or "-",
-                        variant.source_label,
+                        self._source_text(variant.source_label),
                         asset_primary_file_name(asset),
                     ),
-                    tags=(variant.source_kind,),
+                    tags=self._row_tags(variant.source_kind, row_index + child_index),
                 )
 
     def populate(self, data_list: list[ModuleCardData]) -> None:

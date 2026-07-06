@@ -112,18 +112,18 @@ def test_single_variant_module_is_a_leaf_row(panel):
 
 
 @pytest.mark.ui
-def test_single_variant_name_blank_only_when_equal_to_module_label(panel):
-    """变体名只在 == 模块类型名时才留空（消除 `主板程序/主板程序` 重复）；
+def test_single_variant_name_uses_default_when_equal_to_program_type(panel):
+    """程序名只在 == 程序类型名时显示「默认」（消除 `主板程序/主板程序` 重复）；
     若变体名有区分信息（如 `主板程序-减少灯光`）则照常显示，否则看不出是哪一份。"""
     rows = [
-        # 变体名 == 模块名 → 留空（真重复）
+        # 程序名 == 程序类型 → 显示默认（真重复）
         ModuleRow(
             label="主板程序",
             source_kind="custom",
             source_label="定制专属",
             variants=[_variant("/p/mb", "主板程序", "V40", "custom")],
         ),
-        # 变体名 ≠ 模块名 → 照常显示（有用的区分信息）
+        # 程序名 ≠ 程序类型 → 照常显示（有用的区分信息）
         ModuleRow(
             label="主板程序",  # 用相同 label 测分支，但实际是另一行；改用不同 label 避免 iid 撞
             source_kind="custom",
@@ -134,7 +134,7 @@ def test_single_variant_name_blank_only_when_equal_to_module_label(panel):
     # 两行 label 相同会撞 iid，单独各测一次更干净
     panel.populate_tree([rows[0]])
     top = panel.tree.get_children("")[0]
-    assert panel.tree.item(top, "values")[0] == ""  # 重复名 → 留空
+    assert panel.tree.item(top, "values")[0] == "默认"  # 重复名 → 默认
 
     panel.populate_tree([rows[1]])
     top = panel.tree.get_children("")[0]
@@ -142,8 +142,8 @@ def test_single_variant_name_blank_only_when_equal_to_module_label(panel):
 
 
 @pytest.mark.ui
-def test_program_column_shows_primary_firmware_filename(panel):
-    """「程序名称」列显示主固件文件名（手控显示 rom）。"""
+def test_program_file_column_shows_primary_firmware_filename(panel):
+    """「程序文件」列显示主固件文件名（手控显示 rom）。"""
     v = ModuleVariant(
         asset={
             "path": "/L36/定制/马来/手控UI/A",
@@ -159,8 +159,57 @@ def test_program_column_shows_primary_firmware_filename(panel):
     row = ModuleRow(label="手控UI-单", source_kind="custom", source_label="定制专属", variants=[v])
     panel.populate_tree([row])
     top = panel.tree.get_children("")[0]
-    # values = (变体名, 版本, 来源, 程序名称) → 程序名列是 rom
+    # values = (程序名称, 版本, 程序归属, 程序文件) → 程序文件列是 rom
     assert panel.tree.item(top, "values")[3] == "hc_v12.rom"
+
+
+@pytest.mark.ui
+def test_source_column_uses_operator_facing_ownership_label(panel):
+    row = ModuleRow(
+        label="蓝牙程序",
+        source_kind="common",
+        source_label="通用默认",
+        variants=[
+            ModuleVariant(
+                asset={
+                    "path": "/L36/通用/蓝牙程序",
+                    "directory_name": "蓝牙程序",
+                    "version": "V2",
+                    "flash_mode": "tool_launch",
+                },
+                name="蓝牙程序",
+                version="V2",
+                source_kind="common",
+                source_label="通用默认",
+            )
+        ],
+    )
+    panel.populate_tree([row])
+    top = panel.tree.get_children("")[0]
+    assert panel.tree.heading("source", "text") == "程序归属"
+    # values = (程序名称, 版本, 程序归属, 程序文件)
+    assert panel.tree.item(top, "values")[2] == "通用默认"
+
+
+@pytest.mark.ui
+def test_table_headings_use_operator_facing_program_terms(panel):
+    panel.populate_tree(_rows())
+    assert panel.tree.heading("#0", "text") == "程序类型"
+    assert panel.tree.heading("variant", "text") == "程序名称"
+    assert panel.tree.heading("version", "text") == "版本"
+    assert panel.tree.heading("source", "text") == "程序归属"
+    assert panel.tree.heading("program", "text") == "程序文件"
+
+
+@pytest.mark.ui
+def test_table_headings_align_with_column_content(panel):
+    panel.populate_tree(_rows())
+
+    assert str(panel.tree.heading("#0", "anchor")) == str(panel.tree.column("#0", "anchor")) == "w"
+    assert str(panel.tree.heading("variant", "anchor")) == str(panel.tree.column("variant", "anchor")) == "w"
+    assert str(panel.tree.heading("program", "anchor")) == str(panel.tree.column("program", "anchor")) == "w"
+    assert str(panel.tree.heading("version", "anchor")) == str(panel.tree.column("version", "anchor")) == "center"
+    assert str(panel.tree.heading("source", "anchor")) == str(panel.tree.column("source", "anchor")) == "center"
 
 
 @pytest.mark.ui
