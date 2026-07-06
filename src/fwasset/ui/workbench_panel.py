@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import os
+import subprocess
 import threading
 import tkinter as tk
 from pathlib import Path
+from tkinter import filedialog
 
 import customtkinter as ctk
 
@@ -47,6 +50,7 @@ from fwasset.ui.view_models.scan_state_model import ScanStateModel
 
 
 MODEL_CHIP_LIMIT = 4
+SEARCH_REFRESH_DEBOUNCE_MS = 180
 
 
 def model_chip_values(
@@ -106,6 +110,10 @@ class WorkbenchPanel(BaseFlashPanel):
 
         self.search_var.trace_add("write", lambda *_: self._on_search_changed())
 
+        # Auto-refresh U盘列表 on startup so the global selector shows current
+        # drives without requiring the user to click 「刷新」. Idempotent — the
+        # 「刷新」 button remains for re-scanning after a drive is plugged in.
+        self.after(100, self._refresh_usb)
         self.after(100, self._load_cached_assets)
 
     # --- Sidebar ---
@@ -227,6 +235,40 @@ class WorkbenchPanel(BaseFlashPanel):
         )
         search_entry.grid(row=0, column=2, sticky="ew")
 
+        # U盘选择器（顶部紧凑版）：手控 UI 等 auto_usb 流程通过
+        # `panel_host.get_global_usb_drive()` 拿盘符，这里给用户一个常驻入口。
+        # 放在搜索框右侧；不与操作区集成（保持 Step C 操作区精简原则）。
+        ctk.CTkLabel(
+            filter_row,
+            text="U 盘",
+            font=(FONT_FAMILY, FONT_SIZE_SM, "bold"),
+            text_color=TEXT_SECONDARY,
+        ).grid(row=0, column=3, sticky="w", padx=(SPACE_LG, SPACE_SM))
+
+        self.usb_menu = ctk.CTkComboBox(
+            filter_row,
+            variable=self.usb_drive,
+            values=[""],
+            width=110,
+            height=36,
+            corner_radius=RADIUS_SM,
+            border_color=BORDER_COLOR,
+            fg_color=BG_INPUT,
+            font=(FONT_FAMILY, FONT_SIZE_MD),
+        )
+        self.usb_menu.grid(row=0, column=4, sticky="ew", padx=(0, SPACE_SM))
+
+        ctk.CTkButton(
+            filter_row,
+            text="刷新",
+            width=60,
+            height=36,
+            fg_color=BG_INPUT,
+            text_color=TEXT_PRIMARY,
+            hover_color=BG_HOVER,
+            command=self._refresh_usb,
+        ).grid(row=0, column=5, sticky="e")
+
         # Data Grid Container
         self.grid_panel = DataGridPanel(main, self._on_grid_selection_changed, self._log)
         self.grid_panel.grid(row=1, column=0, sticky="nsew", pady=(0, SPACE_LG))
@@ -328,8 +370,36 @@ class WorkbenchPanel(BaseFlashPanel):
             self._more_model_combo = combo
 
     def _on_search_changed(self):
-        self._refresh_sidebar_tree()
-        self._refresh_main_grid()
+        # Debounce: rapid typing previously rebuilt the sidebar on every keystroke
+        # (each rebuild destroys every child widget). Coalesce bursts of edits into
+        # one rebuild at the end of typing.
+        if getattr(self, "_search_after_id", None) is not None:
+            try:
+                self.after_cancel(self._search_after_id)
+            except Exception:  # noqa: BLE001
+                # Cancel may raise if the widget was destroyed mid-burst.
+                pass
+            self._search_after_id = None
+
+        def _delayed_refresh():
+            # Widget may have been torn down while the timer was pending.
+            try:
+                if not self.winfo_exists():
+                    return
+            except Exception:  # noqa: BLE001
+                return
+            self._search_after_id = None
+            self._refresh_sidebar_tree()
+            self._refresh_main_grid()
+
+        try:
+            self._search_after_id = self.after(SEARCH_REFRESH_DEBOUNCE_MS, _delayed_refresh)
+        except Exception:  # noqa: BLE001
+            # If scheduling itself fails (e.g. widget already gone), fall back
+            # to an immediate refresh so the user still sees results.
+            self._search_after_id = None
+            self._refresh_sidebar_tree()
+            self._refresh_main_grid()
 
     def _refresh_sidebar_tree(self):
         for widget in self.tree_scroll.winfo_children():
@@ -535,7 +605,6 @@ class WorkbenchPanel(BaseFlashPanel):
         if not data:
             return
         path = str(data.asset.get("path", ""))
-        import os, subprocess
         if not path or not os.path.exists(path):
             self._log("无法打开目录：路径不存在")
             return
@@ -609,7 +678,6 @@ class WorkbenchPanel(BaseFlashPanel):
     def _start_scan(self):
         root = self.root_dir.get().strip()
         if not root:
-            from tkinter import filedialog
             initial_dir = str(Path.cwd())
             new_dir = filedialog.askdirectory(
                 title="选择固件所在的根目录",

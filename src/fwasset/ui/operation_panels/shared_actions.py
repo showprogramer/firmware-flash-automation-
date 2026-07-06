@@ -16,6 +16,7 @@ from fwasset.ui.design_tokens import (
     HEIGHT_LG,
     RADIUS_SM,
     SPACE_MD,
+    SPACE_LG,
     SPACE_SM,
     TEXT_PRIMARY,
 )
@@ -29,7 +30,7 @@ def build_handoff_actions(
 ):
     """构建通用的交接操作按钮组（打开目录、复制路径等）。"""
     action_frame = ctk.CTkFrame(panel, fg_color="transparent")
-    action_frame.pack(fill="x", padx=20, pady=(0, SPACE_MD))
+    action_frame.pack(fill="x", padx=SPACE_LG, pady=(0, SPACE_MD))
 
     for title, command in [
         ("打开程序目录", panel_host._open_current_asset_dir),

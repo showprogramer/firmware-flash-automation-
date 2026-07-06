@@ -8,6 +8,8 @@ ui because instantiating the panel needs a Tk root.
 
 from __future__ import annotations
 
+import inspect
+
 import pytest
 
 from fwasset.ui.view_models.scheme_workbench_model import ModuleRow, ModuleVariant
@@ -39,6 +41,37 @@ def _variant(path: str, name: str, version: str, kind: str) -> ModuleVariant:
         version=version,
         source_kind=kind,
         source_label="定制专属" if kind == "custom" else "通用默认",
+    )
+
+
+def test_populate_uses_module_card_data_source_kind() -> None:
+    """Contracts (BUG-1 follow-up): populate() must classify each card by the
+    explicit source_kind field on ModuleCardData, NOT by the legacy
+    is_fallback inference.
+
+    Why this is a static check, not a behavior check:
+    - The behavior is already covered by the model-level tests
+      (`test_common_module_cards_carry_source_kind_common` and
+      `test_scheme_module_tree_marks_common_assets_as_common_default`).
+    - What we still need to nail down is the contract at the view boundary:
+      DataGridPanel.populate() reading data.source_kind first. If anyone
+      reverts that to the old is_fallback inference, a common 通用 mainboard
+      variant (is_fallback=False, source_kind='common') would be re-labeled
+      as 定制专属 and the bug would silently return.
+    """
+    from fwasset.ui.panels.data_grid_panel import DataGridPanel
+
+    source = inspect.getsource(DataGridPanel.populate)
+    assert "data.source_kind" in source, (
+        "DataGridPanel.populate must consult ModuleCardData.source_kind first; "
+        "falling back to is_fallback would mis-label every 通用 variant as 定制专属"
+    )
+    # And the fallback path must still exist for legacy callers that omit the
+    # field. If someone deletes the fallback entirely, the panel breaks for any
+    # caller that hasn't been updated.
+    assert "is_fallback" in source, (
+        "DataGridPanel.populate must keep an is_fallback fallback for legacy "
+        "callers; do not remove the inference path while removing the dependency"
     )
 
 

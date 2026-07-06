@@ -138,19 +138,49 @@ class BaseFlashPanel(ctk.CTkFrame):
     def _poll_task_queue(self):
         if not self._polling_active:
             return
+        # Destruction guard: if the widget tree is gone, do not drain the queue
+        # (callbacks may still touch widgets) and do not schedule another `after`
+        # call — that would raise TclError on the next tick.
+        if not self._safe_winfo_exists():
+            return
         try:
             while True:
                 kind, name, payload, on_done = self._task_queue.get_nowait()
                 self._busy = False
                 if kind == "done":
                     if callable(on_done):
-                        on_done(payload)
+                        try:
+                            on_done(payload)
+                        except Exception as exc:  # noqa: BLE001
+                            # A user callback must not kill the polling chain.
+                            # Log the error and keep going.
+                            self._log(f"{name} 回调异常: {exc}")
                     self._log(f"{name}{self.task_done_suffix}")
                 else:
                     self._handle_task_failure(name, payload)
+                # The callback or failure handler may have torn down the widget.
+                if not self._safe_winfo_exists():
+                    return
         except queue.Empty:
             pass
-        self.after(120, self._poll_task_queue)
+        # Re-check just before scheduling — widget may have died during drain.
+        if self._safe_winfo_exists():
+            try:
+                self.after(120, self._poll_task_queue)
+            except Exception:  # noqa: BLE001
+                # Widget destroyed between the check and the call; swallow.
+                pass
+
+    def _safe_winfo_exists(self) -> bool:
+        """winfo_exists() wrapper that never raises on a destroyed widget.
+
+        Tk's winfo_exists can itself raise RuntimeError("TclError: invalid command name")
+        when the underlying widget path has been GC'd. Treat any exception as "gone".
+        """
+        try:
+            return bool(self.winfo_exists())
+        except Exception:  # noqa: BLE001
+            return False
 
     def _handle_task_failure(self, name: str, payload):
         self._log(f"{name}{self.task_error_title_suffix}: {payload}")

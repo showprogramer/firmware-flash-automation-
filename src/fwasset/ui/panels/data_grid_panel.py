@@ -177,7 +177,9 @@ class DataGridPanel(ctk.CTkFrame):
         for data in data_list:
             asset = data.asset
             label = str(asset.get("firmware_label", "")) or str(asset.get("firmware_type", ""))
-            kind = "common" if data.is_fallback else "custom"
+            # Prefer the explicit source_kind set by the model layer.
+            # Fall back to is_fallback only for legacy callers that omit it.
+            kind = data.source_kind if data.source_kind else ("common" if data.is_fallback else "custom")
             source_label = "通用默认" if kind == "common" else "定制专属"
             variant = ModuleVariant(
                 asset=asset,

@@ -2,6 +2,76 @@
 
 ## Unreleased
 
+### fix(ui): 启动时自动刷新 U 盘列表
+
+跟 BUG-3（顶部 U 盘选择器）一起被人验发现：
+
+- 启动后 U 盘下拉框**空载**，用户必须点「刷新」一次才能看到当前插入的 U 盘。这是个两步点击的启动税。
+- 修复：`WorkbenchPanel.__init__` 在排完 `_load_cached_assets` 后顺手加 `self.after(100, self._refresh_usb)`。`_refresh_usb` 是 idempotent（空 drives 自动回退到 `[""]`，已选盘符不会被覆盖），所以启动时多调一次没有副作用。「刷新」按钮保留，用于用户重新插 U 盘后手动重扫。
+
+新增测试：
+- `test_workbench_panel_auto_refreshes_usb_on_startup`：静态契约，钉住 `__init__` 内必须调度 `_refresh_usb`——防退化。
+
+验证:
+- `python -m py_compile src\fwasset\ui\workbench_panel.py` -> passed
+- `python -m pytest -m "not ui" -q --no-cov` -> **195 passed, 34 deselected**
+
+### fix(ui): 工作台顶部新增全局 U 盘选择器
+
+人验发现 `Step C 简化操作区` 留下一个未关闭的口子：
+
+- **BUG-3 死结**：手控 UI 变体点 `一键烧录` 时，操作区弹 "请先选择目标 U 盘" 后无路可走。Step C 把操作区内的 U 盘选择器删了，承诺改用全局 `panel_host.get_global_usb_drive()`，但工作台本身**没有任何**让用户设盘符的入口——`self.usb_drive` 永远是空串，`_refresh_usb` 从未被调过。
+- 修复：在工作台顶部筛选条的搜索框右侧新增一列常驻 U 盘选择器（`U 盘 [ComboBox] [刷新]`）。沿用 `BaseFlashPanel._refresh_usb` 扫描 U 盘列表、保留最低高度（36px）、不与操作区集成——严格遵守 Step C "操作区精简"原则。
+- 同步给 `WorkbenchPanel` 加一个 `self.usb_menu: ctk.CTkComboBox` 实例属性供 `_refresh_usb` 操作。
+
+新增测试：
+- `test_workbench_panel_exposes_global_usb_selector_in_main_view`：静态契约，钉住 `self.usb_drive` / `_refresh_usb` / `usb_menu` 三者在 `_build_main_view` 中齐全；防止退化回归。
+
+验证:
+- `python -m py_compile src\fwasset\ui\workbench_panel.py` -> passed
+- `python -m pytest -m "not ui" -q --no-cov` -> **194 passed, 34 deselected**
+
+### fix(ui): 恢复工作台搜索分词与通用模块归属标签
+
+人验反馈两处隐藏 bug，根因在 P1-2 缓存层和 ModuleCardData 标签推断：
+
+- **「主板 防夹」等空格分词搜索被压扁成单段 substring**：P1-2 引入的 `_filter_assets` 用 `kw in hay` 处理 keyword，把 `query_assets` 的「空格分词 AND 跨字段 OR」语义砍成「整段子串」——用户输 `主板 防夹` 必须让 `"主板 防夹"` 整个字符串在某个字段里出现。修复：`_filter_assets` 复刻 `query_assets` 的分词逻辑——`keyword.split()` 每个 token 在 10 字段（`series/model/version/firmware_label/directory_name/model_directory_name/path/flash_mode/scheme_name/platform`）里任一命中（OR），token 之间 AND；空 keyword 退化为无过滤。
+- **通用模块的归属全部误标为 `定制专属`**：`get_scheme_module_tree` 之前用 `c.is_fallback` 推断 `source_kind`，但 `is_fallback` 只对回源资产为 True，所有非回源卡（包括所有 `category="common"`）都被打成 `custom`。修复：给 `ModuleCardData` 加 `source_kind: str = ""` 字段；`get_common_modules / get_all_modules / get_scheme_modules` 显式写入 `"common"` 或 `"custom"`；`get_scheme_module_tree` 改读 `c.source_kind`，缺省时退回原 `is_fallback` 推断。语义对齐 AGENTS.md：「定制专属」只能贴 `category="custom"` 资产，「通用默认」贴 `category="common"` 资产。
+
+新增测试：
+- `test_scheme_workbench_model.py` 新增 4 项：`test_common_module_cards_carry_source_kind_common`、`test_scheme_module_tree_marks_common_assets_as_common_default`、`test_cache_keyword_supports_space_split_AND_with_OR_per_token`、`test_cache_keyword_matches_across_fields_not_just_directory_name`。覆盖「主板 防夹」AND-OR 命中、跨字段 `V40` 命中、空 token 退化、不命中 token 返空。
+
+验证:
+- `python -m py_compile src\fwasset\ui\view_models\scheme_workbench_model.py` -> passed
+- `python -m pytest -m "not ui" -q --no-cov` -> **192 passed, 34 deselected**
+
+### fix(ui) + perf(ui) + refactor(ui): UI Review Bugfix（性能 / 健壮性 / 契约）
+
+针对 `docs/code-review/ui_code_review.pdf` 第 6 节列出的 6 项缺陷：
+
+- **P0 契约 / 健壮性**
+  - `PanelHost` 协议补齐 `get_global_usb_drive()` 声明，IDE/mypy 与运行时 `isinstance()` 检查都能识别该方法。
+  - `BaseFlashPanel._poll_task_queue()` 增加窗口销毁保护：入口、循环中、调度 `after` 前三次 `winfo_exists()` 检查；`on_done` 用户回调 try/except 包裹，单次回调抛错不再让轮询链死掉。
+- **P1 性能**
+  - 搜索框输入 180ms debounce：取消上一个 `after_id`、合并连续按键，侧栏/主表只在用户停顿时重建一次。**型号切换、扫描完成等非搜索路径不**走 debounce，仍即时刷新。
+  - `SchemeWorkbenchModel` 增加 `bind()` 阶段单次资产缓存。`load_all_models / build_sidebar_tree / get_common_modules / get_scheme_modules / get_all_modules` 等热路径改读 `self._all_assets` + Python 层过滤，缓存空时退回 `query_assets` 以兼容未 bind 的调用方。关键字过滤与平台配置回源语义保持原状。
+- **P2 清理**
+  - `shared_actions.build_handoff_actions` 的 `padx=20` 改为 `SPACE_LG`（16），与其他面板间距 token 对齐。
+  - `workbench_panel` 顶部补齐 `import os / subprocess / from tkinter import filedialog`，移除 `_open_current_asset_dir` / `_start_scan` 内的方法内 import。
+
+新增测试：
+- `test_panel_host_protocol.py`（4 项）：协议 `_is_runtime_protocol` 标志、`get_global_usb_drive` 签名与契约、最小实现满足 `isinstance`。
+- `test_base_panel_poll.py`（5 项）：销毁时立即返回 / 不调度 after / 中途销毁停 drain / 回调抛错不破坏后续 / 正常路径。
+- `test_workbench_panel_helpers.py` 新增 4 项：debounce 立即路径不被调度影响、连续输入仅留最后一个 after、销毁场景不刷表、`_refresh_sidebar_tree` 自身不被 debounce 拦截。
+- `test_scheme_workbench_model.py` 新增 5 项：bind 后热路径不再调 `query_assets`、关键字过滤语义保留、平台回源仍生效、未 bind 走退化、`bind()` 重新加载使新增资产可见。
+- `test_workbench_panel_helpers.py` 新增 2 项静态契约：`padx=20` 不再出现于 `shared_actions`、类体不再出现 `import os, subprocess` / `from tkinter import filedialog`。
+
+验证:
+- `python -m py_compile src\fwasset\ui\base_panel.py src\fwasset\ui\workbench_panel.py src\fwasset\ui\operation_panels\host_types.py src\fwasset\ui\operation_panels\shared_actions.py src\fwasset\ui\view_models\scheme_workbench_model.py` -> passed
+- `python -m pytest -m "not ui" -q --no-cov` -> **188 passed, 34 deselected**（34 项 UI 标记测试需在有 display 的环境人验）
+- 对应规划：`specs/active/TASK-20260706-ui-review.md` 全部勾选
+- 对应审查：`docs/code-review/REVIEW-20260706-ui-review-bugfix.md`
+
 ### refactor(ui): Step D 工作台查询体验收尾
 
 - 型号入口从单一下拉改为平铺按钮 + 「更多型号」收纳，保留独立搜索框，兼顾新人浏览和老手快速检索。

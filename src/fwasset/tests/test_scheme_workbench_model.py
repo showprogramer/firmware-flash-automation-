@@ -167,3 +167,344 @@ def test_covered_module_is_not_duplicated_by_fallback(l36_tree: Path, tmp_path: 
         c for c in cards if c.is_fallback and c.asset["firmware_label"] == "主板程序"
     ]
     assert mainboard_fallbacks == []
+
+
+# ---------------------------------------------------------------------------
+# Asset cache (P1-2) — single-bind, no-repeated-SQLite discipline
+# ---------------------------------------------------------------------------
+
+from typing import Any  # noqa: E402  (kept near its only use)
+
+
+def _make_asset(
+    *,
+    path: str,
+    model: str = "L36",
+    category: str = "common",
+    firmware_label: str = "主板程序",
+    firmware_type: str = "mainboard",
+    scheme_name: str = "",
+    directory_name: str = "量产_默认",
+    label: str = "",
+    model_directory_path: str = "/scan/L36程序",
+    platform: str = "",
+) -> dict[str, Any]:
+    return {
+        "series": "",
+        "model": model,
+        "version": "V40",
+        "firmware_type": firmware_type,
+        "firmware_label": firmware_label,
+        "flash_mode": "tool_launch",
+        "usb_flow": "",
+        "path": path,
+        "directory_name": directory_name,
+        "model_directory_name": "L36程序",
+        "model_directory_path": model_directory_path,
+        "files": ["f.bin"],
+        "modified_time": 0.0,
+        "tool_name": "",
+        "tool_path": "",
+        "tool_dir": "",
+        "label": label or directory_name,
+        "category": category,
+        "platform": platform,
+        "scheme_name": scheme_name,
+        "scheme_path": "",
+    }
+
+
+class _CountingQueryAssets:
+    """Counting replacement for fwasset.core.asset_index.query_assets.
+
+    Records every call (so tests can assert the call count) and returns a
+    pre-supplied asset list. Tests monkeypatch the module-level binding
+    `fwasset.core.asset_index.query_assets` to this instance.
+    """
+
+    def __init__(self, assets: list[dict[str, Any]]) -> None:
+        self.assets = assets
+        self.calls: list[dict[str, Any]] = []
+
+    def __call__(self, *args: Any, **kwargs: Any) -> list[dict[str, Any]]:
+        self.calls.append({"args": args, "kwargs": kwargs})
+        # Apply the same filters the real query_assets does, so the model
+        # exercises the same code path as in production.
+        keyword = (kwargs.get("keyword") or "").lower().strip()
+        category = kwargs.get("category") or ""
+        scheme_name = kwargs.get("scheme_name") or ""
+        out: list[dict[str, Any]] = []
+        for a in self.assets:
+            if category and a.get("category") != category:
+                continue
+            if scheme_name and a.get("scheme_name") != scheme_name:
+                continue
+            if keyword:
+                hay = " ".join(
+                    str(a.get(k, "")) for k in ("label", "directory_name", "firmware_label", "firmware_type", "version", "model", "series", "path")
+                ).lower()
+                if keyword not in hay:
+                    continue
+            out.append(a)
+        return out
+
+
+@pytest.fixture()
+def cached_model(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> tuple[SchemeWorkbenchModel, _CountingQueryAssets]:
+    """Build a SchemeWorkbenchModel whose query_assets is a counting fake.
+
+    No real scan, no real SQLite — pure logic + cache discipline tests.
+    """
+    import fwasset.core.asset_index as asset_index_module
+    import fwasset.ui.view_models.scheme_workbench_model as model_module
+
+    assets = [
+        # 通用 mainboard: 2 variants under 通用/主板程序/
+        _make_asset(
+            path="/scan/L36程序/通用/主板程序/量产_默认/YJ_3DMain_L36_V40.bin",
+            directory_name="量产_默认",
+            label="量产_默认",
+        ),
+        _make_asset(
+            path="/scan/L36程序/通用/主板程序/防夹功能/YJ_3DMain_L36_V24.bin",
+            directory_name="防夹功能",
+            label="防夹功能",
+        ),
+        # 通用 single-variant module
+        _make_asset(
+            path="/scan/L36程序/通用/3D机芯版程序/YJ_ZD_3D_Core_L36_V20.mot",
+            firmware_label="3D机芯板程序",
+            directory_name="YJ_ZD_3D_Core_L36_V20",
+            label="3D机芯版程序",
+        ),
+        # 定制 scheme: only ships its own mainboard
+        _make_asset(
+            path="/scan/L36程序/定制/西班牙/主板程序/YJ_3DMain_L36_西班牙_V40.bin",
+            category="custom",
+            scheme_name="西班牙",
+            directory_name="西班牙_主板",
+            label="西班牙_主板",
+            platform="标准单机芯3D",
+        ),
+    ]
+    counter = _CountingQueryAssets(assets)
+    monkeypatch.setattr(asset_index_module, "query_assets", counter)
+    # The model imports the symbol by name — patch that binding too.
+    monkeypatch.setattr(model_module, "query_assets", counter)
+    # Provide a minimal platform config so the 西班牙 fallback path still runs.
+    from fwasset.core.platform_config import PlatformDefaults
+
+    platform = PlatformDefaults(platform_name="标准单机芯3D", defaults={"3D机芯版程序": ""})
+    monkeypatch.setattr(model_module, "load_platform_config", lambda _dir: [platform])
+
+    model = SchemeWorkbenchModel()
+    model.bind(tmp_path / "index.db", tmp_path / "L36程序")
+    return model, counter
+
+
+def test_bind_populates_cache_without_repeated_query_assets(cached_model) -> None:
+    """bind() may call query_assets once to load the model-root map, but never
+    on the hot path. After bind, view methods must NOT call query_assets again.
+    """
+    model, counter = cached_model
+    initial_calls = len(counter.calls)
+
+    # Build the sidebar tree and inspect modules — both should read from the cache.
+    model.build_sidebar_tree("L36")
+    model.get_common_modules("L36", "主板程序")
+    model.get_scheme_modules("L36", "西班牙")
+    model.get_all_modules("L36")
+    model.load_all_models()
+
+    assert len(counter.calls) == initial_calls, (
+        f"view methods must not hit query_assets when cache is populated; "
+        f"got {len(counter.calls) - initial_calls} extra calls"
+    )
+
+
+def test_cache_preserves_keyword_filter_semantics(cached_model) -> None:
+    """The cache must NOT weaken the keyword filter. A user search must still
+    exclude assets whose label/directory_name does not contain the keyword.
+    """
+    model, _counter = cached_model
+
+    # 量产_默认 matches "量产" (part of label + directory_name).
+    matches = model.get_common_modules("L36", "主板程序", keyword="量产")
+    assert len(matches) == 1
+    assert "量产" in matches[0].asset["label"]
+
+    # No mainboard variant matches "xyzzy" — must return empty.
+    assert model.get_common_modules("L36", "主板程序", keyword="xyzzy") == []
+
+
+def test_cache_keyword_supports_space_split_AND_with_OR_per_token(cached_model) -> None:
+    """BUG-2: the cache must replicate query_assets' 「空格分词 AND 跨字段 OR」 semantics.
+
+    Examples:
+        "主板 防夹"  → (any field contains "主板") AND (any field contains "防夹")
+        "主板 xyzzy" → empty (second token matches nothing)
+        "xyzzy"      → empty (single token matches nothing)
+
+    The previous implementation did a single substring match on a joined
+    field string, so "主板 防夹" required the literal string "主板 防夹" to
+    appear in the haystack — effectively killing the flexible multi-word
+    search.
+    """
+    model, _counter = cached_model
+
+    # 主板 mainboard variants: 量产_默认 (label=量产_默认, no 防夹) and 防夹功能 (label=防夹功能, no 主板)
+    # The first token "主板" matches the 主板 mainboard row; the second token
+    # "防夹" then narrows to the variant whose directory_name contains 防夹.
+    cards = model.get_common_modules("L36", "主板程序", keyword="主板 防夹")
+    dirs = [c.asset["directory_name"] for c in cards]
+    assert dirs == ["防夹功能"], (
+        f"expected only 防夹功能 to match '主板 防夹', got {dirs!r}"
+    )
+
+    # Reverse: a token that doesn't match anything must yield an empty list,
+    # not silently return everything (the bug we are fixing).
+    assert model.get_common_modules("L36", "主板程序", keyword="主板 xyzzy") == []
+    assert model.get_common_modules("L36", "主板程序", keyword="xyzzy") == []
+
+    # Single token still works.
+    only_zhujiao = model.get_common_modules("L36", "主板程序", keyword="主板")
+    assert len(only_zhujiao) >= 1
+
+
+def test_cache_keyword_matches_across_fields_not_just_directory_name(cached_model) -> None:
+    """A user search for a version string like V40 must hit assets whose
+    'version' field contains V40 — not only those whose directory_name does.
+    This is the '跨字段' half of the contract.
+    """
+    model, _counter = cached_model
+    # Both mainboard assets have version V40; the custom 西班牙 one too.
+    cards = model.get_all_modules("L36", keyword="V40")
+    assert len(cards) >= 1
+    for c in cards:
+        assert "V40" in str(c.asset.get("version", "")).upper()
+
+
+def test_cache_preserves_scheme_fallback_behavior(cached_model) -> None:
+    """The 西班牙 scheme ships only 主板程序; 3D机芯 must still come from 通用
+    via the platform-config fallback. Caching must not break this.
+    """
+    model, _counter = cached_model
+    cards = model.get_scheme_modules("L36", "西班牙")
+    by_label: dict[str, list] = {}
+    for c in cards:
+        by_label.setdefault(c.asset["firmware_label"], []).append(c)
+
+    assert "主板程序" in by_label
+    assert "3D机芯板程序" in by_label
+    # 3D机芯 should be a fallback (no _默认 directory but platform_config
+    # covered it).
+    assert by_label["3D机芯板程序"][0].is_fallback is True
+    # 主板 must be 定制专属, not fallback.
+    assert all(c.source_type == "custom_exclusive" for c in by_label["主板程序"])
+    by_label: dict[str, list] = {}
+    for c in cards:
+        by_label.setdefault(c.asset["firmware_label"], []).append(c)
+
+    assert "主板程序" in by_label
+    assert "3D机芯板程序" in by_label
+    # 3D机芯 should be a fallback (no _默认 directory but platform_config
+    # covered it).
+    assert by_label["3D机芯板程序"][0].is_fallback is True
+    # 主板 must be 定制专属, not fallback.
+    assert all(c.source_type == "custom_exclusive" for c in by_label["主板程序"])
+
+
+def test_common_module_cards_carry_source_kind_common(cached_model) -> None:
+    """BUG-1: a 通用 mainboard variant must report source_kind='common' so the
+    workbench can mark it 通用默认 — not 定制专属.
+
+    The previous code inferred source_kind from is_fallback only, so any
+    non-fallback card (which all 通用 cards are) was mis-labeled as custom.
+    """
+    model, _counter = cached_model
+    cards = model.get_common_modules("L36", "主板程序")
+    assert cards, "fixture should yield at least one mainboard card"
+    for c in cards:
+        assert getattr(c, "source_kind", None) == "common", (
+            f"mainboard variant {c.asset.get('directory_name')!r} should be "
+            f"common but got source_kind={getattr(c, 'source_kind', None)!r}"
+        )
+
+
+def test_scheme_module_tree_marks_common_assets_as_common_default(cached_model) -> None:
+    """BUG-1: when viewing a 西班牙 scheme that ships its own 主板, the OTHER
+    mainboard variants under 通用 (防夹功能, 量产_默认 etc.) shown by get_all_modules
+    must be tagged 通用默认 — never 定制专属.
+
+    The test is end-to-end through the public method that the UI consumes.
+    """
+    model, _counter = cached_model
+    all_cards = model.get_all_modules("L36")
+    common_only = [c for c in all_cards if c.source_type.startswith("common_")]
+    assert common_only, "fixture should yield common cards"
+    for c in common_only:
+        assert c.source_kind == "common", (
+            f"common card {c.asset.get('directory_name')!r} leaked into custom: "
+            f"source_kind={c.source_kind!r} source_type={c.source_type!r}"
+        )
+
+
+def test_unbound_model_falls_back_to_query_assets(monkeypatch: pytest.MonkeyPatch) -> None:
+    """If someone calls a view method before bind() (or with an empty cache),
+    the model must still work by going to the DB. This protects against the
+    'cache missed' regression where the view would silently return empty.
+    """
+    import fwasset.core.asset_index as asset_index_module
+    import fwasset.ui.view_models.scheme_workbench_model as model_module
+
+    assets = [
+        _make_asset(
+            path="/scan/X/通用/主板程序/量产_默认/f.bin",
+            model="X",
+            directory_name="量产_默认",
+        )
+    ]
+    counter = _CountingQueryAssets(assets)
+    monkeypatch.setattr(asset_index_module, "query_assets", counter)
+    monkeypatch.setattr(model_module, "query_assets", counter)
+
+    model = SchemeWorkbenchModel()  # never bound
+    tree = model.build_sidebar_tree("X")
+    assert tree["common"] == {"主板程序": 1}
+    assert counter.calls, "unbound model must hit query_assets to stay correct"
+
+
+def test_cache_invalidates_on_rebind(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Calling bind() again must reload the cache (e.g. after a rescan added
+    new assets). A stale cache from a previous bind is a silent bug — a
+    rescan would not show up in the UI.
+    """
+    import fwasset.core.asset_index as asset_index_module
+    import fwasset.ui.view_models.scheme_workbench_model as model_module
+
+    first_assets = [_make_asset(path="/scan/L36程序/通用/主板程序/量产_默认/f.bin")]
+    second_assets = first_assets + [
+        _make_asset(
+            path="/scan/L36程序/通用/语音程序/默认/v.bin",
+            firmware_label="语音程序",
+            directory_name="默认",
+        )
+    ]
+
+    first = _CountingQueryAssets(first_assets)
+    second = _CountingQueryAssets(second_assets)
+
+    # Initial bind uses the first counter.
+    monkeypatch.setattr(asset_index_module, "query_assets", first)
+    monkeypatch.setattr(model_module, "query_assets", first)
+    monkeypatch.setattr(model_module, "load_platform_config", lambda _dir: [])
+
+    model = SchemeWorkbenchModel()
+    model.bind(tmp_path / "index.db", tmp_path / "L36程序")
+    assert "语音程序" not in model.build_sidebar_tree("L36")["common"]
+
+    # Rebind against a new DB that has the new asset.
+    monkeypatch.setattr(asset_index_module, "query_assets", second)
+    monkeypatch.setattr(model_module, "query_assets", second)
+    model.bind(tmp_path / "index2.db", tmp_path / "L36程序")
+    assert "语音程序" in model.build_sidebar_tree("L36")["common"]

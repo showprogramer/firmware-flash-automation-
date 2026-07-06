@@ -39,6 +39,7 @@ class ModuleCardData:
     source_type: str               # "common_default" | "custom_exclusive" | "common_fallback" | "common_variant"
     source_label: str              # 用于显示的来源标签文本
     is_fallback: bool              # 是否是回源模块
+    source_kind: str = ""          # "common" | "custom" — coarse bucket for the row-level 定制专属/通用默认 标签
 
 
 # 整机标准模块的固定展示顺序（按烧录习惯，大部分机型包含这些模块）
@@ -79,22 +80,99 @@ class SchemeWorkbenchModel:
         self.root_dir: Path | None = None
         self._platforms: list[PlatformDefaults] = []
         self._model_root_paths: dict[str, str] = {}  # model_name → model_directory_path
+        # Single-shot in-memory asset cache. Populated by bind() so the hot
+        # path (sidebar rebuild on every search keystroke) does not re-query
+        # SQLite. Methods that previously called query_assets() now read from
+        # this list and filter in Python. The cache is invalidated by bind();
+        # see test_cache_invalidates_on_rebind.
+        self._all_assets: list[FirmwareAsset] = []
+
+    def _cache_loaded(self) -> bool:
+        """True once bind() has populated the asset cache."""
+        return bool(self._all_assets)
 
     def bind(self, db_path: Path | None, root_dir: Path):
         self.db_path = db_path
         self.root_dir = root_dir
+        # Load once. Any view method on the hot path reads from this list.
+        self._all_assets = list(query_assets(path=self.db_path))
         self._load_model_root_paths()
         self._load_platforms_for_all_models()
 
     def _load_model_root_paths(self):
         """从数据库中提取每个型号的根目录路径 (model_directory_path)。"""
         self._model_root_paths.clear()
-        assets = query_assets(path=self.db_path)
+        # Use the cache when available (avoid re-hitting SQLite for a derived
+        # lookup that runs at every bind). Falls back to a one-shot query if
+        # bind() was bypassed somehow.
+        assets = self._all_assets if self._cache_loaded() else query_assets(path=self.db_path)
         for a in assets:
             model = str(a.get("model", ""))
             mdp = str(a.get("model_directory_path", ""))
             if model and mdp and model not in self._model_root_paths:
                 self._model_root_paths[model] = mdp
+
+    def _filter_assets(
+        self,
+        *,
+        keyword: str = "",
+        category: str = "",
+        scheme_name: str = "",
+    ) -> list[FirmwareAsset]:
+        """Read assets from the cache, applying the same filters query_assets would.
+
+        Falls back to a one-shot query_assets call if bind() has not populated
+        the cache yet — keeps the model correct for callers that skip bind
+        (and lets the existing 6 fixture tests keep passing).
+        """
+        if not self._cache_loaded():
+            return query_assets(
+                keyword=keyword,
+                path=self.db_path,
+                category=category,
+                scheme_name=scheme_name,
+            )
+        out: list[FirmwareAsset] = []
+        # scheme_name uses a substring LIKE in query_assets; mirror that.
+        scheme_needle = scheme_name.strip().lower() if scheme_name else ""
+        # Tokenize the keyword exactly as query_assets does: whitespace split,
+        # every token must hit at least one of the 10 keyword fields (OR),
+        # all tokens must hit (AND). Empty keyword = no filter.
+        tokens = keyword.split() if keyword else []
+        keyword_fields = (
+            "series",
+            "model",
+            "version",
+            "firmware_label",
+            "directory_name",
+            "model_directory_name",
+            "path",
+            "flash_mode",
+            "scheme_name",
+            "platform",
+        )
+        for a in self._all_assets:
+            if category and str(a.get("category", "")) != category:
+                continue
+            if scheme_needle:
+                sn = str(a.get("scheme_name", "")).lower()
+                if scheme_needle not in sn:
+                    continue
+            if tokens:
+                keep = True
+                for token in tokens:
+                    needle = token.lower()
+                    hit = any(
+                        needle in str(a.get(field, "")).lower()
+                        for field in keyword_fields
+                    )
+                    if not hit:
+                        keep = False
+                        break
+                if not keep:
+                    continue
+            out.append(a)
+        return out
 
     def _load_platforms_for_all_models(self):
         """加载平台配置（平台配置.toml）。
@@ -176,7 +254,7 @@ class SchemeWorkbenchModel:
         if structural:
             return [structural]
         # 退化：无 root_dir 时回退到解析 model（兼容旧调用）
-        assets = query_assets(path=self.db_path)
+        assets = self._all_assets if self._cache_loaded() else query_assets(path=self.db_path)
         models = {str(a.get("model", "")) for a in assets if str(a.get("model", ""))}
         return sorted(models)
 
@@ -192,7 +270,7 @@ class SchemeWorkbenchModel:
         if not model_name:
             return {"common": {}, "custom": []}
 
-        assets = query_assets(path=self.db_path)
+        assets = self._all_assets if self._cache_loaded() else query_assets(path=self.db_path)
         # 过滤出该型号的资产
         model_assets = [a for a in assets if self._belongs_to_model(a, model_name)]
 
@@ -216,7 +294,7 @@ class SchemeWorkbenchModel:
 
     def get_common_modules(self, model_name: str, firmware_label: str, keyword: str = "") -> list[ModuleCardData]:
         """点击通用模块时，返回该类型下的所有变体"""
-        assets = query_assets(keyword=keyword, path=self.db_path)
+        assets = self._filter_assets(keyword=keyword, category="common")
         results: list[ModuleCardData] = []
 
         for a in assets:
@@ -238,7 +316,8 @@ class SchemeWorkbenchModel:
                 asset=a,
                 source_type=source_type,
                 source_label=source_label,
-                is_fallback=False
+                is_fallback=False,
+                source_kind="common",
             ))
 
         return results
@@ -246,7 +325,7 @@ class SchemeWorkbenchModel:
     def get_scheme_modules(self, model_name: str, scheme_name: str, keyword: str = "") -> list[ModuleCardData]:
         """点击定制方案时，返回完整模块清单（含回源）"""
         # 1. 查找属于这个方案的定制模块
-        custom_assets = query_assets(path=self.db_path, category="custom", scheme_name=scheme_name)
+        custom_assets = self._filter_assets(category="custom", scheme_name=scheme_name)
         # 如果方案被关键字过滤掉了，说明用户正在搜索，我们需要让全局过滤生效
         if keyword:
             custom_assets = [a for a in custom_assets if keyword.lower() in str(a.get("label", "")).lower() or keyword.lower() in str(a.get("directory_name", "")).lower()]
@@ -271,7 +350,8 @@ class SchemeWorkbenchModel:
                 asset=a,
                 source_type="custom_exclusive",
                 source_label=f"定制/{scheme_name} (专属)",
-                is_fallback=False
+                is_fallback=False,
+                source_kind="custom",
             ))
 
         # 2. 从 platform_config 中寻找缺失的通用模块（回源）
@@ -281,7 +361,7 @@ class SchemeWorkbenchModel:
             relevant_platforms = [p for p in self._platforms if p.platform_name == platform_name]
 
         if relevant_platforms and model_root:
-            common_assets = query_assets(path=self.db_path, category="common")
+            common_assets = self._filter_assets(category="common")
             # 过滤出同型号的通用资产
             model_common = [a for a in common_assets if self._belongs_to_model(a, model_name)]
 
@@ -318,7 +398,8 @@ class SchemeWorkbenchModel:
                             asset=fallback_asset,
                             source_type="common_fallback",
                             source_label=f"通用/{src_dir} (回源)",
-                            is_fallback=True
+                            is_fallback=True,
+                            source_kind="common",
                         ))
 
         return results
@@ -341,7 +422,9 @@ class SchemeWorkbenchModel:
         grouped: dict[str, list[ModuleVariant]] = {}
         for c in cards:
             label = str(c.asset.get("firmware_label", "")) or str(c.asset.get("firmware_type", ""))
-            kind = "common" if c.is_fallback else "custom"
+            # source_kind is set by the producer (get_scheme_modules etc.). Fall
+            # back to the legacy is_fallback inference for safety.
+            kind = c.source_kind or ("common" if c.is_fallback else "custom")
             variant = ModuleVariant(
                 asset=c.asset,
                 name=str(c.asset.get("directory_name", "")),
@@ -370,7 +453,7 @@ class SchemeWorkbenchModel:
 
     def get_all_modules(self, model_name: str, keyword: str = "") -> list[ModuleCardData]:
         """获取指定型号下的所有模块（不回源，仅展示物理存在的模块）"""
-        assets = query_assets(keyword=keyword, path=self.db_path)
+        assets = self._filter_assets(keyword=keyword)
         results: list[ModuleCardData] = []
         for a in assets:
             if not self._belongs_to_model(a, model_name):
@@ -394,6 +477,7 @@ class SchemeWorkbenchModel:
                 asset=a,
                 source_type=source_type,
                 source_label=source_label,
-                is_fallback=False
+                is_fallback=False,
+                source_kind="common" if cat == "common" else "custom",
             ))
         return results
