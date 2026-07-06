@@ -42,37 +42,37 @@
 
 ### P0-1 · 补齐 PanelHost 协议
 
-- [ ] 测试先行：在 `test_operation_panels.py` 或新增 helper 测试中断言 `PanelHost` 暴露 `get_global_usb_drive`。
-- [ ] 在 `src/fwasset/ui/operation_panels/host_types.py` 增加：
+- [x] 测试先行：在 `test_operation_panels.py` 或新增 helper 测试中断言 `PanelHost` 暴露 `get_global_usb_drive`。
+- [x] 在 `src/fwasset/ui/operation_panels/host_types.py` 增加：
   `def get_global_usb_drive(self) -> str: ...`
-- [ ] 验证 `AutoUsbPanel._resolve_drive()` 依赖的宿主契约在 Protocol 中可见。
+- [x] 验证 `AutoUsbPanel._resolve_drive()` 依赖的宿主契约在 Protocol 中可见。
 
 验收：
-- [ ] 相关测试通过。
-- [ ] 不改 UI 行为。
+- [x] 相关测试通过。
+- [x] 不改 UI 行为。
 
 ### P0-2 · `_poll_task_queue()` 窗口销毁保护
 
-- [ ] 测试先行：覆盖 `_poll_task_queue()` 在控件已销毁/不存在时直接返回，不继续调用 `on_done` 或 `after`。
-- [ ] 在 `BaseFlashPanel._poll_task_queue()` 开头检查 `winfo_exists()`。
-- [ ] 在继续安排 `self.after(120, ...)` 前再次检查窗口仍存在。
-- [ ] 需要时对 `on_done(payload)` 做最小防护，避免回调异常让轮询状态卡死。
+- [x] 测试先行：覆盖 `_poll_task_queue()` 在控件已销毁/不存在时直接返回，不继续调用 `on_done` 或 `after`。
+- [x] 在 `BaseFlashPanel._poll_task_queue()` 开头检查 `winfo_exists()`。
+- [x] 在继续安排 `self.after(120, ...)` 前再次检查窗口仍存在。
+- [x] 需要时对 `on_done(payload)` 做最小防护，避免回调异常让轮询状态卡死。
 
 验收：
-- [ ] 关闭窗口后后台任务完成不抛 `TclError`。
-- [ ] 正常后台任务完成流程不变。
+- [x] 关闭窗口后后台任务完成不抛 `TclError`。
+- [x] 正常后台任务完成流程不变。
 
 ### P1-1 · 搜索刷新 debounce
 
-- [ ] 测试先行：快速触发多次 `_on_search_changed()` 时，只保留一次延迟刷新任务。
-- [ ] 在 `WorkbenchPanel` 增加 `_search_after_id` 或类似字段。
-- [ ] `_on_search_changed()` 不直接刷新侧栏/主表，改为取消旧 `after` 并延迟 150-200ms 执行。
-- [ ] 延迟回调执行前确认窗口仍存在。
+- [x] 测试先行：快速触发多次 `_on_search_changed()` 时，只保留一次延迟刷新任务。
+- [x] 在 `WorkbenchPanel` 增加 `_search_after_id` 或类似字段。
+- [x] `_on_search_changed()` 不直接刷新侧栏/主表，改为取消旧 `after` 并延迟 150-200ms 执行。
+- [x] 延迟回调执行前确认窗口仍存在。
 
 验收：
-- [ ] 快速输入搜索时侧栏不再每个按键立即整树销毁重建。
-- [ ] 停止输入后筛选结果仍正确刷新。
-- [ ] 型号切换、扫描完成等非搜索路径不被 debounce 误延迟，除非代码明确复用同一刷新入口。
+- [x] 快速输入搜索时侧栏不再每个按键立即整树销毁重建。
+- [x] 停止输入后筛选结果仍正确刷新。
+- [x] 型号切换、扫描完成等非搜索路径不被 debounce 误延迟，除非代码明确复用同一刷新入口。
 
 ### P1-2 · `SchemeWorkbenchModel` 资产查询缓存
 
@@ -93,21 +93,21 @@
 
 ### P2-1 · 清理 `shared_actions.py` 硬编码间距
 
-- [ ] 测试/静态断言：`shared_actions.py` 不再出现 `padx=20`。
-- [ ] 用 `SPACE_LG` 或符合当前 UI 密度的 token 替代硬编码数值。
+- [x] 测试/静态断言：`shared_actions.py` 不再出现 `padx=20`。
+- [x] 用 `SPACE_LG` 或符合当前 UI 密度的 token 替代硬编码数值。
 
 验收：
-- [ ] 操作面板布局无明显变化或更统一。
+- [x] 操作面板布局无明显变化或更统一。
 
 ### P2-2 · 整理 `workbench_panel.py` 方法内 import
 
-- [ ] 将 `_open_current_asset_dir()` 内的 `import os, subprocess` 移到文件顶部。
-- [ ] 将 `_start_scan()` 内的 `from tkinter import filedialog` 移到文件顶部。
-- [ ] 保持调用逻辑不变。
+- [x] 将 `_open_current_asset_dir()` 内的 `import os, subprocess` 移到文件顶部。
+- [x] 将 `_start_scan()` 内的 `from tkinter import filedialog` 移到文件顶部。
+- [x] 保持调用逻辑不变。
 
 验收：
-- [ ] `py_compile` 通过。
-- [ ] 扫描目录选择、双击/打开目录逻辑不变。
+- [x] `py_compile` 通过。
+- [x] 扫描目录选择、双击/打开目录逻辑不变。
 
 ---
 
@@ -127,10 +127,10 @@ python -m py_compile src\fwasset\ui\base_panel.py src\fwasset\ui\workbench_panel
 
 ## 4. 文档与提交流程
 
-- [ ] 更新 `docs/CHANGELOG.md`，记录 UI review bugfix。
-- [ ] 新建或更新 `docs/code-review/REVIEW-20260706-ui-review-bugfix.md`。
-- [ ] 本任务涉及 UI 稳定性与性能，提交前必须按 AGENTS.md 先提示人工验证。
-- [ ] 人工确认后再按 Conventional Commit 提交。
+- [x] 更新 `docs/CHANGELOG.md`，记录 UI review bugfix。
+- [x] 新建或更新 `docs/code-review/REVIEW-20260706-ui-review-bugfix.md`。
+- [x] 本任务涉及 UI 稳定性与性能，提交前必须按 AGENTS.md 先提示人工验证。
+- [x] 人工确认后再按 Conventional Commit 提交。
 
 建议提交拆分：
 
@@ -142,3 +142,21 @@ python -m py_compile src\fwasset\ui\base_panel.py src\fwasset\ui\workbench_panel
    - P1-2。
 4. `refactor(ui): clean minor review findings`
    - P2-1、P2-2。
+
+---
+
+## 5. 实际提交记录
+
+经用户拍板，按 1 个综合 commit 一次性提交（避免 `workbench_panel.py` 被多个 commit 拆分 hunk 带来的 staging 风险），完全合入 `specs/active/TASK-20260609-ui-rewrite-plan.md` Step D 之后的同一个分支 `feature/ui-workbench-redesign`：
+
+- `b35bb48` · `fix(ui): 加固工作台契约、性能与归属显示`
+  - P0-1 / P0-2 / P1-1 / P1-2 / P2-1 / P2-2 全部 6 项主任务
+  - 人验期发现的隐藏 bug 一并修：
+    - 通用模块的归属误标为「定制专属」（BUG-1：`ModuleCardData.source_kind`）
+    - 缓存关键字分词被压扁（BUG-2：复刻 `query_assets` AND-OR）
+    - 一键烧录无 U 盘入口（BUG-3：顶部 U 盘选择器）
+    - 启动时需手动刷新（BUG-4：自动 `after(100, _refresh_usb)`）
+
+自动化门禁：`python -m pytest -m "not ui" -q --no-cov` → 195 passed, 34 deselected。
+
+配套文档：`docs/code-review/REVIEW-20260706-ui-review-bugfix.md`、`docs/CHANGELOG.md` Unreleased 段。
