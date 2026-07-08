@@ -69,3 +69,31 @@ def default_variant_for(
         if p.platform_name == platform_name:
             return p.defaults.get(module_dir, "")
     return ""
+
+
+def _toml_str(value: str) -> str:
+    """Serialize a string as a TOML basic string (quotes/backslash escaped)."""
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+def save_platform_config(model_root: Path, platforms: list[PlatformDefaults]) -> Path:
+    """把平台默认配置写回型号根目录下的 `平台配置.toml`。
+
+    以规范格式整体重写（应用托管该文件）；写入失败向上抛异常，由服务层
+    包装为 ServiceResult。返回写入的文件路径。
+    """
+    lines: list[str] = [
+        "# 本文件由 fwasset 管理（工作台「设为平台默认」会改写它）。",
+        "# defaults 键 = 通用区模块目录名，值 = 默认变体子目录名（空串表示该模块唯一）。",
+    ]
+    for p in platforms:
+        lines.append("")
+        lines.append("[[platform]]")
+        lines.append(f"name = {_toml_str(p.platform_name)}")
+        lines.append("[platform.defaults]")
+        for module_dir, variant_name in p.defaults.items():
+            lines.append(f"{_toml_str(module_dir)} = {_toml_str(variant_name)}")
+    toml_path = model_root / "平台配置.toml"
+    toml_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return toml_path

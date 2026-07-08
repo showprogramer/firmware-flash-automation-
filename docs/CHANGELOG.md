@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+### feat(ui): 设为平台默认 + 多型号根支持
+
+烧录员现在可以在工作台内维护通用模块的平台默认程序，且扫描根支持"父文件夹含多个型号目录"的布局：
+
+- **设为平台默认**：右键通用变体 → 「设为平台默认」（单平台直出、多平台子菜单、当前默认置灰打勾）→ 确认后写入该型号的 `平台配置.toml`。事实源唯一为 toml 的 `[platform.defaults]`；目录名 `_默认` 后缀不再作为写入依据。设置成功后就地重载平台配置，回源与徽章立即生效，**不需要重新扫描**。
+- **★默认 徽章**：程序名称列标出当前平台默认变体（该型号多平台时附平台名）。
+- **新服务** `core/services/platform_default_service.py`：`set_default_variant` 返回 ServiceResult（`ok / invalid_args / write_failed`）；`core/platform_config.py` 新增 `save_platform_config`（规范格式整体重写，含转义）。写入位置按加载器候选顺序找现存配置所在目录，修复 `model_directory_path` 指向 `通用/` 子目录导致写错位置的坑。
+- **多型号根**：扫描根直接含 `通用/定制` → 单型号根（原行为不变）；否则按一级子目录枚举型号（`L36程序` → L36），未整理的型号目录也进型号列表（资产仅见于「全部」视图）。归属只看物理路径，不看文件名解析的 model。平台配置按型号隔离（`_platforms_by_model`），徽章/回源/右键菜单/设默认写入全部按型号取平台，杜绝跨型号串扰。
+
+新增测试：`test_platform_default_service.py`（6）、`test_platform_config.py` 写回三例、`test_scheme_workbench_model.py` 平台默认 7 例 + 多型号根 5 例。
+
+验证:
+- `uv run python -m pytest -m "not ui" -q` -> **216 passed, 34 deselected, coverage 86.09%**
+- 真实数据（`D:\按摩器程序`，70 资产）：型号 `[L36, L36双机芯-上3D-下2D]`，L36 侧边树 7 通用模块 + 6 方案，无跨型号泄漏
+- 用户人工验证通过（设默认写回、徽章、双型号识别）
+
+### fix(core): 全新初始化索引时补建 v3 索引
+
+- `init_asset_index` 在全新建库分支只建表未建 `category/platform/scheme_name` 三个 v3 索引（此前仅 v2→v3 迁移路径会建）。补齐，保证新装机与迁移库的查询计划一致。
+
 ### fix(ui): 启动时自动刷新 U 盘列表
 
 跟 BUG-3（顶部 U 盘选择器）一起被人验发现：

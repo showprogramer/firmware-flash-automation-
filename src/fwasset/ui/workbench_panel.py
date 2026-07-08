@@ -5,7 +5,7 @@ import subprocess
 import threading
 import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog
+from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
 
@@ -270,7 +270,12 @@ class WorkbenchPanel(BaseFlashPanel):
         ).grid(row=0, column=5, sticky="e")
 
         # Data Grid Container
-        self.grid_panel = DataGridPanel(main, self._on_grid_selection_changed, self._log)
+        self.grid_panel = DataGridPanel(
+            main,
+            self._on_grid_selection_changed,
+            self._log,
+            on_right_click=self._on_grid_right_click,
+        )
         self.grid_panel.grid(row=1, column=0, sticky="nsew", pady=(0, SPACE_LG))
 
         # Operations Footer (Bottom section where actions appear when a row is selected)
@@ -580,6 +585,71 @@ class WorkbenchPanel(BaseFlashPanel):
         )
         self.active_operation_panel.pack(fill="both", expand=True)
         self.active_operation_panel.build()
+
+    # --- 右键菜单（设为平台默认） ---
+    def _on_grid_right_click(self, variant: ModuleVariant, x_root: int, y_root: int):
+        menu = tk.Menu(self, tearoff=0)
+
+        asset = variant.asset
+        is_common = variant.source_kind == "common" and str(asset.get("category", "")) == "common"
+        if is_common:
+            platforms = self.workbench_model.platform_names(self.current_selection.model_name)
+            current_defaults = set(self.workbench_model.default_platforms_for(asset))
+            if not platforms:
+                menu.add_command(label="设为平台默认（未找到平台配置）", state="disabled")
+            elif len(platforms) == 1:
+                p = platforms[0]
+                if p in current_defaults:
+                    menu.add_command(label=f"✓ 已是「{p}」默认程序", state="disabled")
+                else:
+                    menu.add_command(
+                        label=f"设为「{p}」默认程序",
+                        command=lambda: self._set_default_variant(p, variant),
+                    )
+            else:
+                submenu = tk.Menu(menu, tearoff=0)
+                for p in platforms:
+                    if p in current_defaults:
+                        submenu.add_command(label=f"✓ {p}（当前默认）", state="disabled")
+                    else:
+                        submenu.add_command(
+                            label=p,
+                            command=lambda name=p: self._set_default_variant(name, variant),
+                        )
+                menu.add_cascade(label="设为平台默认", menu=submenu)
+            menu.add_separator()
+
+        menu.add_command(label="打开目录", command=self._open_current_asset_dir)
+        menu.add_command(label="复制目录路径", command=self._copy_asset_dir_path)
+
+        try:
+            menu.tk_popup(x_root, y_root)
+        finally:
+            menu.grab_release()
+
+    def _set_default_variant(self, platform_name: str, variant: ModuleVariant):
+        asset = variant.asset
+        module = str(asset.get("firmware_label", "")) or str(asset.get("firmware_type", ""))
+        shown = variant.name or str(asset.get("directory_name", ""))
+        confirmed = messagebox.askyesno(
+            title="设为平台默认",
+            message=(
+                f"将「{module} / {shown}」设为平台「{platform_name}」的默认程序？\n\n"
+                "定制方案缺少该模块时，将使用此程序补齐。"
+            ),
+            parent=self.winfo_toplevel(),
+        )
+        if not confirmed:
+            return
+        result = self.workbench_model.set_default_variant(
+            self.current_selection.model_name, platform_name, asset, log_fn=self._log
+        )
+        if not result["ok"]:
+            self._log(result["message"])
+            messagebox.showerror(title="设置失败", message=result["message"], parent=self.winfo_toplevel())
+            return
+        # 平台配置已就地重载，刷新表格让 ★默认 徽章与回源立即生效
+        self._refresh_main_grid()
 
     def _format_selection_summary(self, variant: ModuleVariant, flash_mode: str) -> str:
         asset = variant.asset

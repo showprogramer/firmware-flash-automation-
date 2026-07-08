@@ -1,11 +1,22 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from fwasset.core.asset_index import query_assets
 from fwasset.core.platform_config import load_platform_config, default_variant_for, PlatformDefaults
+from fwasset.core.services.platform_default_service import (
+    set_default_variant as _set_default_variant_service,
+)
 from fwasset.core.types import FirmwareAsset
+
+
+def _strip_model_suffix(name: str) -> str:
+    """目录名 → 型号名（'L36程序' → 'L36'）。"""
+    for suffix in ("程序", "目录"):
+        if name.endswith(suffix):
+            return name[: -len(suffix)].strip()
+    return name.strip()
 
 
 def _module_matches(asset: FirmwareAsset, module_key: str) -> bool:
@@ -40,6 +51,7 @@ class ModuleCardData:
     source_label: str              # 用于显示的来源标签文本
     is_fallback: bool              # 是否是回源模块
     source_kind: str = ""          # "common" | "custom" — coarse bucket for the row-level 定制专属/通用默认 标签
+    default_badge: str = ""        # 平台默认徽章文案（如 "★默认"），非默认为空串
 
 
 # 整机标准模块的固定展示顺序（按烧录习惯，大部分机型包含这些模块）
@@ -63,6 +75,7 @@ class ModuleVariant:
     version: str
     source_kind: str               # "custom"（定制专属）/ "common"（通用默认）
     source_label: str              # 用户可读来源文案，绝不含"回源"
+    default_badge: str = ""        # 平台默认徽章文案（如 "★默认"），非默认为空串
 
 
 @dataclass
@@ -80,6 +93,11 @@ class SchemeWorkbenchModel:
         self.root_dir: Path | None = None
         self._platforms: list[PlatformDefaults] = []
         self._model_root_paths: dict[str, str] = {}  # model_name → model_directory_path
+        # 布局模式：True = 扫描根本身是一个型号目录（含 通用/定制）；
+        # False = 扫描根是父文件夹，一级子目录各是一个型号（多型号根）。
+        self._single_model_root: bool = True
+        self._multi_model_dirs: dict[str, str] = {}  # model_name → 一级子目录名
+        self._platforms_by_model: dict[str, list[PlatformDefaults]] = {}
         # Single-shot in-memory asset cache. Populated by bind() so the hot
         # path (sidebar rebuild on every search keystroke) does not re-query
         # SQLite. Methods that previously called query_assets() now read from
@@ -96,8 +114,40 @@ class SchemeWorkbenchModel:
         self.root_dir = root_dir
         # Load once. Any view method on the hot path reads from this list.
         self._all_assets = list(query_assets(path=self.db_path))
+        self._single_model_root = self._detect_single_model_root()
+        self._load_multi_model_dirs()
         self._load_model_root_paths()
         self._load_platforms_for_all_models()
+
+    def _detect_single_model_root(self) -> bool:
+        """扫描根直接含 通用/定制 → 单型号根；否则视为多型号父文件夹。
+
+        根目录不存在（如仅有索引的测试场景）时保持单型号语义，向后兼容。
+        """
+        if self.root_dir is None or not self.root_dir.is_dir():
+            return True
+        return (self.root_dir / "通用").is_dir() or (self.root_dir / "定制").is_dir()
+
+    def _load_multi_model_dirs(self):
+        """多型号根：从资产路径的一级子目录枚举型号（'L36程序' → 'L36'）。
+
+        以"该子目录下扫到过资产"为准，未整理的型号目录（还没有 通用/定制）
+        也会出现在型号列表里。
+        """
+        self._multi_model_dirs.clear()
+        if self.root_dir is None or self._single_model_root:
+            return
+        for a in self._all_assets:
+            try:
+                rel = Path(str(a.get("path", ""))).relative_to(self.root_dir)
+            except ValueError:
+                continue
+            if not rel.parts:
+                continue
+            top = rel.parts[0]
+            model = _strip_model_suffix(top)
+            if model and model not in self._multi_model_dirs:
+                self._multi_model_dirs[model] = top
 
     def _load_model_root_paths(self):
         """从数据库中提取每个型号的根目录路径 (model_directory_path)。"""
@@ -175,15 +225,30 @@ class SchemeWorkbenchModel:
         return out
 
     def _load_platforms_for_all_models(self):
-        """加载平台配置（平台配置.toml）。
+        """加载平台配置（平台配置.toml），并按型号隔离。
 
-        `平台配置.toml` 位于扫描根目录（如 L36程序/），因此优先从 root_dir 读取。
-        为兼容"根目录下含多个型号子目录"的结构，再尝试每个 model_directory_path
-        的上层目录。所有结果去重合并。
+        - 多型号根：每个型号只读自己目录下的 `平台配置.toml`（型号间绝不混用，
+          否则同名平台/同名模块的默认会跨型号串扰）。
+        - 单型号根：配置位于扫描根（如 L36程序/），优先从 root_dir 读取；再尝试
+          每个 model_directory_path 及其上层目录，结果去重合并。
+        `self._platforms` 保留为全量合并列表，供无型号上下文的旧调用使用。
         """
         self._platforms.clear()
-        seen_dirs: set[str] = set()
+        self._platforms_by_model.clear()
 
+        def _merge(platforms: list[PlatformDefaults]) -> None:
+            for plat in platforms:
+                if plat.platform_name not in {p.platform_name for p in self._platforms}:
+                    self._platforms.append(plat)
+
+        if not self._single_model_root and self.root_dir is not None:
+            for model, dir_name in self._multi_model_dirs.items():
+                platforms = load_platform_config(self.root_dir / dir_name)
+                self._platforms_by_model[model] = platforms
+                _merge(platforms)
+            return
+
+        seen_dirs: set[str] = set()
         candidate_dirs: list[Path] = []
         if self.root_dir is not None:
             candidate_dirs.append(self.root_dir)
@@ -198,10 +263,142 @@ class SchemeWorkbenchModel:
             if key in seen_dirs:
                 continue
             seen_dirs.add(key)
-            platforms = load_platform_config(model_dir)
-            for plat in platforms:
-                if plat.platform_name not in {p.platform_name for p in self._platforms}:
-                    self._platforms.append(plat)
+            _merge(load_platform_config(model_dir))
+
+        structural = self._structural_model()
+        if structural:
+            self._platforms_by_model[structural] = list(self._platforms)
+
+    def _platforms_for(self, model_name: str) -> list[PlatformDefaults]:
+        """该型号可用的平台列表；无型号上下文时退化为全量合并列表。"""
+        return self._platforms_by_model.get(model_name, self._platforms)
+
+    def _model_of_asset(self, asset: FirmwareAsset) -> str:
+        """资产所属型号：多型号根按一级子目录推导，单型号根即结构化型号。"""
+        if self._single_model_root or self.root_dir is None:
+            return self._structural_model()
+        try:
+            rel = Path(str(asset.get("path", ""))).relative_to(self.root_dir)
+        except ValueError:
+            return ""
+        return _strip_model_suffix(rel.parts[0]) if rel.parts else ""
+
+    # --- 平台默认（设默认功能） ---
+    def platform_names(self, model_name: str = "") -> list[str]:
+        """可选平台名列表：优先取该型号的平台配置，缺失时退化为资产上出现过的平台。"""
+        platforms = self._platforms_for(model_name) if model_name else self._platforms
+        names = [p.platform_name for p in platforms]
+        if names:
+            return names
+        seen: list[str] = []
+        for a in self._all_assets:
+            if model_name and not self._belongs_to_model(a, model_name):
+                continue
+            pn = str(a.get("platform", ""))
+            if pn and pn not in seen:
+                seen.append(pn)
+        return seen
+
+    def _common_module_parts(self, asset: FirmwareAsset) -> tuple[str, str]:
+        """解析通用区资产的 (模块目录名, 变体目录名)。
+
+        路径形如 …/通用/主板程序/量产_默认：模块 = 通用后的第一段（跳过双机芯
+        等平台子目录），变体 = 资产目录名。资产目录直接位于模块层（该模块唯一
+        一份）时变体返回空串——与 平台配置.toml 中空值的语义一致。
+        非通用区或无法解析时返回 ("", "")。
+        """
+        parts = Path(str(asset.get("path", ""))).parts
+        if "通用" not in parts:
+            return "", ""
+        rest = list(parts[parts.index("通用") + 1:])
+        platform = str(asset.get("platform", ""))
+        if rest and platform and rest[0] == platform:
+            rest = rest[1:]
+        if not rest:
+            return "", ""
+        if len(rest) == 1:
+            return rest[0], ""
+        return rest[0], rest[-1]
+
+    def default_platforms_for(self, asset: FirmwareAsset) -> list[str]:
+        """返回把该通用变体配置为默认程序的平台名列表（只看资产所属型号的配置）。"""
+        if str(asset.get("category", "")) != "common":
+            return []
+        dir_name = str(asset.get("directory_name", ""))
+        if not dir_name:
+            return []
+        names: list[str] = []
+        for p in self._platforms_for(self._model_of_asset(asset)):
+            for module_key, variant_name in p.defaults.items():
+                if variant_name == dir_name and _module_matches(asset, module_key):
+                    names.append(p.platform_name)
+                    break
+        return names
+
+    def default_badge(self, asset: FirmwareAsset) -> str:
+        """默认徽章文案：该型号单平台只标 ★默认，多平台附上平台名。"""
+        names = self.default_platforms_for(asset)
+        if not names:
+            return ""
+        if len(self._platforms_for(self._model_of_asset(asset))) <= 1:
+            return "★默认"
+        return "★默认·" + "/".join(names)
+
+    def _platform_config_root(self, model_name: str) -> str:
+        """平台配置.toml 的落盘目录。
+
+        不能直接用 _get_model_root：扫描器的 model_directory_path 可能指向
+        通用/ 子目录，把配置写到那里后加载器会先读到扫描根下的旧文件（按平台
+        名去重，旧值获胜）。因此按加载器同样的候选顺序找现存配置文件所在目录；
+        都不存在时落在扫描根（配置的规范位置）。
+        """
+        # 多型号根：配置的规范位置就是各型号自己的目录
+        if not self._single_model_root:
+            return self._get_model_root(model_name)
+
+        candidates: list[Path] = []
+        if self.root_dir is not None:
+            candidates.append(self.root_dir)
+        model_path = self._model_root_paths.get(model_name, "")
+        if model_path:
+            p = Path(model_path)
+            candidates.extend([p, p.parent])
+        for d in candidates:
+            if (d / "平台配置.toml").exists():
+                return str(d)
+        return str(candidates[0]) if candidates else ""
+
+    def set_default_variant(
+        self, model_name: str, platform_name: str, asset: FirmwareAsset, log_fn=print
+    ) -> dict:
+        """把选中的通用变体设为指定平台的默认程序（写入 平台配置.toml）。
+
+        成功后就地重载平台配置，回源与徽章立即生效——不需要重新扫描。
+        """
+        module_dir, variant_name = self._common_module_parts(asset)
+        if not module_dir:
+            return {
+                "ok": False,
+                "code": "invalid_args",
+                "message": "设置默认失败：该程序不在通用区，无法作为平台默认",
+                "payload": {},
+            }
+        # 平台配置里可能已存在用字略有差异的模块键（如 版/板），沿用旧键，
+        # 避免同一模块出现两个 defaults 条目。
+        for p in self._platforms_for(model_name):
+            if p.platform_name != platform_name:
+                continue
+            for key in p.defaults:
+                if _module_matches(asset, key):
+                    module_dir = key
+                    break
+            break
+        result = _set_default_variant_service(
+            self._platform_config_root(model_name), platform_name, module_dir, variant_name, log_fn=log_fn
+        )
+        if result["ok"]:
+            self._load_platforms_for_all_models()
+        return result
 
     def _structural_model(self) -> str:
         """从扫描根目录名推导结构化型号（如 'L36程序' → 'L36'）。
@@ -211,20 +408,27 @@ class SchemeWorkbenchModel:
         """
         if self.root_dir is None:
             return ""
-        name = self.root_dir.name
-        for suffix in ("程序", "目录"):
-            if name.endswith(suffix):
-                name = name[: -len(suffix)]
-                break
-        return name.strip()
+        return _strip_model_suffix(self.root_dir.name)
 
     def _belongs_to_model(self, asset: FirmwareAsset, model_name: str) -> bool:
         """资产是否属于该型号。
 
-        单型号根下，资产的解析 model 可能因文件名噪声而异（L50/L50S...），
+        多型号根：以"路径的一级子目录 == 该型号目录"为准，不看解析 model
+        （文件名里的 L50S 等噪声会跨型号误判）。
+        单型号根：资产的解析 model 可能因文件名噪声而异（L50/L50S...），
         但它们物理上都在 root_dir 内，因此以"路径在 root_dir 下"为准。
         兼容旧多型号结构：解析 model 精确相等也算。
         """
+        if not self._single_model_root:
+            dir_name = self._multi_model_dirs.get(model_name, "")
+            if not dir_name or self.root_dir is None:
+                return False
+            try:
+                rel = Path(str(asset.get("path", ""))).relative_to(self.root_dir)
+            except ValueError:
+                return False
+            return bool(rel.parts) and rel.parts[0] == dir_name
+
         if str(asset.get("model", "")) == model_name:
             return True
         if self.root_dir is None or model_name != self._structural_model():
@@ -237,6 +441,11 @@ class SchemeWorkbenchModel:
 
     def _get_model_root(self, model_name: str) -> str:
         """获取给定型号的根目录路径。"""
+        if not self._single_model_root:
+            dir_name = self._multi_model_dirs.get(model_name, "")
+            if dir_name and self.root_dir is not None:
+                return str(self.root_dir / dir_name)
+            return ""
         root = self._model_root_paths.get(model_name, "")
         if root:
             return root
@@ -248,8 +457,11 @@ class SchemeWorkbenchModel:
     def load_all_models(self) -> list[str]:
         """获取型号列表，用于下拉框。
 
-        以扫描根目录结构为准（单型号根），避免文件名解析噪声产生 L50/L50S 等假型号。
+        多型号根：枚举一级子目录推导的型号；单型号根：以扫描根目录名为准。
+        两者都不从文件名解析型号，避免 L50/L50S 等噪声产生假型号。
         """
+        if not self._single_model_root and self._multi_model_dirs:
+            return sorted(self._multi_model_dirs)
         structural = self._structural_model()
         if structural:
             return [structural]
@@ -318,6 +530,7 @@ class SchemeWorkbenchModel:
                 source_label=source_label,
                 is_fallback=False,
                 source_kind="common",
+                default_badge=self.default_badge(a),
             ))
 
         return results
@@ -355,10 +568,11 @@ class SchemeWorkbenchModel:
             ))
 
         # 2. 从 platform_config 中寻找缺失的通用模块（回源）
-        # 如果不知道 platform，则从所有平台找（退化处理）
-        relevant_platforms = self._platforms
+        # 平台按型号隔离；如果不知道 platform，则从该型号所有平台找（退化处理）
+        model_platforms = self._platforms_for(model_name)
+        relevant_platforms = model_platforms
         if platform_name:
-            relevant_platforms = [p for p in self._platforms if p.platform_name == platform_name]
+            relevant_platforms = [p for p in model_platforms if p.platform_name == platform_name]
 
         if relevant_platforms and model_root:
             common_assets = self._filter_assets(category="common")
@@ -479,5 +693,6 @@ class SchemeWorkbenchModel:
                 source_label=source_label,
                 is_fallback=False,
                 source_kind="common" if cat == "common" else "custom",
+                default_badge=self.default_badge(a) if cat == "common" else "",
             ))
         return results

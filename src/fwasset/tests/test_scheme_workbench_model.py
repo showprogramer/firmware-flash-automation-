@@ -170,6 +170,202 @@ def test_covered_module_is_not_duplicated_by_fallback(l36_tree: Path, tmp_path: 
 
 
 # ---------------------------------------------------------------------------
+# 多型号根：父文件夹下每个一级子目录是一个型号
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def multi_model_tree(tmp_path: Path) -> Path:
+    """父文件夹 按摩器程序/ 下两个型号目录：
+
+    - L36程序：已整理（通用/定制/平台配置.toml）
+    - L36双机芯-上3D-下2D程序：未整理（模块目录直接平铺，无 通用/定制）
+    """
+    parent = tmp_path / "按摩器程序"
+
+    l36 = parent / "L36程序"
+    _write(
+        l36 / "平台配置.toml",
+        '[[platform]]\nname = "标准单机芯3D"\n[platform.defaults]\n"主板程序" = "量产_默认"\n',
+    )
+    _write(l36 / "通用" / "主板程序" / "量产_默认" / "YJ_3DMain_L36_V40.bin")
+    _write(l36 / "通用" / "主板程序" / "防夹功能" / "YJ_3DMain_L36_V24.bin")
+    scheme = l36 / "定制" / "西班牙"
+    _write(scheme / "方案配置.toml", 'name = "西班牙"\nplatform = "标准单机芯3D"\n')
+    _write(scheme / "腿部程序" / "Yj_Foot_L36_西班牙_V6.hex")
+
+    dual = parent / "L36双机芯-上3D-下2D程序"
+    _write(dual / "主板程序" / "YJ_2CoreMain_L50S_V60.bin")
+
+    return parent
+
+
+def test_multi_model_root_lists_both_models(multi_model_tree: Path, tmp_path: Path) -> None:
+    model = _bind_model(multi_model_tree, tmp_path)
+    assert model.load_all_models() == ["L36", "L36双机芯-上3D-下2D"]
+
+
+def test_multi_model_assets_do_not_leak_across_models(multi_model_tree: Path, tmp_path: Path) -> None:
+    """双机芯主板不出现在 L36 视图里，反之亦然（文件名噪声不参与归属）。"""
+    model = _bind_model(multi_model_tree, tmp_path)
+
+    l36_paths = {str(c.asset["path"]) for c in model.get_all_modules("L36")}
+    dual_paths = {str(c.asset["path"]) for c in model.get_all_modules("L36双机芯-上3D-下2D")}
+    assert l36_paths, "L36 should have assets"
+    assert dual_paths, "dual-core model should have assets"
+    assert not (l36_paths & dual_paths), "assets must not appear under both models"
+    assert all("L36双机芯" not in p for p in l36_paths)
+    assert all("L36双机芯" in p for p in dual_paths)
+
+
+def test_multi_model_platforms_are_scoped_per_model(multi_model_tree: Path, tmp_path: Path) -> None:
+    """平台配置按型号隔离：L36 有标准单机芯3D，未整理的双机芯型号没有平台。"""
+    model = _bind_model(multi_model_tree, tmp_path)
+    assert model.platform_names("L36") == ["标准单机芯3D"]
+    assert model.platform_names("L36双机芯-上3D-下2D") == []
+
+
+def test_multi_model_sidebar_and_fallback_work_per_model(multi_model_tree: Path, tmp_path: Path) -> None:
+    model = _bind_model(multi_model_tree, tmp_path)
+
+    tree = model.build_sidebar_tree("L36")
+    assert tree["common"].get("主板程序") == 2
+    assert tree["custom"] == ["西班牙"]
+
+    # 西班牙 缺主板 → 回源到 L36 自己的通用默认
+    cards = model.get_scheme_modules("L36", "西班牙")
+    fb = [c for c in cards if c.is_fallback and c.asset["firmware_label"] == "主板程序"]
+    assert fb and fb[0].asset["directory_name"] == "量产_默认"
+
+    # 未整理的双机芯型号没有 通用/定制 → 侧边树为空，但「全部」视图能看到资产
+    dual_tree = model.build_sidebar_tree("L36双机芯-上3D-下2D")
+    assert dual_tree == {"common": {}, "custom": []}
+
+
+def test_multi_model_set_default_writes_into_model_dir(multi_model_tree: Path, tmp_path: Path) -> None:
+    """多型号根下设默认要写进该型号自己的 平台配置.toml。"""
+    model = _bind_model(multi_model_tree, tmp_path)
+    cards = model.get_common_modules("L36", "主板程序")
+    fangjia = next(c.asset for c in cards if c.asset["directory_name"] == "防夹功能")
+
+    result = model.set_default_variant("L36", "标准单机芯3D", fangjia, log_fn=lambda _m: None)
+    assert result["ok"] is True, result["message"]
+
+    from fwasset.core.platform_config import load_platform_config
+
+    loaded = load_platform_config(multi_model_tree / "L36程序")
+    assert loaded[0].defaults["主板程序"] == "防夹功能"
+    # 父文件夹自身不应被写入配置
+    assert not (multi_model_tree / "平台配置.toml").exists()
+
+
+# ---------------------------------------------------------------------------
+# 平台默认（设默认功能）：徽章、写回 平台配置.toml、回源联动
+# ---------------------------------------------------------------------------
+
+
+def test_default_badge_marks_configured_variant(l36_tree: Path, tmp_path: Path) -> None:
+    """平台配置里指定的变体带 ★默认 徽章，其余变体不带。"""
+    model = _bind_model(l36_tree, tmp_path)
+    cards = model.get_common_modules("L36", "主板程序")
+    badges = {c.asset["directory_name"]: c.default_badge for c in cards}
+    assert badges["量产_默认"] == "★默认"  # 单平台 → 不附平台名
+    assert badges["防夹功能"] == ""
+
+
+def test_common_module_parts_resolves_variant_and_single_level(l36_tree: Path, tmp_path: Path) -> None:
+    model = _bind_model(l36_tree, tmp_path)
+    cards = model.get_common_modules("L36", "主板程序")
+    mainboard = next(c.asset for c in cards if c.asset["directory_name"] == "量产_默认")
+    assert model._common_module_parts(mainboard) == ("主板程序", "量产_默认")
+
+    leg_cards = model.get_common_modules("L36", "腿部程序")
+    assert leg_cards, "腿部程序 should exist as a single-level common module"
+    # 资产目录直接位于模块层 → 变体为空串（与 toml 空值语义一致）
+    assert model._common_module_parts(leg_cards[0].asset) == ("腿部程序", "")
+
+
+def test_set_default_variant_writes_config_and_moves_badge(l36_tree: Path, tmp_path: Path) -> None:
+    """设默认后：toml 落盘、平台配置就地重载、徽章移动，无需重新扫描。"""
+    model = _bind_model(l36_tree, tmp_path)
+    cards = model.get_common_modules("L36", "主板程序")
+    fangjia = next(c.asset for c in cards if c.asset["directory_name"] == "防夹功能")
+
+    result = model.set_default_variant("L36", "标准单机芯3D", fangjia, log_fn=lambda _m: None)
+    assert result["ok"] is True, result["message"]
+
+    # toml 落盘
+    from fwasset.core.platform_config import load_platform_config
+
+    loaded = load_platform_config(l36_tree)
+    assert loaded[0].defaults["主板程序"] == "防夹功能"
+
+    # 徽章立即移动（平台已重载）
+    badges = {c.asset["directory_name"]: c.default_badge for c in model.get_common_modules("L36", "主板程序")}
+    assert badges["防夹功能"] == "★默认"
+    assert badges["量产_默认"] == ""
+
+
+def test_set_default_variant_changes_scheme_fallback(l36_tree: Path, tmp_path: Path) -> None:
+    """回源跟随新默认：缺主板的方案设默认后应回源到新变体。"""
+    # 增加一个不带主板的方案，让主板走回源
+    scheme = l36_tree / "定制" / "葡萄牙"
+    _write(scheme / "方案配置.toml", 'name = "葡萄牙"\nplatform = "标准单机芯3D"\n')
+    _write(scheme / "腿部程序" / "Yj_Foot_L36_葡萄牙_V6.hex")
+
+    model = _bind_model(l36_tree, tmp_path)
+
+    def _mainboard_fallback_dir() -> str:
+        cards = model.get_scheme_modules("L36", "葡萄牙")
+        fb = [c for c in cards if c.is_fallback and c.asset["firmware_label"] == "主板程序"]
+        assert fb, "葡萄牙 lacks 主板程序 → must fall back to 通用"
+        return str(fb[0].asset["directory_name"])
+
+    assert _mainboard_fallback_dir() == "量产_默认"
+
+    cards = model.get_common_modules("L36", "主板程序")
+    fangjia = next(c.asset for c in cards if c.asset["directory_name"] == "防夹功能")
+    result = model.set_default_variant("L36", "标准单机芯3D", fangjia, log_fn=lambda _m: None)
+    assert result["ok"] is True, result["message"]
+
+    assert _mainboard_fallback_dir() == "防夹功能"
+
+
+def test_set_default_variant_reuses_existing_module_key(l36_tree: Path, tmp_path: Path) -> None:
+    """平台配置已有用字差异的模块键（版/板）时沿用旧键，不产生重复条目。"""
+    model = _bind_model(l36_tree, tmp_path)
+    cards = model.get_all_modules("L36")
+    core_3d = next(
+        c.asset for c in cards if c.asset["firmware_label"] == "3D机芯板程序"
+    )
+
+    result = model.set_default_variant("L36", "标准单机芯3D", core_3d, log_fn=lambda _m: None)
+    assert result["ok"] is True, result["message"]
+
+    from fwasset.core.platform_config import load_platform_config
+
+    defaults = load_platform_config(l36_tree)[0].defaults
+    # 沿用 toml 里既有的 "3D机芯版程序" 键（版），不新增 "3D机芯板程序"（板）
+    keys_3d = [k for k in defaults if "机芯" in k and "3D" in k]
+    assert keys_3d == ["3D机芯版程序"]
+
+
+def test_set_default_variant_rejects_custom_asset(l36_tree: Path, tmp_path: Path) -> None:
+    """定制区资产不能设为平台默认。"""
+    model = _bind_model(l36_tree, tmp_path)
+    cards = model.get_scheme_modules("L36", "西班牙")
+    custom = next(c.asset for c in cards if c.source_type == "custom_exclusive")
+    result = model.set_default_variant("L36", "标准单机芯3D", custom, log_fn=lambda _m: None)
+    assert result["ok"] is False
+    assert result["code"] == "invalid_args"
+
+
+def test_platform_names_prefers_config(l36_tree: Path, tmp_path: Path) -> None:
+    model = _bind_model(l36_tree, tmp_path)
+    assert model.platform_names() == ["标准单机芯3D"]
+
+
+# ---------------------------------------------------------------------------
 # Asset cache (P1-2) — single-bind, no-repeated-SQLite discipline
 # ---------------------------------------------------------------------------
 

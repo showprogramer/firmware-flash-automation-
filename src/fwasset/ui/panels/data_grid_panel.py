@@ -41,7 +41,7 @@ class DataGridPanel(ctk.CTkFrame):
     # iid 前缀：区分模块父行与变体子行
     _MOD_PREFIX = "mod::"
 
-    def __init__(self, master, on_selection_changed, on_log, **kwargs):
+    def __init__(self, master, on_selection_changed, on_log, on_right_click=None, **kwargs):
         super().__init__(
             master,
             fg_color=BG_CARD,
@@ -53,6 +53,7 @@ class DataGridPanel(ctk.CTkFrame):
 
         self._on_selection_changed = on_selection_changed
         self._on_log = on_log
+        self._on_right_click = on_right_click
         # iid -> ModuleVariant（仅变体子节点登记；父行不登记）
         self._variant_map: dict[str, ModuleVariant] = {}
 
@@ -82,6 +83,7 @@ class DataGridPanel(ctk.CTkFrame):
 
         self.tree.bind("<<TreeviewSelect>>", self._on_tree_select)
         self.tree.bind("<Double-1>", self._on_tree_double_click)
+        self.tree.bind("<Button-3>", self._on_tree_right_click)
 
     # --- 渲染 ---
     def _configure_tags(self) -> None:
@@ -123,6 +125,8 @@ class DataGridPanel(ctk.CTkFrame):
                 variant = row.variants[0]
                 asset = variant.asset
                 variant_text = "默认" if variant.name == row.label else variant.name
+                if variant.default_badge:
+                    variant_text = f"{variant_text}  {variant.default_badge}"
                 self.tree.insert(
                     "",
                     "end",
@@ -153,13 +157,16 @@ class DataGridPanel(ctk.CTkFrame):
                 asset = variant.asset
                 child_iid = str(asset.get("path", "")) or f"{mod_iid}::{variant.name}"
                 self._variant_map[child_iid] = variant
+                child_text = variant.name
+                if variant.default_badge:
+                    child_text = f"{child_text}  {variant.default_badge}"
                 self.tree.insert(
                     mod_iid,
                     "end",
                     iid=child_iid,
                     text="",
                     values=(
-                        variant.name,
+                        child_text,
                         variant.version or "-",
                         self._source_text(variant.source_label),
                         asset_primary_file_name(asset),
@@ -187,6 +194,7 @@ class DataGridPanel(ctk.CTkFrame):
                 version=str(asset.get("version", "")),
                 source_kind=kind,
                 source_label=source_label,
+                default_badge=data.default_badge,
             )
             grouped.setdefault(label, []).append(variant)
 
@@ -216,6 +224,19 @@ class DataGridPanel(ctk.CTkFrame):
 
     def _on_tree_select(self, _event):
         self._on_selection_changed(self.get_selected_variant())
+
+    def _on_tree_right_click(self, event):
+        """右键：先选中命中的行，再把变体与屏幕坐标交给上层弹菜单。"""
+        if self._on_right_click is None:
+            return
+        iid = self.tree.identify_row(event.y)
+        if not iid:
+            return
+        self.tree.selection_set(iid)
+        self.tree.focus(iid)
+        variant = self._variant_map.get(iid)
+        if variant is not None:
+            self._on_right_click(variant, event.x_root, event.y_root)
 
     def _on_tree_double_click(self, _event):
         variant = self.get_selected_variant()
