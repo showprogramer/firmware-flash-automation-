@@ -43,7 +43,11 @@ A massage chair typically contains multiple modules (主板, 手控UI, 蓝牙, e
 ### UI-facing language rules (hard constraints)
 
 - The user-visible source label is **only** `定制专属` (custom-exclusive) or `通用默认` (common-default). The word **"回源" must never appear in UI text** — it is an internal term only. See `ModuleVariant.source_label` / `ModuleRow.source_label`.
-- 型号 list is derived from the **scan root directory name** (`_structural_model()`, e.g. `L36程序` → `L36`), NOT from parsing filenames — filenames contain noise like `L50S` that would pollute the model list. Memory notes record prior bugs here ([[workbench-ui-p0-fixes]]).
+- 型号 list is derived from **directory structure**, NOT from parsing filenames — filenames contain noise like `L50S` that would pollute the model list. Memory notes record prior bugs here ([[workbench-ui-p0-fixes]]). Two layouts (auto-detected in `_detect_single_model_root()`): a scan root containing `通用/定制` directly is a **single-model root** (model = root dir name, `L36程序` → `L36`); otherwise it is a **multi-model parent** (e.g. `按摩器程序/`) whose first-level subdirs are each a model. Platform configs are **scoped per model** (`_platforms_by_model`) — never let one model's platforms/defaults leak into another.
+
+### Platform defaults (设为平台默认)
+
+The default variant used for scheme fallback is defined **only** by `平台配置.toml` `[platform.defaults]` (the `_默认` dir-name suffix is legacy display, never a write target). The workbench lets the 烧录员 set it: right-click a common variant → 设为平台默认 → `core/services/platform_default_service.py::set_default_variant` rewrites the model's `平台配置.toml` (via `save_platform_config`), then the model reloads platforms in place — fallback and the `★默认` badge update **without a rescan** (defaults are read live from toml, not indexed).
 
 ## Architecture deltas vs. AGENTS.md / docs/README.md
 
