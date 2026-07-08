@@ -161,10 +161,12 @@ class SpikeWindow(FluentWindow):
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--root", default=r"D:\按摩器程序")
+    parser.add_argument("--root", default="", help="固件根目录（必填）")
     parser.add_argument("--screenshot", default="")
     parser.add_argument("--quit-after", type=int, default=0, help="毫秒后自动退出")
     args = parser.parse_args()
+    if not args.root:
+        parser.error("--root 必填，如 --root D:\\按摩器程序")
 
     app = QApplication(sys.argv)
     setTheme(Theme.AUTO)

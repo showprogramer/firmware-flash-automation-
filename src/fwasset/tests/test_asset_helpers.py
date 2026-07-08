@@ -1,6 +1,15 @@
 from pathlib import Path
 
-from fwasset.core.asset_helpers import asset_dir_path, asset_flash_mode, asset_primary_file_name, asset_primary_file_path, asset_rom_pkg_files, asset_usb_flow
+import fwasset.core.asset_helpers as asset_helpers_module
+from fwasset.core.asset_helpers import (
+    asset_dir_path,
+    asset_flash_mode,
+    asset_primary_file_name,
+    asset_primary_file_path,
+    asset_rom_pkg_files,
+    asset_usb_flow,
+    open_path_in_explorer,
+)
 
 
 def _asset(**overrides) -> dict:
@@ -129,3 +138,29 @@ def test_asset_primary_file_name_prefers_rom_for_handcontrol():
 def test_asset_primary_file_name_empty_when_no_files():
     asset = _asset(path="D:/root/L36/主板/V1.0", files=[])
     assert asset_primary_file_name(asset) == ""
+
+
+def test_open_path_in_explorer_rejects_missing_path():
+    logs: list[str] = []
+    assert open_path_in_explorer("D:/不存在的目录xyzzy", logs.append) is False
+    assert open_path_in_explorer("", logs.append) is False
+    assert any("路径不存在" in m for m in logs)
+
+
+def test_open_path_in_explorer_opens_existing_dir(tmp_path, monkeypatch):
+    opened: list[str] = []
+    monkeypatch.setattr(asset_helpers_module.os, "startfile", lambda p: opened.append(str(p)), raising=False)
+    monkeypatch.setattr(asset_helpers_module.subprocess, "run", lambda *a, **k: opened.append(str(a[0])), raising=False)
+    assert open_path_in_explorer(str(tmp_path), lambda _m: None) is True
+    assert opened, "should invoke the platform opener"
+
+
+def test_open_path_in_explorer_logs_on_opener_failure(tmp_path, monkeypatch):
+    def _boom(_p):
+        raise OSError("no association")
+
+    monkeypatch.setattr(asset_helpers_module.os, "startfile", _boom, raising=False)
+    monkeypatch.setattr(asset_helpers_module.subprocess, "run", _boom, raising=False)
+    logs: list[str] = []
+    assert open_path_in_explorer(str(tmp_path), logs.append) is False
+    assert any("打开目录失败" in m for m in logs)

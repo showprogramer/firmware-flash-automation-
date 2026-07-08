@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import subprocess
 import sys
 import threading
 from pathlib import Path
@@ -24,6 +23,7 @@ from qfluentwidgets import (
     BodyLabel,
     CaptionLabel,
     ComboBox,
+    EditableComboBox,
     FluentIcon,
     FluentWindow,
     ListWidget,
@@ -37,9 +37,11 @@ from qfluentwidgets import (
     Theme,
 )
 
+from fwasset.core.asset_helpers import open_path_in_explorer
 from fwasset.core.logging_utils import FileLogger
 from fwasset.core.services.scan_service import build_cached_scan_result, build_scan_result
 from fwasset.core.settings import DEFAULT_ROOT
+from fwasset.core.types import ServiceResult
 from fwasset.core.usb_ops import get_usb_drives
 from fwasset.ui.view_models.scan_state_model import ScanStateModel
 from fwasset.ui.view_models.scheme_workbench_model import (
@@ -48,49 +50,28 @@ from fwasset.ui.view_models.scheme_workbench_model import (
     SchemeWorkbenchModel,
     WorkbenchSelection,
 )
+from fwasset.ui.workbench_helpers import flash_mode_label, model_chip_values
 from fwasset.ui_qt.data_grid import DataGrid
+from fwasset.ui_qt.design_tokens import (
+    SEARCH_MIN_WIDTH,
+    SIDEBAR_WIDTH,
+    SPACE_MD,
+    SPACE_SM,
+    SPACE_XS,
+    SPACE_XXS,
+    USB_COMBO_MIN_WIDTH,
+)
 from fwasset.ui_qt.log_panel import LogPanel
 
 
-MODEL_CHIP_LIMIT = 4
 SEARCH_REFRESH_DEBOUNCE_MS = 180
-SIDEBAR_WIDTH = 300
-
-
-# 与 ui/workbench_panel.py 同名同语义（CTk 版含 customtkinter 导入，不能直接
-# import；CTk 退役时合并到共享模块）。
-def model_chip_values(
-    models: list[str], selected: str = "", limit: int = MODEL_CHIP_LIMIT
-) -> tuple[list[str], list[str]]:
-    """Split models into visible chips and overflow while keeping selected visible."""
-    clean_models = [model for model in models if model]
-    if len(clean_models) <= limit:
-        return clean_models, []
-
-    chips = clean_models[:limit]
-    overflow = clean_models[limit:]
-    if selected and selected in clean_models and selected not in chips:
-        displaced = chips[-1]
-        chips[-1] = selected
-        overflow = [item for item in clean_models if item not in chips]
-        if displaced not in overflow:
-            overflow.insert(0, displaced)
-    return chips, overflow
-
-
-def flash_mode_label(mode: str) -> str:
-    labels = {
-        "auto_usb": "USB刷机",
-        "tool_launch": "工具烧录",
-        "manual_doc": "说明操作",
-        "disabled": "不可烧录",
-    }
-    return labels.get(mode, mode or "-")
 
 
 class WorkbenchInterface(QWidget):
     """程序资产工作台（Qt 版）。布局与交互对齐 ui/workbench_panel.py。"""
 
+    # Signal 元类型只能是运行时类型，TypedDict（ServiceResult）不可用；
+    # 类型契约由槽函数 _handle_scan_result 的参数标注承担。
     scan_result_ready = Signal(dict)
 
     def __init__(self, parent=None):
@@ -121,14 +102,14 @@ class WorkbenchInterface(QWidget):
     # ------------------------------------------------------------------ 布局
     def _build_layout(self) -> None:
         root_layout = QHBoxLayout(self)
-        root_layout.setContentsMargins(0, 0, 8, 8)
-        root_layout.setSpacing(12)
+        root_layout.setContentsMargins(0, 0, SPACE_SM, SPACE_SM)
+        root_layout.setSpacing(SPACE_MD)
 
         # --- 左侧边栏 ---
         sidebar = QFrame(self)
         sidebar.setFixedWidth(SIDEBAR_WIDTH)
         side_layout = QVBoxLayout(sidebar)
-        side_layout.setContentsMargins(12, 12, 4, 0)
+        side_layout.setContentsMargins(SPACE_MD, SPACE_MD, SPACE_XS, 0)
         side_layout.addWidget(SubtitleLabel("程序资产", sidebar))
         side_layout.addWidget(CaptionLabel("通用模块与定制方案", sidebar))
 
@@ -139,12 +120,12 @@ class WorkbenchInterface(QWidget):
         self.scan_btn = PrimaryPushButton("扫描目录", sidebar)
         self.scan_btn.clicked.connect(self._on_scan_button_click)
         side_layout.addWidget(self.scan_btn)
-        side_layout.addSpacing(8)
+        side_layout.addSpacing(SPACE_SM)
         root_layout.addWidget(sidebar)
 
         # --- 右侧主区 ---
         main = QVBoxLayout()
-        main.setSpacing(10)
+        main.setSpacing(SPACE_SM)
 
         # 头部：标题行
         title_row = QHBoxLayout()
@@ -159,7 +140,7 @@ class WorkbenchInterface(QWidget):
         filter_row = QHBoxLayout()
         filter_row.addWidget(BodyLabel("型号", self))
         self.chip_bar = QHBoxLayout()
-        self.chip_bar.setSpacing(6)
+        self.chip_bar.setSpacing(SPACE_XS)
         filter_row.addLayout(self.chip_bar)
         self.model_hint = CaptionLabel("扫描后显示可选型号", self)
         filter_row.addWidget(self.model_hint)
@@ -167,12 +148,12 @@ class WorkbenchInterface(QWidget):
 
         self.search_edit = SearchLineEdit(self)
         self.search_edit.setPlaceholderText("搜索模块 / 版本 / 方案 / 平台")
-        self.search_edit.setMinimumWidth(280)
+        self.search_edit.setMinimumWidth(SEARCH_MIN_WIDTH)
         filter_row.addWidget(self.search_edit, stretch=2)
 
         filter_row.addWidget(BodyLabel("U 盘", self))
         self.usb_combo = ComboBox(self)
-        self.usb_combo.setMinimumWidth(100)
+        self.usb_combo.setMinimumWidth(USB_COMBO_MIN_WIDTH)
         filter_row.addWidget(self.usb_combo)
         usb_refresh = PushButton("刷新", self)
         usb_refresh.clicked.connect(self._refresh_usb)
@@ -188,7 +169,7 @@ class WorkbenchInterface(QWidget):
         # 操作区（Phase 3 迁移操作面板，这里先给选择摘要 + 占位）
         ops = QFrame(self)
         ops_layout = QVBoxLayout(ops)
-        ops_layout.setContentsMargins(4, 2, 4, 2)
+        ops_layout.setContentsMargins(SPACE_XS, SPACE_XXS, SPACE_XS, SPACE_XXS)
         self.selection_summary = CaptionLabel("未选择变体", ops)
         ops_layout.addWidget(self.selection_summary)
         self.ops_placeholder = BodyLabel("展开模块并选择具体变体以查看操作（操作面板 Phase 3 迁移中，双击行可打开目录）", ops)
@@ -257,7 +238,7 @@ class WorkbenchInterface(QWidget):
         result = build_cached_scan_result(log_fn=self._log)
         self._handle_scan_result(result)
 
-    def _handle_scan_result(self, result: dict) -> None:
+    def _handle_scan_result(self, result: ServiceResult) -> None:
         self.scan_state_model.replace(None)
         self.scan_btn.setText("扫描目录")
         self.scan_btn.setEnabled(True)
@@ -302,7 +283,9 @@ class WorkbenchInterface(QWidget):
 
     # ------------------------------------------------------------------ 型号 chips
     def _on_model_changed(self, choice: str) -> None:
-        if not choice or choice == "更多型号":
+        # 只接受真实型号：可搜索下拉的中间输入态（如敲了一半的 "L5"）不得
+        # 污染 model_name，否则视图会静默变空。
+        if not choice or choice not in self._available_models:
             return
         self.current_selection.model_name = choice
         self.current_selection.node_type = "all"
@@ -327,9 +310,14 @@ class WorkbenchInterface(QWidget):
             self.chip_bar.addWidget(btn)
 
         if overflow:
-            combo = ComboBox(self)
-            combo.addItems(["更多型号"] + overflow)
-            combo.setCurrentText("更多型号")
+            # 型号多时给可输入过滤的下拉（型号本身是作用域选择器，不进搜索框；
+            # 这里让烧录员敲几个字就能定位到型号）。
+            combo = EditableComboBox(self)
+            combo.addItems(overflow)
+            combo.setPlaceholderText("更多型号…")
+            combo.setCurrentIndex(-1)
+            if combo.completer() is not None:
+                combo.completer().setFilterMode(Qt.MatchFlag.MatchContains)
             combo.currentTextChanged.connect(self._on_model_changed)
             self.chip_bar.addWidget(combo)
 
@@ -530,17 +518,7 @@ class WorkbenchInterface(QWidget):
 
     # ------------------------------------------------------------------ 工具
     def _open_asset_dir(self, variant: ModuleVariant) -> None:
-        path = str(variant.asset.get("path", ""))
-        if not path or not os.path.exists(path):
-            self._log("无法打开目录：路径不存在")
-            return
-        try:
-            if os.name == "nt":
-                os.startfile(path)
-            elif os.name == "posix":
-                subprocess.run(["xdg-open", path], check=False)
-        except Exception as e:  # noqa: BLE001
-            self._log(f"打开目录失败: {e}")
+        open_path_in_explorer(str(variant.asset.get("path", "")), self._log)
 
     def _copy_to_clipboard(self, text: str) -> None:
         if not text:
@@ -576,4 +554,5 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    # 开发直跑入口（等价 FWASSET_UI=qt uv run fwasset）；正式入口在 app.main。
     raise SystemExit(main())

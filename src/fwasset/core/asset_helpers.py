@@ -1,8 +1,29 @@
 from __future__ import annotations
 
+import os
+import subprocess
 from pathlib import Path
 
 from fwasset.core.types import FirmwareAsset
+
+
+def open_path_in_explorer(path: str, log_fn=print) -> bool:
+    """在系统文件管理器中打开目录/文件；失败记录日志并返回 False。
+
+    UI 双击行 / 右键「打开目录」共用此入口，避免多处复制 startfile 逻辑。
+    """
+    if not path or not os.path.exists(path):
+        log_fn(f"无法打开目录：路径不存在 ({path})")
+        return False
+    try:
+        if os.name == "nt":
+            os.startfile(path)  # noqa: S606
+        elif os.name == "posix":
+            subprocess.run(["xdg-open", path], check=False)
+        return True
+    except Exception as exc:  # noqa: BLE001
+        log_fn(f"打开目录失败: {exc}")
+        return False
 
 
 def asset_flash_mode(asset: FirmwareAsset) -> str:

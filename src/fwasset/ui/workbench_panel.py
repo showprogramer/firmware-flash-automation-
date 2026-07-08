@@ -49,37 +49,14 @@ from fwasset.ui.view_models.scheme_workbench_model import (
 from fwasset.ui.view_models.scan_state_model import ScanStateModel
 
 
-MODEL_CHIP_LIMIT = 4
+# 纯函数助手移至 workbench_helpers（CTk/Qt 双壳共用）；此处 re-export 保持旧导入路径。
+from fwasset.ui.workbench_helpers import (  # noqa: F401  (re-export for tests/back-compat)
+    MODEL_CHIP_LIMIT,
+    flash_mode_label,
+    model_chip_values,
+)
+
 SEARCH_REFRESH_DEBOUNCE_MS = 180
-
-
-def model_chip_values(
-    models: list[str], selected: str = "", limit: int = MODEL_CHIP_LIMIT
-) -> tuple[list[str], list[str]]:
-    """Split models into visible chips and overflow while keeping selected visible."""
-    clean_models = [model for model in models if model]
-    if len(clean_models) <= limit:
-        return clean_models, []
-
-    chips = clean_models[:limit]
-    overflow = clean_models[limit:]
-    if selected and selected in clean_models and selected not in chips:
-        displaced = chips[-1]
-        chips[-1] = selected
-        overflow = [item for item in clean_models if item not in chips]
-        if displaced not in overflow:
-            overflow.insert(0, displaced)
-    return chips, overflow
-
-
-def flash_mode_label(mode: str) -> str:
-    labels = {
-        "auto_usb": "USB刷机",
-        "tool_launch": "工具烧录",
-        "manual_doc": "说明操作",
-        "disabled": "不可烧录",
-    }
-    return labels.get(mode, mode or "-")
 
 
 class WorkbenchPanel(BaseFlashPanel):

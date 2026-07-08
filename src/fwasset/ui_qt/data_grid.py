@@ -1,19 +1,18 @@
 from __future__ import annotations
 
-import os
-import subprocess
-
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QTreeWidgetItem, QVBoxLayout, QWidget
+from PySide6.QtGui import QAction
+from PySide6.QtWidgets import QMenu, QTreeWidgetItem, QVBoxLayout, QWidget
 
 from qfluentwidgets import TreeWidget
 
-from fwasset.core.asset_helpers import asset_primary_file_name
+from fwasset.core.asset_helpers import asset_primary_file_name, open_path_in_explorer
 from fwasset.ui.view_models.scheme_workbench_model import (
     ModuleCardData,
     ModuleRow,
     ModuleVariant,
 )
+from fwasset.ui_qt.design_tokens import GRID_BORDER_RADIUS, GRID_COL_WIDTHS
 
 _VARIANT_ROLE = Qt.ItemDataRole.UserRole
 
@@ -39,12 +38,12 @@ class DataGrid(QWidget):
         self.tree = TreeWidget(self)
         self.tree.setColumnCount(5)
         self.tree.setHeaderLabels(["程序类型", "程序名称", "版本", "程序归属", "程序文件"])
-        self.tree.setColumnWidth(0, 190)
-        self.tree.setColumnWidth(1, 250)
-        self.tree.setColumnWidth(2, 92)
-        self.tree.setColumnWidth(3, 118)
+        for col, width in enumerate(GRID_COL_WIDTHS):
+            self.tree.setColumnWidth(col, width)
+        self.tree.header().setStretchLastSection(True)
+        self.tree.setAlternatingRowColors(True)
         self.tree.setBorderVisible(True)
-        self.tree.setBorderRadius(8)
+        self.tree.setBorderRadius(GRID_BORDER_RADIUS)
         layout.addWidget(self.tree)
 
         self.tree.itemSelectionChanged.connect(self._on_selection)
@@ -81,6 +80,8 @@ class DataGrid(QWidget):
             parent = QTreeWidgetItem([row.label, "", "", row.source_label, ""])
             self.tree.addTopLevelItem(parent)
             for variant in row.variants:
+                # 多变体子行显示原始变体名（与 CTk 版一致）：同模块多份时
+                # 「默认」映射会让子行无法区分，故不走 _variant_text。
                 name = variant.name + (f"  {variant.default_badge}" if variant.default_badge else "")
                 child = QTreeWidgetItem(
                     [
@@ -143,17 +144,7 @@ class DataGrid(QWidget):
         variant = item.data(0, _VARIANT_ROLE)
         if variant is None:
             return
-        path = str(variant.asset.get("path", ""))
-        if not path or not os.path.exists(path):
-            self._on_log(f"无法打开目录：路径不存在 ({path})")
-            return
-        try:
-            if os.name == "nt":
-                os.startfile(path)
-            elif os.name == "posix":
-                subprocess.run(["xdg-open", path], check=False)
-        except Exception as e:  # noqa: BLE001
-            self._on_log(f"打开目录失败: {e}")
+        open_path_in_explorer(str(variant.asset.get("path", "")), self._on_log)
 
     def _on_context_menu(self, pos) -> None:
         item = self.tree.itemAt(pos)
@@ -163,3 +154,10 @@ class DataGrid(QWidget):
         variant = item.data(0, _VARIANT_ROLE)
         if variant is not None:
             self.variant_right_clicked.emit(variant, self.tree.viewport().mapToGlobal(pos))
+            return
+        # 多变体父行：右键给「展开/收起」轻量菜单，避免用户觉得右键无响应
+        menu = QMenu(self)
+        toggle = QAction("收起" if item.isExpanded() else "展开", menu)
+        toggle.triggered.connect(lambda: item.setExpanded(not item.isExpanded()))
+        menu.addAction(toggle)
+        menu.exec(self.tree.viewport().mapToGlobal(pos))
