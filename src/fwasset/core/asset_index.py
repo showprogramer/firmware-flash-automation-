@@ -92,6 +92,9 @@ def init_asset_index(path: str | Path | None = None) -> None:
                     "INSERT INTO schema_meta(key, value) VALUES('schema_version', ?)",
                     (str(SCHEMA_VERSION),),
                 )
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_category ON assets(category)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_platform ON assets(platform)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_scheme ON assets(scheme_name)")
                 return
             current_version = int(current["value"])
             if current_version == 1:
