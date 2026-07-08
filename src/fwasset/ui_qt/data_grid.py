@@ -1,0 +1,165 @@
+from __future__ import annotations
+
+import os
+import subprocess
+
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import QTreeWidgetItem, QVBoxLayout, QWidget
+
+from qfluentwidgets import TreeWidget
+
+from fwasset.core.asset_helpers import asset_primary_file_name
+from fwasset.ui.view_models.scheme_workbench_model import (
+    ModuleCardData,
+    ModuleRow,
+    ModuleVariant,
+)
+
+_VARIANT_ROLE = Qt.ItemDataRole.UserRole
+
+
+class DataGrid(QWidget):
+    """整机模块固定层级的可展开树（QTreeWidget 版，语义对齐 ui/panels/data_grid_panel.py）。
+
+    顶层 = 模块类型行（ModuleRow），多变体收在该行子节点下，绝不在顶层铺平。
+    程序归属列只显示「定制专属 / 通用默认」，绝不出现"回源"。
+    选中变体子节点才发 ModuleVariant；选中多变体父行发 None（等用户展开）。
+    """
+
+    selection_changed = Signal(object)          # ModuleVariant | None
+    variant_right_clicked = Signal(object, object)  # (ModuleVariant, QPoint global)
+
+    def __init__(self, on_log, parent=None):
+        super().__init__(parent)
+        self._on_log = on_log
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        self.tree = TreeWidget(self)
+        self.tree.setColumnCount(5)
+        self.tree.setHeaderLabels(["程序类型", "程序名称", "版本", "程序归属", "程序文件"])
+        self.tree.setColumnWidth(0, 190)
+        self.tree.setColumnWidth(1, 250)
+        self.tree.setColumnWidth(2, 92)
+        self.tree.setColumnWidth(3, 118)
+        self.tree.setBorderVisible(True)
+        self.tree.setBorderRadius(8)
+        layout.addWidget(self.tree)
+
+        self.tree.itemSelectionChanged.connect(self._on_selection)
+        self.tree.itemDoubleClicked.connect(self._on_double_click)
+        self.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.tree.customContextMenuRequested.connect(self._on_context_menu)
+
+    # --- 渲染 ---
+    @staticmethod
+    def _variant_text(variant: ModuleVariant, label: str) -> str:
+        text = "默认" if variant.name == label else variant.name
+        if variant.default_badge:
+            text = f"{text}  {variant.default_badge}"
+        return text
+
+    def populate_tree(self, rows: list[ModuleRow]) -> None:
+        self.tree.clear()
+        for row in rows:
+            if len(row.variants) == 1:
+                variant = row.variants[0]
+                item = QTreeWidgetItem(
+                    [
+                        row.label,
+                        self._variant_text(variant, row.label),
+                        variant.version or "-",
+                        variant.source_label,
+                        asset_primary_file_name(variant.asset),
+                    ]
+                )
+                item.setData(0, _VARIANT_ROLE, variant)
+                self.tree.addTopLevelItem(item)
+                continue
+
+            parent = QTreeWidgetItem([row.label, "", "", row.source_label, ""])
+            self.tree.addTopLevelItem(parent)
+            for variant in row.variants:
+                name = variant.name + (f"  {variant.default_badge}" if variant.default_badge else "")
+                child = QTreeWidgetItem(
+                    [
+                        "",
+                        name,
+                        variant.version or "-",
+                        variant.source_label,
+                        asset_primary_file_name(variant.asset),
+                    ]
+                )
+                child.setData(0, _VARIANT_ROLE, variant)
+                parent.addChild(child)
+            parent.setExpanded(True)
+
+    def populate(self, data_list: list[ModuleCardData]) -> None:
+        """兼容旧调用（通用/全部视图）：按模块类型归组后走 populate_tree。"""
+        grouped: dict[str, list[ModuleVariant]] = {}
+        for data in data_list:
+            asset = data.asset
+            label = str(asset.get("firmware_label", "")) or str(asset.get("firmware_type", ""))
+            kind = data.source_kind if data.source_kind else ("common" if data.is_fallback else "custom")
+            variant = ModuleVariant(
+                asset=asset,
+                name=str(asset.get("directory_name", "")),
+                version=str(asset.get("version", "")),
+                source_kind=kind,
+                source_label="通用默认" if kind == "common" else "定制专属",
+                default_badge=data.default_badge,
+            )
+            grouped.setdefault(label, []).append(variant)
+
+        rows: list[ModuleRow] = []
+        for label, variants in grouped.items():
+            row_kind = "custom" if any(v.source_kind == "custom" for v in variants) else "common"
+            rows.append(
+                ModuleRow(
+                    label=label,
+                    source_kind=row_kind,
+                    source_label="定制专属" if row_kind == "custom" else "通用默认",
+                    variants=variants,
+                )
+            )
+        self.populate_tree(rows)
+
+    # --- 选择 ---
+    def get_selected_variant(self) -> ModuleVariant | None:
+        items = self.tree.selectedItems()
+        if not items:
+            return None
+        return items[0].data(0, _VARIANT_ROLE)
+
+    # 旧名兼容（PanelHost 走 get_selected_data().asset）
+    def get_selected_data(self) -> ModuleVariant | None:
+        return self.get_selected_variant()
+
+    def _on_selection(self) -> None:
+        self.selection_changed.emit(self.get_selected_variant())
+
+    def _on_double_click(self, item: QTreeWidgetItem, _column: int) -> None:
+        variant = item.data(0, _VARIANT_ROLE)
+        if variant is None:
+            return
+        path = str(variant.asset.get("path", ""))
+        if not path or not os.path.exists(path):
+            self._on_log(f"无法打开目录：路径不存在 ({path})")
+            return
+        try:
+            if os.name == "nt":
+                os.startfile(path)
+            elif os.name == "posix":
+                subprocess.run(["xdg-open", path], check=False)
+        except Exception as e:  # noqa: BLE001
+            self._on_log(f"打开目录失败: {e}")
+
+    def _on_context_menu(self, pos) -> None:
+        item = self.tree.itemAt(pos)
+        if item is None:
+            return
+        self.tree.setCurrentItem(item)
+        variant = item.data(0, _VARIANT_ROLE)
+        if variant is not None:
+            self.variant_right_clicked.emit(variant, self.tree.viewport().mapToGlobal(pos))

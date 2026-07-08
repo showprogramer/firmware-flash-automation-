@@ -43,4 +43,4 @@ markers = [
 
 [tool.coverage.run]
 source = ["src/fwasset"]
-omit = ["src/fwasset/app.py", "src/fwasset/ui/*"]
+omit = ["src/fwasset/app.py", "src/fwasset/ui/*", "src/fwasset/ui_qt/*"]

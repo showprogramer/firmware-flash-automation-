@@ -51,13 +51,18 @@ CTk + ttk.Treeview 的交互天花板（右键菜单靠手拼、无行内编辑�
   2. 冻结 exe 旁必须放 `firmware_catalog.toml`（否则扫描 0 资产、界面空白无报错）——与现有交付物结构一致，但值得在启动时加显式警告。
   3. FluentWindow 的 Mica 半透明 + `grab()` 截图在暗色主题下抓取不全——暗色观感需人工开窗验证，自动化截图仅用亮色。
 
-**Phase 1 — 壳与骨架（1~2 天）**
-- 新建 `ui_qt/` 并行目录（不动现有 `ui/`，双轨可跑）；shell、布局骨架（侧边栏 / 顶栏 / 表格区 / 操作区 / 日志区）。
-- QSS 设计令牌落位；`app.py` 加 `FWASSET_UI=qt` 环境开关，默认仍走 CTk。
+**Phase 1 — 壳与骨架** ✅ 已完成（2026-07-08，与 Phase 2 同批交付）
+- `ui_qt/`（`workbench_window.py` / `data_grid.py` / `log_panel.py`）并行目录，`ui/` 未动。
+- `app.py` 加 `FWASSET_UI=qt` 环境开关，默认仍走 CTk；coverage omit 加 `ui_qt/*`。
+- 设计令牌暂由 QFluentWidgets 主题承担，未引入自定义 QSS（后续按需加）。
 
-**Phase 2 — 数据面（1~2 天）**
-- 侧边树（通用模块计数 + 定制方案）、型号 chips、搜索防抖 → 全部对接现有 `SchemeWorkbenchModel`。
-- DataGrid：模块行/变体子行、★默认徽章、右键菜单（设为平台默认/打开目录/复制路径）、双击开目录。
+**Phase 2 — 数据面** ✅ 已完成（2026-07-08）
+- 侧边树（通用模块计数 + 定制方案分区）、型号 chips（4+溢出下拉）、搜索 180ms 防抖 → 对接 `SchemeWorkbenchModel`。
+- DataGrid（QTreeWidget）：模块行/变体子行、★默认徽章、右键菜单（设为平台默认/打开目录/复制路径）、双击开目录。
+- 扫描/取消（threading + Signal 跨线程回投）、缓存加载；**较 CTk 版的增强**：缓存加载时若未配置 DEFAULT_ROOT，从 scan_meta 恢复上次扫描根（CTk 版会绑到 "." 产生噪声假型号）。
+- 自动化验证钩子：环境变量 `FWASSET_QT_SCREENSHOT` / `FWASSET_QT_QUIT_MS`。
+- 已验证（真实数据截图 .runtime/qt_phase1b.png）：双型号 chips、侧边树 7 模块 + 6 方案、徽章、归属列。
+- 待人工验证：右键设默认全流程、扫描取消、暗色主题观感。
 
 **Phase 3 — 操作面与任务（1~2 天）**
 - `PanelHost` 协议在 Qt 壳实现；四个操作面板迁移；`_run_task` → QThread+Signal；扫描取消（threading.Event 沿用）。
