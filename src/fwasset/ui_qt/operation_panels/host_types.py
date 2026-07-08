@@ -1,0 +1,23 @@
+from __future__ import annotations
+
+from typing import Any, Protocol, runtime_checkable
+
+from fwasset.core.types import FirmwareAsset
+
+
+@runtime_checkable
+class PanelHost(Protocol):
+    """Qt 操作面板对宿主的依赖面（框架无关，无 tkinter 类型）。
+
+    WorkbenchInterface 实现此协议。相比 CTk 版协议，去掉了
+    `usb_drive: tk.StringVar` 与 `_build_usb_selector_row`（操作区精简后
+    面板不再内嵌 U 盘选择器，盘符统一走 get_global_usb_drive）。
+    """
+
+    def _run_task(self, name: str, fn: Any, on_done: Any = None) -> None: ...
+    def _selected_asset(self) -> FirmwareAsset | None: ...
+    def _open_current_asset_dir(self) -> None: ...
+    def _copy_asset_dir_path(self) -> None: ...
+    def _copy_primary_file_path(self) -> None: ...
+    def _launch_tool_and_open_asset_dir(self) -> None: ...
+    def get_global_usb_drive(self) -> str: ...

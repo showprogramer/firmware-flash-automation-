@@ -177,3 +177,158 @@ def test_model_overflow_uses_searchable_dropdown(qapp) -> None:
     # 真实型号可切换
     w._on_model_changed("M8")
     assert w.current_selection.model_name == "M8"
+
+
+# ---------------------------------------------------------------------------
+# Phase 3：操作面板注册表与四类面板构建
+# ---------------------------------------------------------------------------
+
+
+class _FakeHost:
+    """满足 ui_qt PanelHost 协议的最小假宿主。"""
+
+    def __init__(self, drive: str = "E:"):
+        self.drive = drive
+        self.calls: list[tuple] = []
+
+    def _run_task(self, name, fn, on_done=None):
+        self.calls.append(("run_task", name))
+
+    def _selected_asset(self):
+        return None
+
+    def _open_current_asset_dir(self):
+        self.calls.append(("open_dir",))
+
+    def _copy_asset_dir_path(self):
+        self.calls.append(("copy_dir",))
+
+    def _copy_primary_file_path(self):
+        self.calls.append(("copy_file",))
+
+    def _launch_tool_and_open_asset_dir(self):
+        self.calls.append(("tool_combo",))
+
+    def get_global_usb_drive(self) -> str:
+        return self.drive
+
+
+def _op_asset(**overrides) -> dict:
+    base = {
+        "firmware_type": "handcontrol_ui",
+        "firmware_label": "手控UI",
+        "flash_mode": "auto_usb",
+        "usb_flow": "paired_files",
+        "model": "L36",
+        "version": "V1.0",
+        "path": "D:/x/手控UI/A",
+        "files": ["a.rom", "a.pkg"],
+        "tool_name": "",
+        "tool_dir": "",
+    }
+    base.update(overrides)
+    return base
+
+
+def test_qt_panel_registry_routes_all_four_modes(qapp) -> None:
+    from fwasset.ui_qt.operation_panels import get_panel
+
+    for mode in ("auto_usb", "tool_launch", "manual_doc", "disabled"):
+        assert get_panel(mode) is not None, f"{mode} 应有注册面板"
+    assert get_panel("nonexistent") is None
+
+
+def test_auto_usb_panel_paired_files_shows_one_click(qapp) -> None:
+    from qfluentwidgets import PrimaryPushButton
+
+    from fwasset.ui_qt.operation_panels import get_panel
+
+    panel = get_panel("auto_usb")(asset=_op_asset(), log_fn=lambda _m: None, panel_host=_FakeHost())
+    panel.build()
+    buttons = panel.findChildren(PrimaryPushButton)
+    assert any(b.text() == "一键烧录" for b in buttons)
+
+
+def test_auto_usb_panel_missing_pkg_shows_warning(qapp) -> None:
+    from qfluentwidgets import BodyLabel, PrimaryPushButton
+
+    from fwasset.ui_qt.operation_panels import get_panel
+
+    panel = get_panel("auto_usb")(
+        asset=_op_asset(files=["a.rom"]), log_fn=lambda _m: None, panel_host=_FakeHost()
+    )
+    panel.build()
+    assert not panel.findChildren(PrimaryPushButton), "缺 PKG 不应出现一键烧录"
+    labels = [w.text() for w in panel.findChildren(BodyLabel)]
+    assert any("PKG" in t for t in labels)
+
+
+def test_auto_usb_panel_directory_copy_has_options(qapp) -> None:
+    from qfluentwidgets import CheckBox
+
+    from fwasset.ui_qt.operation_panels import get_panel
+
+    panel = get_panel("auto_usb")(
+        asset=_op_asset(firmware_type="music_files", usb_flow="directory_copy"),
+        log_fn=lambda _m: None,
+        panel_host=_FakeHost(),
+    )
+    panel.build()
+    checks = {c.text(): c.isChecked() for c in panel.findChildren(CheckBox)}
+    assert checks == {"格式化": True, "完成后弹出": True}
+
+
+def test_tool_launch_panel_without_tool_disables_button(qapp) -> None:
+    from qfluentwidgets import PrimaryPushButton
+
+    from fwasset.ui_qt.operation_panels import get_panel
+
+    panel = get_panel("tool_launch")(
+        asset=_op_asset(firmware_type="不存在的类型", flash_mode="tool_launch"),
+        log_fn=lambda _m: None,
+        panel_host=_FakeHost(),
+    )
+    panel.build()
+    launch = [b for b in panel.findChildren(PrimaryPushButton) if b.text() == "打开烧录工具"]
+    assert launch and not launch[0].isEnabled()
+
+
+def test_disabled_and_manual_panels_have_handoff_actions(qapp) -> None:
+    from qfluentwidgets import PushButton
+
+    from fwasset.ui_qt.operation_panels import get_panel
+
+    host = _FakeHost()
+    for mode in ("disabled", "manual_doc"):
+        panel = get_panel(mode)(
+            asset=_op_asset(flash_mode=mode), log_fn=lambda _m: None, panel_host=host
+        )
+        panel.build()
+        texts = {b.text() for b in panel.findChildren(PushButton)}
+        assert {"打开程序目录", "复制目录路径", "复制主文件路径"} <= texts, f"{mode} 缺交接按钮"
+
+
+def test_run_task_busy_guard_and_completion(qapp) -> None:
+    """任务桥契约：忙时拒绝新任务；worker 结束后经 Signal 回投解除忙态。"""
+    import time as _time
+
+    from fwasset.ui_qt.workbench_window import WorkbenchInterface
+
+    w = WorkbenchInterface()
+    logs: list[str] = []
+    w.log_message.connect(logs.append)
+
+    done = []
+    w._run_task("测试任务", lambda log_fn: (log_fn("working"), "ok")[-1], lambda r: done.append(r))
+    # 忙态下第二个任务应被拒绝
+    w._run_task("第二任务", lambda log_fn: "no")
+    deadline = _time.time() + 5
+    while w._busy and _time.time() < deadline:
+        qapp.processEvents()
+        _time.sleep(0.02)
+    qapp.processEvents()
+
+    assert w._busy is False, "worker 完成后应解除忙态"
+    assert done == ["ok"], "on_done 回调应收到任务结果"
+    assert any("已有任务执行中" in m for m in logs)
+    assert any("测试任务完成" in m for m in logs)

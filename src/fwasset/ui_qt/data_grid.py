@@ -127,6 +127,20 @@ class DataGrid(QWidget):
         self.populate_tree(rows)
 
     # --- 选择 ---
+    def select_first_variant(self) -> bool:
+        """选中第一个变体行（自动化验证/回归钩子用），无变体返回 False。"""
+        for i in range(self.tree.topLevelItemCount()):
+            top = self.tree.topLevelItem(i)
+            if top.data(0, _VARIANT_ROLE) is not None:
+                self.tree.setCurrentItem(top)
+                return True
+            for j in range(top.childCount()):
+                child = top.child(j)
+                if child.data(0, _VARIANT_ROLE) is not None:
+                    self.tree.setCurrentItem(child)
+                    return True
+        return False
+
     def get_selected_variant(self) -> ModuleVariant | None:
         items = self.tree.selectedItems()
         if not items:

@@ -52,6 +52,7 @@ from fwasset.ui.view_models.scheme_workbench_model import (
 )
 from fwasset.ui.workbench_helpers import flash_mode_label, model_chip_values
 from fwasset.ui_qt.data_grid import DataGrid
+from fwasset.ui_qt.operation_panels import get_panel
 from fwasset.ui_qt.design_tokens import (
     SEARCH_MIN_WIDTH,
     SIDEBAR_WIDTH,
@@ -73,6 +74,13 @@ class WorkbenchInterface(QWidget):
     # Signal 元类型只能是运行时类型，TypedDict（ServiceResult）不可用；
     # 类型契约由槽函数 _handle_scan_result 的参数标注承担。
     scan_result_ready = Signal(dict)
+    # 后台任务结果回投（对应 CTk BaseFlashPanel 的 queue + after 轮询）
+    _task_done = Signal(str, object, object)   # name, result, on_done
+    _task_failed = Signal(str, str)            # name, error
+    # 日志跨线程回投：worker 线程里调用 _log 时不能直写 QPlainTextEdit
+    log_message = Signal(str)
+
+    busy_message = "已有任务执行中，请稍后"
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -85,10 +93,15 @@ class WorkbenchInterface(QWidget):
         self._available_models: list[str] = []
         self._nav_entries: list[tuple[str, str]] = []  # (kind, key)：all / common_type / custom_scheme
         self._file_logger = FileLogger()
+        self._busy = False
+        self.active_operation_panel = None
 
         self._build_layout()
 
         self.scan_result_ready.connect(self._handle_scan_result)
+        self._task_done.connect(self._on_task_done)
+        self._task_failed.connect(self._on_task_failed)
+        self.log_message.connect(self._append_log)
 
         self._search_timer = QTimer(self)
         self._search_timer.setSingleShot(True)
@@ -166,14 +179,14 @@ class WorkbenchInterface(QWidget):
         self.grid_panel.variant_right_clicked.connect(self._on_grid_right_click)
         main.addWidget(self.grid_panel, stretch=1)
 
-        # 操作区（Phase 3 迁移操作面板，这里先给选择摘要 + 占位）
+        # 操作区：选择摘要 + 按 flash_mode 挂载的操作面板
         ops = QFrame(self)
-        ops_layout = QVBoxLayout(ops)
-        ops_layout.setContentsMargins(SPACE_XS, SPACE_XXS, SPACE_XS, SPACE_XXS)
+        self.ops_layout = QVBoxLayout(ops)
+        self.ops_layout.setContentsMargins(SPACE_XS, SPACE_XXS, SPACE_XS, SPACE_XXS)
         self.selection_summary = CaptionLabel("未选择变体", ops)
-        ops_layout.addWidget(self.selection_summary)
-        self.ops_placeholder = BodyLabel("展开模块并选择具体变体以查看操作（操作面板 Phase 3 迁移中，双击行可打开目录）", ops)
-        ops_layout.addWidget(self.ops_placeholder)
+        self.ops_layout.addWidget(self.selection_summary)
+        self.ops_placeholder = BodyLabel("展开模块并选择具体变体以查看操作", ops)
+        self.ops_layout.addWidget(self.ops_placeholder)
         main.addWidget(ops)
 
         # 日志
@@ -184,8 +197,75 @@ class WorkbenchInterface(QWidget):
 
     # ------------------------------------------------------------------ 日志
     def _log(self, message: str) -> None:
-        self.log_panel.write(message or "")
-        self._file_logger.log(message or "")
+        # 可能被 worker 线程调用（扫描/烧录任务的 log_fn），经 Signal 回投 UI 线程
+        self.log_message.emit(message or "")
+
+    def _append_log(self, message: str) -> None:
+        self.log_panel.write(message)
+        self._file_logger.log(message)
+
+    # ------------------------------------------------------------------ 后台任务（PanelHost）
+    def _run_task(self, name: str, fn, on_done=None) -> None:
+        if self._busy:
+            self._log(self.busy_message)
+            return
+        self._busy = True
+
+        def worker():
+            try:
+                result = fn(self._log)
+                self._task_done.emit(name, result, on_done)
+            except Exception as exc:  # noqa: BLE001
+                self._task_failed.emit(name, str(exc))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_task_done(self, name: str, result, on_done) -> None:
+        self._busy = False
+        if callable(on_done):
+            try:
+                on_done(result)
+            except Exception as exc:  # noqa: BLE001
+                self._log(f"{name} 回调异常: {exc}")
+        self._log(f"{name}完成")
+
+    def _on_task_failed(self, name: str, error: str) -> None:
+        self._busy = False
+        self._log(f"{name}失败: {error}")
+        QMessageBox.critical(self, f"{name}失败", error)
+
+    # ------------------------------------------------------------------ PanelHost 选中资产与交接动作
+    def _selected_asset(self) -> dict | None:
+        data = self.grid_panel.get_selected_data()
+        return data.asset if data else None
+
+    def _open_current_asset_dir(self) -> None:
+        data = self.grid_panel.get_selected_data()
+        if data:
+            open_path_in_explorer(str(data.asset.get("path", "")), self._log)
+
+    def _copy_asset_dir_path(self) -> None:
+        data = self.grid_panel.get_selected_data()
+        if data:
+            self._copy_to_clipboard(str(data.asset.get("path", "")))
+
+    def _copy_primary_file_path(self) -> None:
+        data = self.grid_panel.get_selected_data()
+        if not data:
+            return
+        asset = data.asset
+        files = list(asset.get("files", []))
+        path = str(asset.get("path", ""))
+        if files:
+            self._copy_to_clipboard(str(Path(path) / files[0]))
+        else:
+            self._copy_to_clipboard(path)
+
+    def _launch_tool_and_open_asset_dir(self) -> None:
+        panel = self.active_operation_panel
+        if panel is not None and hasattr(panel, "_launch_current_tool"):
+            panel._launch_current_tool()
+        self._open_current_asset_dir()
 
     # ------------------------------------------------------------------ USB
     def _refresh_usb(self) -> None:
@@ -433,21 +513,38 @@ class WorkbenchInterface(QWidget):
 
     # ------------------------------------------------------------------ 选择与操作区
     def _on_grid_selection_changed(self, variant: ModuleVariant | None) -> None:
+        # 先拆掉上一个操作面板，避免选行叠加旧面板
+        if self.active_operation_panel is not None:
+            self.ops_layout.removeWidget(self.active_operation_panel)
+            self.active_operation_panel.deleteLater()
+            self.active_operation_panel = None
+
         if not variant:
             self.selection_summary.setText("未选择变体")
-            self.ops_placeholder.setText(
-                "展开模块并选择具体变体以查看操作（操作面板 Phase 3 迁移中，双击行可打开目录）"
-            )
+            self.ops_placeholder.setText("展开模块并选择具体变体以查看操作")
+            self.ops_placeholder.show()
             return
+
         asset = variant.asset
-        mode = str(asset.get("flash_mode", "disabled"))
+        mode = str(asset.get("flash_mode", "disabled")) or "disabled"
         module = str(asset.get("firmware_label", "")) or str(asset.get("firmware_type", ""))
         version = variant.version or str(asset.get("version", "")) or "-"
         self.selection_summary.setText(
             f"已选：{module} / {variant.name or str(asset.get('directory_name', ''))}"
             f" · {version} · {variant.source_label} · {flash_mode_label(mode)}"
         )
-        self.ops_placeholder.setText(f"操作模式 {flash_mode_label(mode)} 的面板将在 Phase 3 提供；双击行可打开目录")
+
+        PanelClass = get_panel(mode)
+        if PanelClass is None:
+            self.ops_placeholder.setText(f"暂不支持的操作模式: {mode}")
+            self.ops_placeholder.show()
+            return
+
+        self.ops_placeholder.hide()
+        panel = PanelClass(asset=asset, log_fn=self._log, panel_host=self)
+        panel.build()
+        self.ops_layout.addWidget(panel)
+        self.active_operation_panel = panel
 
     # ------------------------------------------------------------------ 右键菜单（设为平台默认）
     def _on_grid_right_click(self, variant: ModuleVariant, global_pos) -> None:
@@ -542,7 +639,9 @@ def main() -> int:
     window = QtWorkbenchWindow()
     window.show()
 
-    # 自动化验证钩子（截图 / 定时退出），供开发与 Phase 4 回归用
+    # 自动化验证钩子（截图 / 自动选行 / 定时退出），供开发与 Phase 4 回归用
+    if os.environ.get("FWASSET_QT_AUTOSELECT", ""):
+        QTimer.singleShot(1000, lambda: window.workbench.grid_panel.select_first_variant())
     shot = os.environ.get("FWASSET_QT_SCREENSHOT", "")
     if shot:
         QTimer.singleShot(1500, lambda: (window.grab().save(shot), print(f"SCREENSHOT={shot}", flush=True)))

@@ -64,9 +64,19 @@ CTk + ttk.Treeview 的交互天花板（右键菜单靠手拼、无行内编辑�
 - 已验证（真实数据截图 .runtime/qt_phase1b.png）：双型号 chips、侧边树 7 模块 + 6 方案、徽章、归属列。
 - 待人工验证：右键设默认全流程、扫描取消、暗色主题观感。
 
-**Phase 3 — 操作面与任务（1~2 天）**
-- `PanelHost` 协议在 Qt 壳实现；四个操作面板迁移；`_run_task` → QThread+Signal；扫描取消（threading.Event 沿用）。
-- U盘选择器、设默认确认框（QMessageBox）。
+**Phase 3 — 操作面与任务** ✅ 已完成（2026-07-08）
+- `ui_qt/operation_panels/`：独立注册表（与 CTk 注册表模块隔离，避免同 key 互踩）、
+  无 tkinter 类型的 `PanelHost` 协议（去掉 `usb_drive: tk.StringVar` / `_build_usb_selector_row`，
+  P1-P2 review 风险项落实）、四面板全迁移（auto_usb 三形态 / tool_launch / manual_doc / disabled）。
+- `WorkbenchInterface` 实现 PanelHost：`_run_task` 用 threading + `_task_done/_task_failed` Signal
+  回投（等价 CTk 的 queue+after 轮询，无需 winfo_exists 防御）；忙态守卫沿用「已有任务执行中」。
+- **日志线程安全修复**：`_log` 改经 `log_message` Signal 回投 UI 线程（P2 里扫描 worker 直写
+  QPlainTextEdit 的隐患一并修掉）。
+- 交接动作（打开目录/复制路径/工具组合）横排布局（操作区高度有限，与 CTk 竖排不同，有意为之）。
+- 自动化钩子新增 `FWASSET_QT_AUTOSELECT`（自动选中首个变体行，配合截图验证操作面板挂载）。
+- 已验证：smoke 22 例（含面板注册路由、auto_usb 三形态、任务桥忙态守卫）；真实数据截图确认
+  tool_launch 面板自动发现本机烧录工具路径。
+- 待人工验证：一键烧录 / 目录刷机真实 U 盘流程（不宜自动化）。
 
 **Phase 4 — 对齐与切换（1 天）**
 - 逐项过功能清单（下方验收）；`@pytest.mark.ui` 测试改 pytest-qt 重写关键契约（全局 USB 选择器存在、启动自动刷 U 盘、设默认菜单出现条件）。
