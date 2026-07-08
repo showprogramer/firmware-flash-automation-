@@ -21,6 +21,10 @@ dev = [
     "pytest>=8.0.0",
     "pytest-cov>=5.0.0",
 ]
+qt = [
+    "pyside6>=6.6.3.1",
+    "pyside6-fluent-widgets>=1.11.2",
+]
 
 [project.scripts]
 fwasset = "fwasset.app:main"

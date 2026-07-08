@@ -39,9 +39,17 @@ CTk + ttk.Treeview 的交互天花板（右键菜单靠手拼、无行内编辑�
 
 ## 分阶段计划
 
-**Phase 0 — Spike（半天）**
-- `uv add pyside6 qfluentwidgets`（dev 分支）；最小窗口 + 一个 QTreeView 渲染真实扫描数据。
-- `uv run pyinstaller` 验证：exe 体积、启动时长、中文字体、高 DPI。**此阶段出否决结论**（体积/启动不可接受则回退主题方案或重新评估）。
+**Phase 0 — Spike（半天）** ✅ 已完成（2026-07-08，分支 feature/pyside6-migration）
+- 依赖：`pyside6 6.11.1` + `pyside6-fluent-widgets 1.11.2`（optional extra `qt`，`uv sync --extra qt`）。
+- `scripts/spike_pyside6.py`：FluentWindow + 导航 + TreeWidget，对接真实 `SchemeWorkbenchModel`（扫 `D:\按摩器程序`，70 资产），支持 `--screenshot / --quit-after` 自动化验证。
+- **结论：通过，迁移放行。** 实测：
+  - 源码启动 1.9~2.7s、打包 exe 启动 **1.5s**（含实时扫描 70 资产建临时索引）
+  - onefile exe **52.1 MB**，在预估 30~50MB 区间边缘，可接受
+  - 中文字体清晰、高 DPI 正常、整机层级/归属列/方案导航渲染正确
+- **踩坑记录**（Phase 1+ 必读）：
+  1. 装 pyside6 后 `pyinstaller.exe` shim 损坏（报 `Failed to canonicalize script path`）——一律用 `uv run python -m PyInstaller`。
+  2. 冻结 exe 旁必须放 `firmware_catalog.toml`（否则扫描 0 资产、界面空白无报错）——与现有交付物结构一致，但值得在启动时加显式警告。
+  3. FluentWindow 的 Mica 半透明 + `grab()` 截图在暗色主题下抓取不全——暗色观感需人工开窗验证，自动化截图仅用亮色。
 
 **Phase 1 — 壳与骨架（1~2 天）**
 - 新建 `ui_qt/` 并行目录（不动现有 `ui/`，双轨可跑）；shell、布局骨架（侧边栏 / 顶栏 / 表格区 / 操作区 / 日志区）。
