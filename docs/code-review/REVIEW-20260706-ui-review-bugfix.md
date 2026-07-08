@@ -97,8 +97,8 @@
 
 - [x] 全部 6 项按 TDD 完成实现 + 自动化测试
 - [x] 人验反馈的 2 个真 bug（空格分词、通用模块归属）已一并修复并补测试
-- [ ] 等待用户人工回归后拆分 commit
-- [ ] 按 `docs/COMMIT_TEMPLATE.md` 出 Conventional Commit：
+- [x] 等待用户人工回归后拆分 commit
+- [x] 按 `docs/COMMIT_TEMPLATE.md` 出 Conventional Commit：
   - `fix(ui): harden workbench task polling and host contract`（P0-1 + P0-2）
   - `perf(ui): debounce workbench search refresh`（P1-1）
   - `perf(ui): cache scheme workbench assets`（P1-2，**含 BUG-1 source_kind 字段 + BUG-2 空格分词复刻**）

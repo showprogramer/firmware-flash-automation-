@@ -31,14 +31,14 @@ This is the central concept and is **not** in AGENTS.md. The firmware root (e.g.
 - **`通用/` (common)** — shared modules. One module (e.g. 蓝牙程序) may hold several *variants* (subdirs like `英文-通用`, `中文-通用_默认`). A subdir whose name contains `_默认` is the **default variant** used to fill gaps in custom schemes.
 - **`定制/` (custom)** — per-customer whole-chair schemes. Each scheme dir holds a `方案配置.toml` (`name`, `platform`) and only the modules that differ from common. Missing modules are **filled from `通用/`** (internally called "回源 / fallback") based on `平台配置.toml` defaults.
 
-A massage chair has up to ~7 modules (主板, 手控UI, 蓝牙, 语音, 快捷键, 3D机芯, 腿部 — not every model has all). The workbench presents these as a **fixed 七程序 hierarchy** (`STANDARD_MODULE_ORDER` in `view_models/scheme_workbench_model.py`), one row per module, variants nested under the row.
+A massage chair typically contains multiple modules (主板, 手控UI, 蓝牙, etc. — not every model has all, and some may have extra specialized modules). The workbench presents them dynamically: it groups variants by module and sorts them using a **preferred display order** for common modules (`STANDARD_MODULE_ORDER` in `view_models/scheme_workbench_model.py`). Any non-standard modules are simply appended to the list.
 
 ### Key files for the scheme system
 
 - `core/scheme_config.py` — `discover_schemes(model_root)` walks `定制/*/方案配置.toml` → `SchemeConfig(name, platform, path)`. `scheme_for_path()` maps an asset path back to its scheme.
 - `core/platform_config.py` — `load_platform_config(model_root)` reads `平台配置.toml` (`[[platform]]` + `[platform.defaults]` mapping `module_dir → variant_name`). Drives fallback selection.
 - `core/file_scan.py` — `_infer_asset_context()` derives `(category, platform, scheme_name, scheme_path)` from an asset's path relative to root: a `通用` path segment ⇒ `category="common"`, a `定制` segment ⇒ `category="custom"` + scheme lookup.
-- `ui/view_models/scheme_workbench_model.py` — `SchemeWorkbenchModel` is the brain of the UI. `build_sidebar_tree()` returns `{common: {label: count}, custom: [scheme...]}`; `get_scheme_module_tree()` produces the grouped 七程序 rows with fallback applied.
+- `ui/view_models/scheme_workbench_model.py` — `SchemeWorkbenchModel` is the brain of the UI. `build_sidebar_tree()` returns `{common: {label: count}, custom: [scheme...]}`; `get_scheme_module_tree()` produces the grouped rows dynamically with fallback applied.
 
 ### UI-facing language rules (hard constraints)
 
