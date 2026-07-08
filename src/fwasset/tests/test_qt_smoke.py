@@ -146,3 +146,34 @@ def test_log_panel_write_and_toggle(qapp) -> None:
     assert panel.toggle_btn.text() == "折叠日志"
     panel.toggle()
     assert panel.toggle_btn.text() == "展开日志"
+
+
+def test_model_overflow_uses_searchable_dropdown(qapp) -> None:
+    """型号超过 chip 上限时，溢出项落入可输入过滤的 EditableComboBox；
+    输入中间态（非真实型号）不得改变当前选中型号。"""
+    from qfluentwidgets import EditableComboBox, TogglePushButton
+
+    from fwasset.ui_qt.workbench_window import WorkbenchInterface
+
+    w = WorkbenchInterface()
+    models = ["L36", "L36双机芯-上3D-下2D", "L50S", "M3", "M5", "M8"]
+    w.current_selection.model_name = "L36"
+    w._refresh_model_selector(models)
+
+    widgets = [
+        w.chip_bar.itemAt(i).widget()
+        for i in range(w.chip_bar.count())
+        if w.chip_bar.itemAt(i).widget() is not None
+    ]
+    chips = [x for x in widgets if isinstance(x, TogglePushButton)]
+    combos = [x for x in widgets if isinstance(x, EditableComboBox)]
+    assert len(chips) == 4, "前 4 个型号应显示为 chip"
+    assert len(combos) == 1, "溢出型号应落入可输入过滤下拉"
+    assert combos[0].count() == 2  # M5 / M8（M3 被换出规则保留在 chips 之外时进溢出）or 2 items
+
+    # 防呆：输入中间态 "L5"（不是真实型号）不得切换
+    w._on_model_changed("L5")
+    assert w.current_selection.model_name == "L36"
+    # 真实型号可切换
+    w._on_model_changed("M8")
+    assert w.current_selection.model_name == "M8"
