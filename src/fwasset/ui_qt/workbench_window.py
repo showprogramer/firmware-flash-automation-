@@ -9,6 +9,7 @@ from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QApplication,
+    QCompleter,
     QFileDialog,
     QFrame,
     QHBoxLayout,
@@ -108,6 +109,15 @@ class WorkbenchInterface(QWidget):
         self._search_timer.setInterval(SEARCH_REFRESH_DEBOUNCE_MS)
         self._search_timer.timeout.connect(self._on_search_debounced)
         self.search_edit.textChanged.connect(lambda _t: self._search_timer.start())
+
+        # 型号下拉的切换防抖：EditableComboBox 在输入文字恰好等于某项时会立即
+        # 发 currentIndexChanged（"L36" 是 "L36双机芯-…" 的前缀，输到一半就会
+        # 命中），所以切型号必须经短暂防抖确认，键入中间态被后续输入取消。
+        self._pending_model = ""
+        self._model_switch_timer = QTimer(self)
+        self._model_switch_timer.setSingleShot(True)
+        self._model_switch_timer.setInterval(250)
+        self._model_switch_timer.timeout.connect(self._apply_pending_model)
 
         QTimer.singleShot(100, self._refresh_usb)
         QTimer.singleShot(100, self._load_cached_assets)
@@ -381,7 +391,7 @@ class WorkbenchInterface(QWidget):
             if item.widget() is not None:
                 item.widget().deleteLater()
 
-        chips, overflow = model_chip_values(self._available_models, self.current_selection.model_name)
+        chips, _overflow = model_chip_values(self._available_models, self.current_selection.model_name)
         self.model_hint.setVisible(not chips)
         for model in chips:
             btn = TogglePushButton(model, self)
@@ -389,17 +399,37 @@ class WorkbenchInterface(QWidget):
             btn.clicked.connect(lambda _c=False, value=model: self._on_model_changed(value))
             self.chip_bar.addWidget(btn)
 
-        if overflow:
-            # 型号多时给可输入过滤的下拉（型号本身是作用域选择器，不进搜索框；
-            # 这里让烧录员敲几个字就能定位到型号）。
+        # 常驻可搜索型号下拉（含全部型号）：型号是作用域选择器，不走搜索框；
+        # 型号少时也保留（用户要求，便于验证与键盘定位），多时是唯一入口。
+        if self._available_models:
             combo = EditableComboBox(self)
-            combo.addItems(overflow)
-            combo.setPlaceholderText("更多型号…")
+            combo.addItems(self._available_models)
+            combo.setPlaceholderText("搜索型号…")
             combo.setCurrentIndex(-1)
-            if combo.completer() is not None:
-                combo.completer().setFilterMode(Qt.MatchFlag.MatchContains)
-            combo.currentTextChanged.connect(self._on_model_changed)
+            combo.setMinimumWidth(150)
+            completer = QCompleter(self._available_models, combo)
+            completer.setFilterMode(Qt.MatchFlag.MatchContains)
+            completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+            combo.setCompleter(completer)
+            # 不接 currentTextChanged（每键都发）；currentIndexChanged 只在文本
+            # 精确命中某项/从补全菜单选中时发，再经防抖确认，见 _schedule_model_switch。
+            combo.currentIndexChanged.connect(
+                lambda i, c=combo: self._schedule_model_switch(c.itemText(i))
+            )
             self.chip_bar.addWidget(combo)
+            self.model_combo = combo
+
+    def _schedule_model_switch(self, model_name: str) -> None:
+        if not model_name or model_name not in self._available_models:
+            return
+        self._pending_model = model_name
+        self._model_switch_timer.start()
+
+    def _apply_pending_model(self) -> None:
+        name = self._pending_model
+        self._pending_model = ""
+        if name and name != self.current_selection.model_name:
+            self._on_model_changed(name)
 
     # ------------------------------------------------------------------ 侧边树
     def _refresh_sidebar_tree(self) -> None:

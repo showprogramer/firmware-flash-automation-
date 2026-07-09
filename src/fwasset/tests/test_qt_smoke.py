@@ -148,35 +148,62 @@ def test_log_panel_write_and_toggle(qapp) -> None:
     assert panel.toggle_btn.text() == "展开日志"
 
 
-def test_model_overflow_uses_searchable_dropdown(qapp) -> None:
-    """型号超过 chip 上限时，溢出项落入可输入过滤的 EditableComboBox；
-    输入中间态（非真实型号）不得改变当前选中型号。"""
+def _chip_bar_widgets(w):
+    return [
+        w.chip_bar.itemAt(i).widget()
+        for i in range(w.chip_bar.count())
+        if w.chip_bar.itemAt(i).widget() is not None
+    ]
+
+
+def test_model_dropdown_always_present_with_all_models(qapp) -> None:
+    """可搜索型号下拉常驻（型号少时也在），且包含全部型号。"""
     from qfluentwidgets import EditableComboBox, TogglePushButton
 
     from fwasset.ui_qt.workbench_window import WorkbenchInterface
 
     w = WorkbenchInterface()
-    models = ["L36", "L36双机芯-上3D-下2D", "L50S", "M3", "M5", "M8"]
+
+    # 少量型号：2 chips + 常驻下拉（含全部 2 项）
     w.current_selection.model_name = "L36"
-    w._refresh_model_selector(models)
-
-    widgets = [
-        w.chip_bar.itemAt(i).widget()
-        for i in range(w.chip_bar.count())
-        if w.chip_bar.itemAt(i).widget() is not None
-    ]
-    chips = [x for x in widgets if isinstance(x, TogglePushButton)]
+    w._refresh_model_selector(["L36", "L36双机芯-上3D-下2D"])
+    widgets = _chip_bar_widgets(w)
+    assert len([x for x in widgets if isinstance(x, TogglePushButton)]) == 2
     combos = [x for x in widgets if isinstance(x, EditableComboBox)]
-    assert len(chips) == 4, "前 4 个型号应显示为 chip"
-    assert len(combos) == 1, "溢出型号应落入可输入过滤下拉"
-    assert combos[0].count() == 2  # M5 / M8（M3 被换出规则保留在 chips 之外时进溢出）or 2 items
+    assert len(combos) == 1, "型号下拉应常驻"
+    assert combos[0].count() == 2
 
-    # 防呆：输入中间态 "L5"（不是真实型号）不得切换
+    # 多型号：4 chips + 下拉仍含全部 6 项
+    w._refresh_model_selector(["L36", "L36双机芯-上3D-下2D", "L50S", "M3", "M5", "M8"])
+    widgets = _chip_bar_widgets(w)
+    assert len([x for x in widgets if isinstance(x, TogglePushButton)]) == 4
+    combos = [x for x in widgets if isinstance(x, EditableComboBox)]
+    assert combos[0].count() == 6
+
+
+def test_model_switch_is_debounced_and_prefix_safe(qapp) -> None:
+    """切型号经防抖确认：键入途中命中前缀型号（L36 是 L36双机芯-… 的前缀）
+    会被后续输入覆盖，最终只切到用户真正选中的型号。"""
+    from fwasset.ui_qt.workbench_window import WorkbenchInterface
+
+    w = WorkbenchInterface()
+    w.current_selection.model_name = "M8"
+    w._refresh_model_selector(["L36", "L36双机芯-上3D-下2D", "M8"])
+
+    # 模拟键入 "L36双…"：先命中前缀 L36，随后命中完整型号——防抖期内后者覆盖前者
+    w._schedule_model_switch("L36")
+    w._schedule_model_switch("L36双机芯-上3D-下2D")
+    w._apply_pending_model()
+    assert w.current_selection.model_name == "L36双机芯-上3D-下2D"
+
+    # 非真实型号（输入中间态）不入队
+    w._schedule_model_switch("L5")
+    w._apply_pending_model()
+    assert w.current_selection.model_name == "L36双机芯-上3D-下2D"
+
+    # 防呆兜底：_on_model_changed 直接收到假型号也不切
     w._on_model_changed("L5")
-    assert w.current_selection.model_name == "L36"
-    # 真实型号可切换
-    w._on_model_changed("M8")
-    assert w.current_selection.model_name == "M8"
+    assert w.current_selection.model_name == "L36双机芯-上3D-下2D"
 
 
 # ---------------------------------------------------------------------------
