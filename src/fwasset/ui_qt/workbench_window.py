@@ -82,6 +82,7 @@ class WorkbenchInterface(QWidget):
     log_message = Signal(str)
 
     busy_message = "已有任务执行中，请稍后"
+    scanning_message = "正在扫描中，请稍后再执行任务"
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -219,6 +220,9 @@ class WorkbenchInterface(QWidget):
         if self._busy:
             self._log(self.busy_message)
             return
+        if self.scan_state_model.is_scanning:
+            self._log(self.scanning_message)
+            return
         self._busy = True
 
         def worker():
@@ -237,7 +241,16 @@ class WorkbenchInterface(QWidget):
                 on_done(result)
             except Exception as exc:  # noqa: BLE001
                 self._log(f"{name} 回调异常: {exc}")
-        self._log(f"{name}完成")
+        # ServiceResult：按 ok 区分完成/失败，避免 copy_failed 仍显示「完成」
+        if isinstance(result, dict) and "ok" in result:
+            if result.get("ok"):
+                self._log(f"{name}完成")
+            else:
+                msg = str(result.get("message") or "未知错误")
+                self._log(f"{name}失败: {msg}")
+                QMessageBox.warning(self, f"{name}失败", msg)
+        else:
+            self._log(f"{name}完成")
 
     def _on_task_failed(self, name: str, error: str) -> None:
         self._busy = False
@@ -305,6 +318,10 @@ class WorkbenchInterface(QWidget):
         self._start_scan()
 
     def _start_scan(self) -> None:
+        # 与烧录任务互锁：任务进行中禁止扫描（避免 save_assets 与面板拆除竞态）
+        if self._busy:
+            self._log(self.busy_message)
+            return
         # 单工作区：每次扫描都让用户确认/切换根目录。已绑定的 root（含启动时
         # 从 scan_meta 恢复的）只作为对话框初始路径，不再静默重扫、无法换根。
         initial = (self.root_dir or "").strip() or str(Path.cwd())
@@ -336,6 +353,11 @@ class WorkbenchInterface(QWidget):
 
         if not result["ok"]:
             self._log(f"加载失败: {result['message']}")
+            return
+
+        # 取消：库未写、payload 为空，勿当「扫描完成 0 项」并错误 rebind
+        if result.get("code") == "cancelled":
+            self._log(str(result.get("message") or "扫描已被用户取消"))
             return
 
         payload = result["payload"]

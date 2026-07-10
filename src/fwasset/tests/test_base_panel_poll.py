@@ -124,3 +124,28 @@ class TestPollTaskQueueDestructionGuard:
         assert good_calls == ["ok"], "second on_done must still run after first raised"
         assert panel._busy is False
         assert after_calls == [(120, panel._poll_task_queue)]
+
+    def test_service_result_ok_false_logs_failure_not_done(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """ServiceResult ok=False must not log 「完成」."""
+        from fwasset.ui import base_panel as base_mod
+
+        panel, after_calls = _make_panel_stub(exists=True)
+        logs: list[str] = []
+        panel._log = logs.append
+        monkeypatch.setattr(base_mod.messagebox, "showerror", lambda *a, **k: None)
+
+        panel._task_queue.put(
+            (
+                "done",
+                "一键执行",
+                {"ok": False, "code": "copy_failed", "message": "复制失败", "payload": {}},
+                None,
+            )
+        )
+
+        panel._poll_task_queue()
+
+        assert any("失败" in m and "复制失败" in m for m in logs)
+        assert not any(m.endswith("完成") for m in logs)
+        assert panel._busy is False
+        assert after_calls == [(120, panel._poll_task_queue)]

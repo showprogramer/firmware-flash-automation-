@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import threading
 
-from fwasset.core.asset_index import AssetIndexError, count_assets, load_scan_meta, save_assets
+from fwasset.core.asset_index import count_assets, load_scan_meta, save_assets
 from fwasset.core.file_scan import find_handcontrol_folders, scan_firmware_assets
 
 
@@ -53,6 +55,7 @@ def build_scan_result(
 
 
 def build_cached_scan_result(log_fn=print) -> dict:
+    """读取本地索引状态；任何索引/DB 异常都映射为 ServiceResult，禁止裸抛。"""
     try:
         asset_count = count_assets()
         meta = load_scan_meta()
@@ -83,7 +86,8 @@ def build_cached_scan_result(log_fn=print) -> dict:
                 "asset_count": asset_count,
             },
         }
-    except AssetIndexError as exc:
+    except Exception as exc:
+        # 含 AssetIndexError、sqlite3.OperationalError（锁库）等；与 build_scan_result 一致不裸抛
         return {
             "ok": False,
             "code": "index_unavailable",

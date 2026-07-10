@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### fix(core,ui): 扫描/任务并发与结果契约（审查 Issue 2–5）
+
+- **缓存加载**：`build_cached_scan_result` 宽捕获所有异常 → `index_unavailable`，启动锁库不再裸抛。
+- **互锁**：操作任务进行中禁止扫描；扫描进行中禁止启动烧录等任务（CTk + Qt）。
+- **取消扫描**：`code=cancelled` 只提示取消，不再记「扫描完成 0 项」或错误 rebind。
+- **任务结果**：`ServiceResult.ok=False`（如 `copy_failed`）记失败并弹窗，不再一律「完成」。
+
+验证:
+- `uv run python -m pytest src/fwasset/tests/test_scan_service.py src/fwasset/tests/test_workbench_panel_helpers.py src/fwasset/tests/test_base_panel_poll.py src/fwasset/tests/test_qt_smoke.py -q --no-cov` → **45 passed**
+- 待用户人工验证
+
 ### fix(core,ui): 索引单工作区语义 + 扫描始终可选根目录
 
 - **单工作区索引**：`save_assets` 整库替换 `assets` 后清空并只写一行 `scan_meta`（当前固件根）；换根 = 切换工作区，不保留旧根资产。产品定为目录 + TOML 为真相源，SQLite 为搜索缓存；未来 CRUD 后全量扫描退化为导入/修复冷路径。

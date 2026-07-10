@@ -57,28 +57,28 @@ uv run python -m pytest -m "not ui" -q --no-cov
 - 状态：**fixed（选 B）** — 2026-07-09 收口为单工作区：`save_assets` 清空后只写一行 `scan_meta`；模块注释 + `active_workspace_root()`；测试 `test_save_assets_replaces_index_when_workspace_root_changes` / `test_save_assets_clears_stale_scan_meta_rows`；迁移说明 `docs/migrations/MIGRATION-20260709-single-workspace-index.md`。换根 = 切换工作区属 intentional。
 
 #### Issue 2 — `build_cached_scan_result` 异常捕获过窄
-- 文件：`src/fwasset/core/services/scan_service.py:87`
-- 问题：仅 `except AssetIndexError`。`count_assets` / `load_scan_meta` 在 DB 忙时可抛 `sqlite3.OperationalError`，违反「服务不裸抛、必须 ServiceResult」契约。Qt 启动 `QTimer.singleShot(100, _load_cached_assets)` 在 UI 线程调用，锁库可致壳崩溃。
-- 建议：捕获 `(AssetIndexError, sqlite3.Error)` 或更宽，返回 `code="index_unavailable"`，与 `build_scan_result` 一致。
-- 状态：open（对应 1.2）
+- 文件：`src/fwasset/core/services/scan_service.py`
+- 问题：仅 `except AssetIndexError`。DB 忙时可裸抛。
+- **处置（2026-07-09）**：`except Exception` → `index_unavailable`；测试 `test_build_cached_scan_result_maps_db_errors_to_index_unavailable`。
+- 状态：**fixed**
 
 #### Issue 3 — 扫描与操作任务无互锁
-- 文件：`src/fwasset/ui_qt/workbench_window.py:307-325`
-- 问题：`_run_task` 有 `_busy` 守卫，`_start_scan` 没有。烧录进行中可再点扫描；扫描完成会 rebind 模型、拆掉 `active_operation_panel`，且 `save_assets` 全表写库与在途读库争用。
-- 建议：扫描入口检查 `_busy`；`_run_task` 在 `scan_state_model.is_scanning` 时拒绝。CTk `workbench_panel.py:725` 建议同步（双轨仍可交付时）。
-- 状态：open（对应 1.5）
+- 文件：`src/fwasset/ui_qt/workbench_window.py`、`ui/workbench_panel.py`
+- 问题：烧录中可再扫；扫描完成拆除操作面板。
+- **处置（2026-07-09）**：`_start_scan` 检查 `_busy`；`_run_task` 检查 `is_scanning`（CTk 覆盖、Qt 内联）。契约测试 `test_workbench_scan_task_mutual_exclusion_contract`。
+- 状态：**fixed**
 
 #### Issue 4 — 取消扫描被当成「扫描完成 0 项」
-- 文件：`src/fwasset/ui_qt/workbench_window.py:331-372`
-- 问题：`scan_service` 取消时 `ok=True, code="cancelled", assets=[]` 且**未** `save_assets`（库完好）。`_handle_scan_result` 成功路径不看 `code`，一律打「扫描完成，共找到 N 个项目」并对空结果 rebind。CTk `workbench_panel.py:754-770` 同病。
-- 建议：`code == "cancelled"` 时打 `result["message"]`，跳过完成计数与错误空结果 rebind。
-- 状态：open（**本轮新增强调**）
+- 文件：`src/fwasset/ui_qt/workbench_window.py`、`ui/workbench_panel.py`
+- 问题：`code=cancelled` 仍记完成并 rebind 空结果。
+- **处置（2026-07-09）**：`code == "cancelled"` 只打取消消息并 return，不 rebind。测试 `test_workbench_handles_cancelled_scan` + `test_build_scan_result_cancelled`。
+- 状态：**fixed**
 
 #### Issue 5 — 任务结束一律打「完成」，忽略 `ServiceResult.ok`
-- 文件：`src/fwasset/ui_qt/workbench_window.py:233-240`
-- 问题：`_on_task_done` 在 worker 不抛异常时总是 `f"{name}完成"`。flash/music 失败返回 `ok=False`（如 `copy_failed`），日志先有失败信息再出现矛盾的「一键执行完成」。
-- 建议：结果为含 `ok` 的 dict 时按 `ok` 区分完成/失败；失败可弹 `QMessageBox`。CTk `base_panel` 建议对齐。
-- 状态：open（**本轮新增强调**）
+- 文件：`ui_qt/workbench_window.py`、`ui/base_panel.py`
+- 问题：`ok=False` 仍显示完成。
+- **处置（2026-07-09）**：按 `result["ok"]` 区分完成/失败；失败弹窗。测试 `test_service_result_ok_false_logs_failure_not_done` + 契约测试。
+- 状态：**fixed**
 
 #### Issue 6 — `ModuleCardData.source_label` 仍含「回源」
 - 文件：`src/fwasset/ui/view_models/scheme_workbench_model.py:614`
@@ -215,7 +215,8 @@ uv run python -m pytest -m "not ui" -q --no-cov
 ## 5. 状态
 
 - [x] Bug Issue 1 已修（单工作区语义 B）
-- [ ] Bug Issue 2–7 待修
+- [x] Bug Issue 2–5 已修（缓存契约 / 互锁 / 取消文案 / 任务 ok）
+- [ ] Bug Issue 6–7 待修（回源文案 / 方案视图分词）
 - [ ] Suggestion Issue 8–15 待定
 - [ ] Nit Issue 16–18 可选
 - [x] 自动化门禁：`219 passed, 49 deselected`（`-m "not ui"`）

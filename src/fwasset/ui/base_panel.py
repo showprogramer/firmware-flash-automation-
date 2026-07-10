@@ -155,7 +155,22 @@ class BaseFlashPanel(ctk.CTkFrame):
                             # A user callback must not kill the polling chain.
                             # Log the error and keep going.
                             self._log(f"{name} 回调异常: {exc}")
-                    self._log(f"{name}{self.task_done_suffix}")
+                    # ServiceResult：按 ok 区分完成/失败（copy_failed 不得显示「完成」）
+                    if isinstance(payload, dict) and "ok" in payload:
+                        if payload.get("ok"):
+                            self._log(f"{name}{self.task_done_suffix}")
+                        else:
+                            msg = str(payload.get("message") or "未知错误")
+                            self._log(f"{name}{self.task_error_title_suffix}: {msg}")
+                            try:
+                                messagebox.showerror(
+                                    f"{name}{self.task_error_title_suffix}",
+                                    msg,
+                                )
+                            except Exception:  # noqa: BLE001
+                                pass
+                    else:
+                        self._log(f"{name}{self.task_done_suffix}")
                 else:
                     self._handle_task_failure(name, payload)
                 # The callback or failure handler may have torn down the widget.

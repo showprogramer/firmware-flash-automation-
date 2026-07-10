@@ -714,6 +714,13 @@ class WorkbenchPanel(BaseFlashPanel):
     def _scan_cancel_event(self, event: threading.Event | None) -> None:
         self._scan_state().replace(event)
 
+    def _run_task(self, name: str, fn, on_done=None):
+        # 扫描与烧录互锁：扫描进行中禁止启动操作任务
+        if self.scan_state_model.is_scanning:
+            self._log("正在扫描中，请稍后再执行任务")
+            return
+        super()._run_task(name, fn, on_done)
+
     def _on_scan_button_click(self):
         if self._scan_cancel_event is not None:
             self._scan_cancel_event.set()
@@ -723,6 +730,9 @@ class WorkbenchPanel(BaseFlashPanel):
         self._start_scan()
 
     def _start_scan(self):
+        if self._busy:
+            self._log(self.busy_message)
+            return
         # 单工作区：每次扫描都弹目录选择，便于切换根；已绑定 root 仅作 initialdir。
         initial_dir = self.root_dir.get().strip() or str(Path.cwd())
         new_dir = filedialog.askdirectory(
@@ -756,6 +766,11 @@ class WorkbenchPanel(BaseFlashPanel):
 
         if not result["ok"]:
             self._log(f"加载失败: {result['message']}")
+            return
+
+        # 取消：库未写、payload 为空，勿当「扫描完成 0 项」并错误 rebind
+        if result.get("code") == "cancelled":
+            self._log(str(result.get("message") or "扫描已被用户取消"))
             return
 
         payload = result["payload"]

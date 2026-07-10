@@ -163,6 +163,58 @@ def test_qt_workbench_start_scan_always_asks_for_directory() -> None:
     assert "if not root:\n" not in body.split("getExistingDirectory")[0]
 
 
+def _method_body(source: str, method_name: str) -> str:
+    """Slice from ``def <method_name>`` to the next method at the same indent, or EOF."""
+    marker = f"def {method_name}"
+    start = source.index(marker)
+    rest = source[start + len(marker) :]
+    # next top-level class method: newline + 4 spaces + def
+    next_idx = rest.find("\n    def ")
+    if next_idx < 0:
+        return source[start:]
+    return source[start : start + len(marker) + next_idx]
+
+
+def test_workbench_handles_cancelled_scan_without_complete_log() -> None:
+    """取消扫描不得记为「扫描完成…0 个项目」。"""
+    from pathlib import Path
+
+    for rel in (
+        "src/fwasset/ui/workbench_panel.py",
+        "src/fwasset/ui_qt/workbench_window.py",
+    ):
+        text = Path(rel).read_text(encoding="utf-8")
+        body = _method_body(text, "_handle_scan_result")
+        assert '== "cancelled"' in body
+        assert "扫描已被用户取消" in body or "cancelled" in body
+
+
+def test_workbench_scan_task_mutual_exclusion_contract() -> None:
+    """扫描与操作任务双向互锁：忙时不扫、扫描中不跑任务。"""
+    from pathlib import Path
+
+    ctk = Path("src/fwasset/ui/workbench_panel.py").read_text(encoding="utf-8")
+    assert "if self._busy:" in _method_body(ctk, "_start_scan")
+    assert "is_scanning" in _method_body(ctk, "_run_task")
+
+    qt = Path("src/fwasset/ui_qt/workbench_window.py").read_text(encoding="utf-8")
+    assert "if self._busy:" in _method_body(qt, "_start_scan")
+    assert "is_scanning" in _method_body(qt, "_run_task")
+
+
+def test_base_panel_and_qt_log_service_result_ok() -> None:
+    """任务完成路径须按 ServiceResult.ok 区分完成/失败。"""
+    from pathlib import Path
+
+    base = Path("src/fwasset/ui/base_panel.py").read_text(encoding="utf-8")
+    poll = _method_body(base, "_poll_task_queue")
+    assert '"ok" in payload' in poll or "'ok' in payload" in poll
+
+    qt = Path("src/fwasset/ui_qt/workbench_window.py").read_text(encoding="utf-8")
+    done = _method_body(qt, "_on_task_done")
+    assert '"ok" in result' in done or "'ok' in result" in done
+
+
 def test_model_chip_values_keeps_first_models_visible_when_within_limit() -> None:
     chips, overflow = model_chip_values(["L36", "L30", "X8"], selected="L36", limit=5)
 

@@ -42,9 +42,8 @@ Qt smoke 与 pytest-qt 契约测试已就位（`test_qt_smoke.py`、`test_operat
 ### P2 — 中（运行时错误 / 契约 / 并发）
 
 #### 1.2 `build_cached_scan_result()` 仅捕获 `AssetIndexError`，DB 锁等异常会裸抛
-- 文件：`src/fwasset/core/services/scan_service.py:86`（`except AssetIndexError as exc`）
-- 问题：`count_assets()` / `load_scan_meta()` 在索引被占用（如另一进程 / 上一次扫描未完成）时会抛 `sqlite3.OperationalError`（非 `AssetIndexError` 子类），此处未捕获 → **违反「服务绝不裸抛、必须返回 `ServiceResult`」契约**。启动时（Qt 的 `_load_cached_assets` 在 100ms 定时器触发）一旦本地索引被锁即崩溃。
-- 建议：改为 `except (AssetIndexError, sqlite3.Error) as exc`（或直接 `except Exception`），映射到 `index_unavailable`，与 `build_scan_result` 的宽捕获一致。
+- 文件：`src/fwasset/core/services/scan_service.py`
+- **处置（2026-07-09）**：`except Exception` → `index_unavailable`。状态：**fixed**
 
 #### 1.3 `file_scan.py` 读取 `平台配置.toml` 却从未使用（`platform` 字段对通用资产恒为空）
 - 文件：`src/fwasset/core/file_scan.py:177`（`platform_defaults = load_platform_config(root_path)`），全文件仅此 1 处引用（grep 确认）。
@@ -57,9 +56,8 @@ Qt smoke 与 pytest-qt 契约测试已就位（`test_qt_smoke.py`、`test_operat
 - 建议：候选方案按 `len(str(path))` 降序（最深优先）再做前缀判定；`discover_schemes` 用 `rglob("方案配置.toml")` 或向下多递归一层。
 
 #### 1.5 `_start_scan` 不检查 `_busy`：扫描可与操作任务并发、中途重建 UI
-- 文件：`src/fwasset/ui_qt/workbench_window.py:298-325`（`_on_scan_button_click` / `_start_scan`）
-- 问题：操作任务有 `self._busy` 忙态守卫（`_run_task:219`），但**扫描入口完全不设守卫**。`_handle_scan_result` 会重建 `workbench_model` / 型号选择器 / 数据网格。若用户在「一键烧录」任务进行中点了扫描（或当时任务未结束），`_busy` 不会阻止，扫描结果回来时会**拆除正在执行的任务所在的操作面板**，且 `build_scan_result` 内部再次 `save_assets` 写库，与在途任务争用索引。
-- 建议：扫描入口加 `if self._busy: self._log(self.busy_message); return`，或引入独立的 `_scanning` 标志，并在扫描进行中禁止启动操作任务（双向互锁）。
+- 文件：`src/fwasset/ui_qt/workbench_window.py`、`ui/workbench_panel.py`
+- **处置（2026-07-09）**：双向互锁（忙时不扫 / 扫描中不跑任务）。状态：**fixed**
 
 #### 1.6 `_run_task` 把 `on_done` 可调用对象经跨线程 Signal 透传
 - 文件：`src/fwasset/ui_qt/workbench_window.py:79`（`_task_done = Signal(str, object, object)`）、`:227`（`self._task_done.emit(name, result, on_done)`）
@@ -126,8 +124,8 @@ Qt smoke 与 pytest-qt 契约测试已就位（`test_qt_smoke.py`、`test_operat
 ## 4. 状态
 
 - [x] 阻断/P1：1.1 已修（单工作区 B）
-- [ ] 阻断/P1：1.2 待修
-- [ ] P2：1.3、1.4、1.5、1.6 待修
+- [x] 阻断/P1：1.2 已修（缓存宽捕获）
+- [x] P2：1.5 已修（扫描/任务互锁）；1.3、1.4、1.6 待修
 - [ ] P3：1.7~1.11 待修
 - [x] 自动化门禁通过（219 passed, 82.98%）
 - [ ] 人验回归（含并发互锁）待执行
