@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### fix(core,ui): 索引单工作区语义 + 扫描始终可选根目录
+
+- **单工作区索引**：`save_assets` 整库替换 `assets` 后清空并只写一行 `scan_meta`（当前固件根）；换根 = 切换工作区，不保留旧根资产。产品定为目录 + TOML 为真相源，SQLite 为搜索缓存；未来 CRUD 后全量扫描退化为导入/修复冷路径。
+- **API**：新增 `active_workspace_root()`；模块注释与 `AGENTS.md` / `MIGRATION-20260709-single-workspace-index.md` 写明语义。
+- **扫描 UX**：CTk / Qt 点「扫描目录」**每次**弹出选目录（当前根仅作初始路径），修复已有 `DEFAULT_ROOT` / `scan_meta` 恢复后只能静默重扫、无法换根的问题。
+- **测试**：换根替换整库、清理残留多行 `scan_meta`；工作台 `_start_scan` 契约测试（CTk + Qt）。
+- **审查归档**：`REVIEW-20260709-branch-pyside6.md`、`REVIEW-20260709-pyside6-phase3-core.md`（Issue 1 标 fixed）。
+
+验证:
+- `uv run python -m pytest src/fwasset/tests/test_asset_index.py src/fwasset/tests/test_scan_service.py src/fwasset/tests/test_workbench_panel_helpers.py -q --no-cov` → passed
+- 用户人工验证通过：扫描弹目录选择；换根后索引切换
+
 ### feat(ui): 设为平台默认 + 多型号根支持
 
 烧录员现在可以在工作台内维护通用模块的平台默认程序，且扫描根支持"父文件夹含多个型号目录"的布局：

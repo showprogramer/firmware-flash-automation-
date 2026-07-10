@@ -5,6 +5,7 @@ import pytest
 from fwasset.core.asset_index import (
     SCHEMA_VERSION,
     AssetIndexError,
+    active_workspace_root,
     count_assets,
     delete_missing_assets,
     hide_item,
@@ -81,6 +82,62 @@ def test_save_and_load_assets_roundtrip(tmp_path: Path):
     assert load_scan_meta(db_path) == [
         {"root_dir": str(tmp_path), "last_scan_at": 1000.0, "schema_version": SCHEMA_VERSION}
     ]
+    assert active_workspace_root(db_path) == str(tmp_path)
+
+
+def test_save_assets_replaces_index_when_workspace_root_changes(tmp_path: Path):
+    """单工作区：换根扫描整库替换，不保留上一根资产，scan_meta 仅一行。"""
+    db_path = tmp_path / "fwasset.db"
+    root_a = tmp_path / "workspace_a"
+    root_b = tmp_path / "workspace_b"
+    root_a.mkdir()
+    root_b.mkdir()
+
+    asset_a = make_asset(root_a, model="LA", directory_name="mod_a")
+    asset_b = make_asset(root_b, model="LB", directory_name="mod_b")
+
+    save_assets([asset_a], str(root_a), db_path, scanned_at=1000.0)
+    assert [item["model"] for item in load_assets(db_path)] == ["LA"]
+    assert load_scan_meta(db_path) == [
+        {"root_dir": str(root_a), "last_scan_at": 1000.0, "schema_version": SCHEMA_VERSION}
+    ]
+
+    # 切换工作区：B 覆盖 A（intentional，非多根合并）
+    save_assets([asset_b], str(root_b), db_path, scanned_at=2000.0)
+
+    loaded = load_assets(db_path)
+    assert [item["model"] for item in loaded] == ["LB"]
+    assert asset_a["path"] not in {item["path"] for item in loaded}
+    assert load_scan_meta(db_path) == [
+        {"root_dir": str(root_b), "last_scan_at": 2000.0, "schema_version": SCHEMA_VERSION}
+    ]
+    assert active_workspace_root(db_path) == str(root_b)
+
+
+def test_save_assets_clears_stale_scan_meta_rows(tmp_path: Path):
+    """旧库若残留多行 scan_meta，再次 save 后应收口为当前根一行。"""
+    import sqlite3
+
+    db_path = tmp_path / "fwasset.db"
+    asset = make_asset(tmp_path, model="L36", directory_name="only")
+    save_assets([asset], str(tmp_path), db_path, scanned_at=3000.0)
+
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "INSERT INTO scan_meta(root_dir, last_scan_at, schema_version) VALUES(?, ?, ?)",
+            (str(tmp_path / "stale_root"), 100.0, SCHEMA_VERSION),
+        )
+        conn.commit()
+
+    assert len(load_scan_meta(db_path)) == 2
+
+    save_assets([asset], str(tmp_path), db_path, scanned_at=4000.0)
+
+    meta = load_scan_meta(db_path)
+    assert len(meta) == 1
+    assert meta[0]["root_dir"] == str(tmp_path)
+    assert meta[0]["last_scan_at"] == 4000.0
+    assert active_workspace_root(db_path) == str(tmp_path)
 
 
 def test_query_assets_by_keyword_and_type(tmp_path: Path):

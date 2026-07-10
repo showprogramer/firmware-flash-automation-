@@ -14,6 +14,17 @@ from fwasset.core.types import FirmwareAsset
 SCHEMA_VERSION = 3
 HiddenItemType = Literal["model_directory", "firmware_type", "asset"]
 
+# ---------------------------------------------------------------------------
+# 单工作区语义（非多根并存）
+#
+# 本索引一次只服务一个固件根目录（工作区）。真相源是整理后的目录树 + TOML；
+# SQLite 是搜索/浏览缓存。全量扫描会用当前根的快照整库替换 assets，
+# scan_meta 也只保留当前根一行。换根扫描 = 切换工作区，旧根资产不保留。
+#
+# 未来应用内 CRUD 落地后，日常走行级写；全量 save_assets 退化为
+# 首次导入 / 索引修复 / 强制对账的冷路径，语义仍是「当前工作区快照」。
+# ---------------------------------------------------------------------------
+
 
 class AssetIndexError(RuntimeError):
     """Raised when the local SQLite index cannot be opened or migrated."""
@@ -136,10 +147,18 @@ def save_assets(
     path: str | Path | None = None,
     scanned_at: float | None = None,
 ) -> None:
+    """用当前工作区根目录的全量快照重建索引（单根语义）。
+
+    - ``DELETE FROM assets`` 后写入 ``assets``：整库替换，不是按根增量合并。
+    - ``scan_meta`` 先清空再写入当前 ``root_dir`` 一行：不保留历史根，避免
+      「多行 scan_meta + 单表 assets」被误读成多根并存。
+    - 换根再次扫描会丢弃上一工作区的资产与 meta，这是切换工作区，不是 bug。
+    """
     init_asset_index(path)
     now = float(scanned_at if scanned_at is not None else time.time())
     asset_rows = [_asset_to_row(asset, now) for asset in assets]
     with connect_asset_index(path) as conn:
+        # 单工作区：当前根的快照覆盖整库（见模块顶部注释）。
         conn.execute("DELETE FROM assets")
         conn.executemany(
             """
@@ -158,13 +177,12 @@ def save_assets(
             """,
             asset_rows,
         )
+        # 只保留当前工作区一行，清掉历史 root_dir（旧库可能多行）。
+        conn.execute("DELETE FROM scan_meta")
         conn.execute(
             """
             INSERT INTO scan_meta(root_dir, last_scan_at, schema_version)
             VALUES(?, ?, ?)
-            ON CONFLICT(root_dir) DO UPDATE SET
-                last_scan_at = excluded.last_scan_at,
-                schema_version = excluded.schema_version
             """,
             (str(root_dir), now, SCHEMA_VERSION),
         )
@@ -334,6 +352,12 @@ def prune_missing_hidden_items(
 
 
 def load_scan_meta(path: str | Path | None = None) -> list[dict[str, float | int | str]]:
+    """返回工作区扫描元数据。
+
+    正常经 :func:`save_assets` 写入后至多一行（当前工作区根）。
+    列表形式保留兼容；调用方取 ``[0]`` 即当前根。
+    未清理的旧库可能短暂多行，按 ``last_scan_at DESC`` 排序，首条为最近一次。
+    """
     init_asset_index(path)
     with connect_asset_index(path) as conn:
         rows = conn.execute(
@@ -347,6 +371,15 @@ def load_scan_meta(path: str | Path | None = None) -> list[dict[str, float | int
             }
             for row in rows
         ]
+
+
+def active_workspace_root(path: str | Path | None = None) -> str | None:
+    """当前工作区根目录；无扫描记录时返回 ``None``。"""
+    meta = load_scan_meta(path)
+    if not meta:
+        return None
+    root = str(meta[0].get("root_dir", "")).strip()
+    return root or None
 
 
 def _asset_to_row(asset: FirmwareAsset, scanned_at: float) -> dict[str, object]:

@@ -305,12 +305,13 @@ class WorkbenchInterface(QWidget):
         self._start_scan()
 
     def _start_scan(self) -> None:
-        root = (self.root_dir or "").strip()
+        # 单工作区：每次扫描都让用户确认/切换根目录。已绑定的 root（含启动时
+        # 从 scan_meta 恢复的）只作为对话框初始路径，不再静默重扫、无法换根。
+        initial = (self.root_dir or "").strip() or str(Path.cwd())
+        root = QFileDialog.getExistingDirectory(self, "选择固件所在的根目录", initial)
         if not root:
-            root = QFileDialog.getExistingDirectory(self, "选择固件所在的根目录", str(Path.cwd()))
-            if not root:
-                return
-            self.root_dir = root
+            return
+        self.root_dir = root
 
         cancel_event = threading.Event()
         self.scan_state_model.replace(cancel_event)

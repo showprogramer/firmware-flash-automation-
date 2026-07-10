@@ -723,18 +723,17 @@ class WorkbenchPanel(BaseFlashPanel):
         self._start_scan()
 
     def _start_scan(self):
-        root = self.root_dir.get().strip()
-        if not root:
-            initial_dir = str(Path.cwd())
-            new_dir = filedialog.askdirectory(
-                title="选择固件所在的根目录",
-                initialdir=initial_dir,
-                parent=self.winfo_toplevel(),
-            )
-            if not new_dir:
-                return
-            root = new_dir
-            self.root_dir.set(root)
+        # 单工作区：每次扫描都弹目录选择，便于切换根；已绑定 root 仅作 initialdir。
+        initial_dir = self.root_dir.get().strip() or str(Path.cwd())
+        new_dir = filedialog.askdirectory(
+            title="选择固件所在的根目录",
+            initialdir=initial_dir,
+            parent=self.winfo_toplevel(),
+        )
+        if not new_dir:
+            return
+        root = new_dir
+        self.root_dir.set(root)
 
         cancel_event = threading.Event()
         self._scan_cancel_event = cancel_event

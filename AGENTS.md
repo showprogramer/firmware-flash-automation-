@@ -51,6 +51,8 @@ There are **no standalone lint or type-check commands** configured (no ruff, myp
 
 `SCHEMA_VERSION = 3`. Tables: `assets` (PK: `path`), `hidden_items` (PK: `path`), `scan_meta` (PK: `root_dir`), `schema_meta`. Indexes on `firmware_type`, `model`, `model_directory_path`, `category`, `platform`, `scheme_name`. Migration v1→v2 adds `usb_flow` column, v2→v3 adds `category`, `platform`, `scheme_name`, `scheme_path` columns. `files_json` stores the file list as JSON.
 
+**单工作区语义（非多根）**：索引一次只服务一个固件根目录。`save_assets` 全表替换 `assets`，并清空后只写入当前 `root_dir` 一行 `scan_meta`。换根扫描 = 切换工作区，不保留旧根资产。真相源是整理后的目录树 + TOML；SQLite 为搜索缓存。未来应用内 CRUD 后全量扫描退化为导入/修复冷路径，日常改行级写。
+
 ## Service Layer Conventions
 
 All services in `core/services/` return `dict` matching `ServiceResult`: `{"ok": bool, "code": str, "message": str, "payload": dict}`. User-facing messages in **Chinese**. Specific error codes (never bare exceptions):

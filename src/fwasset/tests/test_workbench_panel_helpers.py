@@ -134,6 +134,35 @@ def test_workbench_panel_exposes_global_usb_selector_in_main_view() -> None:
     )
 
 
+def test_workbench_panel_start_scan_always_asks_for_directory() -> None:
+    """单工作区：点「扫描目录」必须弹选目录，不能仅在 root 为空时才弹。
+
+    否则已有 DEFAULT_ROOT / 上次扫描根时用户无法换根，只会静默重扫。
+    """
+    from pathlib import Path
+
+    text = Path("src/fwasset/ui/workbench_panel.py").read_text(encoding="utf-8")
+    start = text.index("def _start_scan")
+    end = text.index("\n    def ", start + 1)
+    body = text[start:end]
+    assert "askdirectory" in body
+    # 对话框不得包在「root 为空」分支里（旧 bug：有 root 就静默重扫）
+    assert "if not root:\n" not in body.split("askdirectory")[0]
+
+
+def test_qt_workbench_start_scan_always_asks_for_directory() -> None:
+    """Qt 壳与 CTk 对齐：_start_scan 每次都 getExistingDirectory。"""
+    from pathlib import Path
+
+    text = Path("src/fwasset/ui_qt/workbench_window.py").read_text(encoding="utf-8")
+    start = text.index("def _start_scan")
+    end = text.index("\n    def ", start + 1)
+    body = text[start:end]
+    assert "getExistingDirectory" in body
+    # 对话框前不得存在「仅 root 为空才弹」分支
+    assert "if not root:\n" not in body.split("getExistingDirectory")[0]
+
+
 def test_model_chip_values_keeps_first_models_visible_when_within_limit() -> None:
     chips, overflow = model_chip_values(["L36", "L30", "X8"], selected="L36", limit=5)
 
