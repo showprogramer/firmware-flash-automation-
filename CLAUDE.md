@@ -60,4 +60,4 @@ The UI was rewritten around the workbench; several files those docs mention are 
 
 ## Where to find planning context
 
-`specs/active/` holds the live task plans (the UI-rewrite and workbench-optimization specs are the current ones). `docs/code-review/REVIEW-*.md` and the persistent memory in the agent's memory dir capture decisions already made about the workbench — check them before re-litigating UI behavior.
+`specs/active/` holds the live task plans (the UI-rewrite and workbench-optimization specs are the current ones). Live code reviews live in `docs/code-review/` (currently `REVIEW-20260709-branch-pyside6.md`); closed reviews are under `docs/code-review/archive/` — check those before re-litigating settled decisions.

@@ -123,7 +123,7 @@ Defines 20 firmware type entries. Each entry maps `dir_keywords` (Chinese string
 | Architecture Decision | `specs/decisions/` | `ADR-NNN-short-name.md` | `ADR-001-ui-core-separation.md` |
 | Task / Plan | `specs/active/` | `TASK-YYYYMMDD-short-name.md` | `TASK-20260505-newtasks.md` |
 | Migration Note | `docs/migrations/` | `MIGRATION-YYYYMMDD-short-name.md` | `MIGRATION-20260518-docs-consolidation.md` |
-| Code Review | `docs/code-review/` | `REVIEW-YYYYMMDD-short-name.md` | `REVIEW-20260518-sidebar-panel.md` |
+| Code Review | `docs/code-review/`（活文档）/ `docs/code-review/archive/`（已闭环） | `REVIEW-YYYYMMDD-short-name.md` | `REVIEW-20260709-branch-pyside6.md` |
 
 ## Task Verification & Git Workflow
 
@@ -146,7 +146,7 @@ Defines 20 firmware type entries. Each entry maps `dir_keywords` (Chinese string
 
 ## Code Review Automation
 
-完成代码重构、修复、重大修改后，**自动**在 `docs/code-review/` 创建 `REVIEW-YYYYMMDD-short-name.md`，使用模板（类型、模块、问题描述、处理方案、状态、验证记录、相关Commit）。触发条件：`types.py` 变更、服务返回结构变更、注册表/UI入口变更、扫描/索引/USB流程修改、数据库schema迁移、公共API签名变更。
+完成代码重构、修复、重大修改后，**自动**在 `docs/code-review/` 创建 `REVIEW-YYYYMMDD-short-name.md`，使用模板（类型、模块、问题描述、处理方案、状态、验证记录、相关Commit）。触发条件：`types.py` 变更、服务返回结构变更、注册表/UI入口变更、扫描/索引/USB流程修改、数据库schema迁移、公共API签名变更。议题全部关闭后将文件移入 `docs/code-review/archive/` 并更新 `archive/INDEX.md`（见 `docs/code-review/README.md`）。
 
 ## Migration Notes
 

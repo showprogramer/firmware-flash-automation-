@@ -11,10 +11,10 @@
 - 源码 diff 口径：`src/fwasset/` + `pyproject.toml` + `firmware_catalog.toml` + `scripts/`（审查时 84 files）
 - 关联：
   - 计划：`specs/active/TASK-20260708-pyside6-migration.md`
-  - 同日细审：`docs/code-review/REVIEW-20260709-pyside6-phase3-core.md`
-  - 上轮：`REVIEW-20260708-pyside6-p1-p2.md`、`REVIEW-20260708-platform-default.md`
-  - **人验缺陷记录**：`specs/prompts/task-exchange.md`（全部视图难辨认 + 点定制方案空白/只剩手控）
-  - 已合入修复：`7156dc4`（Issue 1 + 扫描弹目录）、`b180292`（Issue 2–5）
+  - 同日细审（已归档）：`archive/REVIEW-20260709-pyside6-phase3-core.md`
+  - 上轮（已归档）：`archive/REVIEW-20260708-pyside6-p1-p2.md`、`archive/REVIEW-20260708-platform-default.md`
+  - 已合入：`7156dc4`（Issue 1）、`b180292`（Issue 2–5）、`2e745fa`（Issue 6/7/19/20 + 侧栏高亮）
+  - 目录约定：见 `docs/code-review/README.md`（根目录仅活文档；历史在 `archive/`）
 
 ---
 
@@ -29,7 +29,7 @@
 | UI Review Bugfix | ✅ 完成 |
 | PySide6 Phase 0–3 | ✅ 完成 |
 | 审查 Bug Issue 1–5 | ✅ 已修并人验合入 |
-| **工作台搜索/方案树人验缺陷**（见 §1.B / task-exchange） | ⏳ **下一轮优先，待本文件审过后再改代码** |
+| 工作台搜索/方案树（Issue 19–20） | ✅ 已修并人验（`2e745fa`） |
 | **PySide6 Phase 4**（默认切 Qt / CTk 退役 / 打包） | ⏳ 待做（建议先收敛工作台可辨认/方案树正确性） |
 | CRUD / 增量重扫 | 📋 规划中 |
 
@@ -54,9 +54,7 @@
 
 | 类别 | 数量 | 说明 |
 |------|------|------|
-| Bug fixed | 5 | Issue 1–5 |
-| Bug open（原审查） | 2 | Issue 6–7（低/中，见重标） |
-| Bug open（人验新增） | 2 | Issue 19–20（**下一轮主线**） |
+| Bug fixed | 9 | Issue 1–7、19–20 |
 | Suggestion open | 8 | Issue 8–15 |
 | Nit open | 3 | Issue 16–18 |
 
@@ -224,43 +222,35 @@
 | 序 | 项 | 动作 | 性质 | 状态 |
 |----|----|------|------|------|
 | — | 1–5 | 已合入 | — | ✅ |
-| **1** | **19**（含原 7） | 方案树与全局搜索解耦 + 过滤语义对齐 `_filter_assets`；补测空白/残留词/多词 | P0 正确性 | ⏳ 待审本文档 |
-| **2** | **20** | 全部视图程序名称/归属可辨认 | P1 体验 | ⏳ 待审本文档 |
-| 3 | 6 | 去掉卡片 API「回源」字样 | P3 顺手 | 可与 19 同 PR |
-| 4 | 13 | 方案树 ★默认徽章 | 中优 | 可选同批 |
-| 5 | 8–12, 14–15 | polish / 产品确认 | 低–中 | 后置 |
-| 6 | 16–18 | nit | 低 | 后置 |
-| 7 | Phase 4 | 默认切 Qt | 迁移 | 建议 19/20 人验后再做 |
-
-**明确不做的误解**：  
-- 不要把「只修 Issue 7 空格分词」当成 task-exchange 的完整解法。  
-- 不要把 Issue 6 当成方案空白的原因。
+| — | 19 / 20 / 6 / 7 | 方案树 + 全部可辨认 + 回源文案 | — | ✅ `2e745fa` |
+| 1 | 13 | 方案树 ★默认徽章 | 中优 | open |
+| 2 | 8–12, 14–15 | polish / 产品确认 | 低–中 | open |
+| 3 | 16–18 | nit | 低 | open |
+| 4 | Phase 4 | 默认切 Qt | 迁移 | 建议遗留 suggestion 视情况处理 |
 
 ---
 
 ## 5. 状态总表
 
-- [x] Bug Issue 1–5 已修并人验、已 commit（`7156dc4` / `b180292`）  
-- [x] **Bug Issue 19（方案树 A）— 已实现，待人验**  
-- [x] **Bug Issue 20（全部可辨认 A）— 已实现，待人验**  
-- [x] Issue 6 / 7 随 19 完成  
-- [ ] Suggestion 8–15 / Nit 16–18  
-- [x] 扫描弹目录、取消/互锁/失败文案等人验项（随 1–5）  
-- [ ] 人验仍开放：真 U 盘烧录、暗色主题、设默认全流程、**方案树/全部搜索（19/20）**  
-- [ ] Phase 4 默认切 Qt：建议阻塞于 **19（至少）** 收敛  
-- [ ] 下一轮代码：用户确认本文件修订后再开工；合入前再人验并按 `docs/COMMIT_TEMPLATE.md` 提交  
+- [x] Bug Issue 1–5（`7156dc4` / `b180292`）  
+- [x] Bug Issue 6 / 7 / 19 / 20 + 侧栏高亮（`2e745fa`，人验通过）  
+- [ ] Suggestion 8–15 / Nit 13、16–18  
+- [ ] 人验仍开放：真 U 盘烧录、暗色主题、设默认全流程  
+- [ ] Phase 4 默认切 Qt  
+- [x] 历史审查已迁入 `docs/code-review/archive/`（见 `archive/INDEX.md`）  
 
 ---
 
-## 6. 关联 Commit / 计划 / 缺陷源
+## 6. 关联 Commit / 计划
 
 | 类型 | 引用 |
 |------|------|
 | Commit | `7156dc4` 单工作区 + 扫描弹目录 |
 | Commit | `b180292` 互锁与结果契约 Issue 2–5 |
+| Commit | `2e745fa` 方案树/全部可辨认 + 侧栏高亮 |
 | 计划 | `specs/active/TASK-20260708-pyside6-migration.md` |
-| 人验缺陷 | `specs/prompts/task-exchange.md` |
 | 迁移 | `docs/migrations/MIGRATION-20260709-single-workspace-index.md` |
+| 审查归档 | `docs/code-review/archive/INDEX.md` |
 
 ---
 

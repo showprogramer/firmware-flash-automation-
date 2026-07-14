@@ -128,7 +128,7 @@ python -m py_compile src\fwasset\ui\base_panel.py src\fwasset\ui\workbench_panel
 ## 4. 文档与提交流程
 
 - [x] 更新 `docs/CHANGELOG.md`，记录 UI review bugfix。
-- [x] 新建或更新 `docs/code-review/REVIEW-20260706-ui-review-bugfix.md`。
+- [x] 新建或更新 `docs/code-review/archive/REVIEW-20260706-ui-review-bugfix.md`（已归档）。
 - [x] 本任务涉及 UI 稳定性与性能，提交前必须按 AGENTS.md 先提示人工验证。
 - [x] 人工确认后再按 Conventional Commit 提交。
 
@@ -159,4 +159,4 @@ python -m py_compile src\fwasset\ui\base_panel.py src\fwasset\ui\workbench_panel
 
 自动化门禁：`python -m pytest -m "not ui" -q --no-cov` → 195 passed, 34 deselected。
 
-配套文档：`docs/code-review/REVIEW-20260706-ui-review-bugfix.md`、`docs/CHANGELOG.md` Unreleased 段。
+配套文档：`docs/code-review/archive/REVIEW-20260706-ui-review-bugfix.md`、`docs/CHANGELOG.md` Unreleased 段。

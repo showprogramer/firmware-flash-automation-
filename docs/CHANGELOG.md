@@ -126,7 +126,7 @@
 - `python -m py_compile src\fwasset\ui\base_panel.py src\fwasset\ui\workbench_panel.py src\fwasset\ui\operation_panels\host_types.py src\fwasset\ui\operation_panels\shared_actions.py src\fwasset\ui\view_models\scheme_workbench_model.py` -> passed
 - `python -m pytest -m "not ui" -q --no-cov` -> **188 passed, 34 deselected**（34 项 UI 标记测试需在有 display 的环境人验）
 - 对应规划：`specs/active/TASK-20260706-ui-review.md` 全部勾选
-- 对应审查：`docs/code-review/REVIEW-20260706-ui-review-bugfix.md`
+- 对应审查：`docs/code-review/archive/REVIEW-20260706-ui-review-bugfix.md`
 
 ### refactor(ui): Step D 工作台查询体验收尾
 

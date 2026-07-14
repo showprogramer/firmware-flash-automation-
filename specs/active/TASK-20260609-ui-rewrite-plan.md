@@ -144,7 +144,7 @@
 
 ## 4. 收尾（全部验收通过后，遵 AGENTS.md）
 
-1. 写 `docs/code-review/REVIEW-20260609-workbench-ui.md`（更新现有那份）：列改动、验证记录、commit hash 占位。
+1. 写 `docs/code-review/archive/REVIEW-20260609-workbench-ui.md`（已归档）：列改动、验证记录、commit hash 占位。
 2. 更新 `docs/CHANGELOG.md`。
 3. 人工验证确认后，按 Conventional Commit 提交（UI/core/view-model 改动需人工先验）。
 
