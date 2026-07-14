@@ -3,7 +3,7 @@ from __future__ import annotations
 import threading
 
 from fwasset.core.asset_index import count_assets, load_scan_meta, save_assets
-from fwasset.core.file_scan import find_handcontrol_folders, scan_firmware_assets
+from fwasset.core.file_scan import handcontrol_folders_from_assets, scan_firmware_assets
 
 
 def build_scan_result(
@@ -26,7 +26,8 @@ def build_scan_result(
                 "payload": {"assets": [], "folders": [], "errors": errors},
             }
 
-        folders = find_handcontrol_folders(root)
+        # 从本次 assets 派生，避免 find_handcontrol_folders 再扫一整遍树
+        folders = handcontrol_folders_from_assets(assets)
         save_assets(assets, root)
         message = "扫描完成"
         if errors:

@@ -8,11 +8,12 @@ def test_build_scan_result_ok(monkeypatch: pytest.MonkeyPatch):
         "fwasset.core.services.scan_service.scan_firmware_assets",
         lambda root, last_scan_at=None, cancel_event=None: ([{"firmware_type": "handcontrol_ui", "model": "L36", "version": "V1.0.0", "label": "x"}], []),
     )
-    monkeypatch.setattr(
-        "fwasset.core.services.scan_service.find_handcontrol_folders",
-        lambda root: [{"model": "L36", "version": "V1.0.0", "label": "x"}],
-    )
     monkeypatch.setattr("fwasset.core.services.scan_service.save_assets", lambda assets, root: None)
+    # folders 由 handcontrol_folders_from_assets 从 assets 派生；本 fixture 无 rom/pkg → 0 folders
+    monkeypatch.setattr(
+        "fwasset.core.services.scan_service.handcontrol_folders_from_assets",
+        lambda assets: [{"model": "L36", "version": "V1.0.0", "label": "x"}],
+    )
 
     result = build_scan_result("D:/x", log_fn=lambda _m: None)
 
@@ -35,7 +36,10 @@ def test_build_scan_result_uses_full_scan_when_scan_meta_exists(monkeypatch: pyt
         lambda: [{"root_dir": "D:/x", "last_scan_at": 123.0, "schema_version": 2}],
     )
     monkeypatch.setattr("fwasset.core.services.scan_service.scan_firmware_assets", fake_scan)
-    monkeypatch.setattr("fwasset.core.services.scan_service.find_handcontrol_folders", lambda root: [])
+    monkeypatch.setattr(
+        "fwasset.core.services.scan_service.handcontrol_folders_from_assets",
+        lambda assets: [],
+    )
     monkeypatch.setattr("fwasset.core.services.scan_service.save_assets", lambda assets, root: None)
 
     result = build_scan_result("D:/x", log_fn=lambda _m: None)

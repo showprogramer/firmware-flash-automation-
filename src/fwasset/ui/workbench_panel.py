@@ -790,6 +790,15 @@ class WorkbenchPanel(BaseFlashPanel):
                 self._log(f"扫描过程中有 {len(errors)} 个错误")
 
         root = self.root_dir.get().strip()
+        if not root:
+            # 与 Qt 对齐：未配置 DEFAULT_ROOT 时从 scan_meta 恢复，避免绑到 "." 出假型号
+            meta = payload.get("scan_meta") or []
+            if meta:
+                recovered = str(meta[0].get("root_dir", "")).strip()
+                if recovered:
+                    root = recovered
+                    self.root_dir.set(root)
+                    self._log(f"使用上次扫描的根目录: {root}")
         root_dir = Path(root) if root else Path(".")
         db_path = None
 

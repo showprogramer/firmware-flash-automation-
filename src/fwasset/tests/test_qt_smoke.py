@@ -42,7 +42,7 @@ def _variant(name: str, badge: str = "", kind: str = "common") -> ModuleVariant:
         name=name,
         version="V40",
         source_kind=kind,
-        source_label="通用默认" if kind == "common" else "定制专属",
+        source_label="通用" if kind == "common" else "定制专属",
         default_badge=badge,
     )
 
@@ -71,7 +71,7 @@ def test_single_variant_collapses_with_directory_name_and_badge(qapp) -> None:
     row = ModuleRow(
         label="主板程序",
         source_kind="common",
-        source_label="通用默认",
+        source_label="通用",
         variants=[_variant("主板程序", badge="★默认")],
     )
     grid = DataGrid(lambda _m: None)
@@ -82,8 +82,16 @@ def test_single_variant_collapses_with_directory_name_and_badge(qapp) -> None:
     assert item.childCount() == 0
     assert item.text(0) == "主板程序"
     assert item.text(1) == "主板程序  ★默认"
-    assert item.text(3) == "通用默认"
-    assert "回源" not in item.text(3)
+    assert item.text(2) == "通用"
+    assert item.text(3) == "V40"
+    assert "回源" not in item.text(2)
+    assert [grid.tree.headerItem().text(i) for i in range(5)] == [
+        "程序类型",
+        "程序名称",
+        "程序归属",
+        "版本",
+        "程序文件",
+    ]
 
 
 def test_multi_variant_grouped_under_parent_row(qapp) -> None:

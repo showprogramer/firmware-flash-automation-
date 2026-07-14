@@ -55,8 +55,8 @@
 | 类别 | 数量 | 说明 |
 |------|------|------|
 | Bug fixed | 9 | Issue 1–7、19–20 |
-| Suggestion open | 8 | Issue 8–15 |
-| Nit open | 3 | Issue 16–18 |
+| Suggestion fixed | 8 | Issue 8–15（15 为 intentional 关闭） |
+| Nit | 3 fixed | 16–18 fixed |
 
 ---
 
@@ -137,52 +137,44 @@
 
 ---
 
-### 1.D Suggestion（未改优先级说明）
+### 1.D Suggestion 8–15
 
 #### Issue 8 — `on_done` 经跨线程 Signal 透传 callable
-- 文件：`ui_qt/workbench_window.py`  
-- 状态：open（对应 phase3 1.6）
+- 状态：**fixed（二次修订）** — Signal `(task_id, name, result)`；回调存 `_pending_task_callbacks`，**UI 槽内** pop 执行（与 CTk 同线程语义）
 
 #### Issue 9 — `file_scan` 加载平台配置后未使用
-- 文件：`file_scan.py`  
-- 状态：open（对应 1.3）
+- 状态：**fixed** — 删除死调用；平台默认仅 workbench 读取
 
 #### Issue 10 — `scheme_for_path` 非最长前缀
-- 文件：`scheme_config.py`  
-- 状态：open（对应 1.4）
+- 状态：**fixed** — 候选按路径深度 max；测试 `test_scheme_config.py`
 
 #### Issue 11 — 扫描双遍目录树
-- 文件：`scan_service.py`  
-- 状态：open（对应 1.7）
+- 状态：**fixed** — `handcontrol_folders_from_assets(assets)`
 
-#### Issue 12 — 增量扫描未剪枝子树（潜伏）
-- 文件：`file_scan.py`  
-- 状态：open（对应 1.10）
+#### Issue 12 — 增量扫描剪枝子树
+- 状态：**fixed（二次修订）** — **取消**按父目录 mtime 的 `dirnames` 剪枝（父旧子新不漏扫）；排除目录仍剪枝
 
 #### Issue 13 — 方案视图无 ★默认 徽章
-- 文件：`get_scheme_module_tree`  
-- 状态：open（可与 19/20 同域顺手）
+- 状态：**fixed（三次修订）** — 空默认 `""` = 该模块键下**唯一**通用资产（含嵌套变体目录）；多候选不标；测试覆盖直接模块层 + `通用/语音/中文唯一版` 嵌套
 
-#### Issue 14 — CTk 未从 scan_meta 恢复 root（双轨漂移）
-- 文件：`workbench_panel.py`  
-- 状态：open（Phase 4 前决策）
+#### Issue 14 — CTk 未从 scan_meta 恢复 root
+- 状态：**fixed** — 与 Qt 对齐（人验：CTk 无 DEFAULT_ROOT 时启动是否恢复上次根）
 
-#### Issue 15 — `segmented_screen` flash_mode 变更是否 intentional
-- 文件：`firmware_catalog.toml`  
-- 状态：open（产品确认）
+#### Issue 15 — `segmented_screen` flash_mode
+- 状态：**closed intentional** — 断码屏走 `tool_launch` 为产品决策
 
 ---
 
 ### 1.E Nit
 
 #### Issue 16 — 方案头徽章「整机模块」vs「整机七程序」
-- 状态：open
+- 状态：**fixed**（CTk 已改「整机模块」）
 
 #### Issue 17 — DataGrid `clear` 未 blockSignals
-- 状态：open
+- 状态：**fixed**（Qt `populate_tree` 已 blockSignals）
 
 #### Issue 18 — SQLite 默认 timeout
-- 状态：open（对应 1.8）
+- 状态：**fixed** — `connect_asset_index(..., timeout=CONNECT_TIMEOUT_SEC=30)`；模块注释声明单写者；测试 `test_connect_asset_index_uses_extended_busy_timeout`
 
 ---
 
@@ -190,54 +182,52 @@
 
 | 来源 | 项 | HEAD 处置 |
 |------|----|-----------|
-| phase3 1.1 | save_assets full DELETE | **fixed** → Issue 1（单工作区 B）· `7156dc4` |
-| phase3 1.2 | cached_scan 窄 except | **fixed** → Issue 2 · `b180292` |
-| phase3 1.5 | scan vs `_busy` | **fixed** → Issue 3 · `b180292` |
-| 本审 Issue 4–5 | 取消扫描 / 任务 ok | **fixed** · `b180292` |
-| phase3 1.3 | platform_defaults 未用 | open → Issue 9 |
-| phase3 1.4 | scheme_for_path | open → Issue 10 |
-| phase3 1.6 | on_done Signal | open → Issue 8 |
-| phase3 1.7–1.10 | 双遍 walk / 增量剪枝等 | open → Issue 11–12 |
-| 原 Issue 6 | 回源文案 | open · P3 顺手 |
-| 原 Issue 7 | 方案分词 | open · **并入 Issue 19** |
-| task-exchange | 点方案空白/只剩手控 | **Issue 19 · 下一轮 P0** |
-| task-exchange | 全部视图名称同质化 | **Issue 20 · 下一轮 P1** |
+| phase3 1.1–1.2, 1.5 + Issue 4–5 | 索引/缓存/互锁/结果 | **fixed** |
+| phase3 1.3 / Issue 9 | platform_defaults 死代码 | **fixed** |
+| phase3 1.4 / Issue 10 | scheme_for_path | **fixed** |
+| phase3 1.6 / Issue 8 | on_done Signal | **fixed** |
+| phase3 1.7–1.10 / Issue 11–12 | 双遍 walk / 增量剪枝 | **fixed** |
+| Issue 6–7 / 19–20 | 回源文案/分词/方案树/全部可辨认 | **fixed** · `2e745fa` |
+| Issue 15 | 断码屏 tool_launch | **intentional** |
 | 型号 Combo 常驻 | — | intentional |
 
 ---
 
 ## 3. 优点（非问题）
 
-- Qt 日志线程安全：`log_message` Signal → `_append_log`  
-- 注册表隔离：`ui_qt/operation_panels/registry.py` 与 CTk 互不踩 key  
-- `SchemeWorkbenchModel` 多型号、平台隔离、树标签对外 `定制专属`/`通用默认` 设计正确  
-- `app.py` 默认 CTk；coverage omit `ui_qt/*`  
-- 型号 EditableComboBox 防抖与前缀碰撞处理合理且有测  
-- 单工作区索引语义与扫描弹目录已人验  
+- Qt 日志线程安全；注册表隔离；多型号/平台隔离  
+- 单工作区索引；方案树/侧栏高亮；审查归档  
 
 ---
 
 ## 4. 建议修复顺序（修订）
 
-| 序 | 项 | 动作 | 性质 | 状态 |
-|----|----|------|------|------|
-| — | 1–5 | 已合入 | — | ✅ |
-| — | 19 / 20 / 6 / 7 | 方案树 + 全部可辨认 + 回源文案 | — | ✅ `2e745fa` |
-| 1 | 13 | 方案树 ★默认徽章 | 中优 | open |
-| 2 | 8–12, 14–15 | polish / 产品确认 | 低–中 | open |
-| 3 | 16–18 | nit | 低 | open |
-| 4 | Phase 4 | 默认切 Qt | 迁移 | 建议遗留 suggestion 视情况处理 |
+| 序 | 项 | 状态 |
+|----|----|------|
+| — | 1–15 主体 | ✅ 代码已齐（本轮 8–15） |
+| 1 | **人验暂停点**（见下） | ⏳ 待用户 |
+| 2 | Issue 18 SQLite timeout | ✅ fixed |
+| 3 | Phase 4 默认 Qt | 人验后 |
+
+### 人验清单（完成 8–15 后暂停）
+
+请验证通过后再继续 Phase 4 / commit：
+
+1. **Qt 目录刷机 / 一键执行**：任务完成/失败日志正常；`on_done` 结果行仍出现  
+2. **方案视图**：回源通用行是否显示 **★默认**（若该变体是平台默认）  
+3. **CTk 启动**（默认入口）：无 config root 时是否从上次扫描恢复根目录（不出现假型号）  
+4. **断码屏**：选中断码屏资产应挂 **工具烧录** 面板（非一键 U 盘）— 确认符合业务  
 
 ---
 
 ## 5. 状态总表
 
-- [x] Bug Issue 1–5（`7156dc4` / `b180292`）  
-- [x] Bug Issue 6 / 7 / 19 / 20 + 侧栏高亮（`2e745fa`，人验通过）  
-- [ ] Suggestion 8–15 / Nit 13、16–18  
-- [ ] 人验仍开放：真 U 盘烧录、暗色主题、设默认全流程  
-- [ ] Phase 4 默认切 Qt  
-- [x] 历史审查已迁入 `docs/code-review/archive/`（见 `archive/INDEX.md`）  
+- [x] Bug Issue 1–7、19–20  
+- [x] Suggestion Issue 8–15（代码 + 15 intentional）  
+- [x] Nit 16–18  
+- [ ] **人验 8–15 相关项（暂停）**  
+- [ ] Phase 4  
+- [x] 历史审查 archive/  
 
 ---
 

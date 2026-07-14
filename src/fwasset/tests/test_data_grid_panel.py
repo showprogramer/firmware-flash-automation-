@@ -48,7 +48,7 @@ def _variant(
         source_kind=kind,
         source_label=source_label
         if source_label is not None
-        else ("定制专属" if kind == "custom" else "通用默认"),
+        else ("定制专属" if kind == "custom" else "通用"),
     )
 
 
@@ -103,7 +103,7 @@ def _rows() -> list[ModuleRow]:
     leg = ModuleRow(
         label="腿部程序",
         source_kind="common",
-        source_label="通用默认",
+        source_label="通用",
         variants=[_variant("/L36/通用/腿部程序", "腿部程序", "V5", "common")],
     )
     return [mainboard, handui, leg]
@@ -143,8 +143,9 @@ def test_single_variant_module_is_a_leaf_row(panel):
     mainboard = next(i for i in top if "主板程序" in panel.tree.item(i, "text"))
     # 单变体：没有子节点
     assert panel.tree.get_children(mainboard) == ()
-    # 版本落在该行上
-    assert panel.tree.item(mainboard, "values")[1] == "V40"
+    # 名称右侧依次为归属、版本
+    assert panel.tree.item(mainboard, "values")[1] == "定制专属"
+    assert panel.tree.item(mainboard, "values")[2] == "V40"
     # 选中该模块行即可直接拿到变体（无需展开）
     panel.tree.selection_set(mainboard)
     sel = panel.get_selected_variant()
@@ -182,7 +183,7 @@ def test_single_variant_name_always_shows_directory_name(panel):
     top = panel.tree.get_children("")[0]
     vals = panel.tree.item(top, "values")
     assert vals[0] == "主板程序"
-    assert vals[2] == "定制专属 · 马来西亚"
+    assert vals[1] == "定制专属 · 马来西亚"
 
     panel.populate_tree([rows[1]])
     top = panel.tree.get_children("")[0]
@@ -207,7 +208,7 @@ def test_program_file_column_shows_primary_firmware_filename(panel):
     row = ModuleRow(label="手控UI-单", source_kind="custom", source_label="定制专属", variants=[v])
     panel.populate_tree([row])
     top = panel.tree.get_children("")[0]
-    # values = (程序名称, 版本, 程序归属, 程序文件) → 程序文件列是 rom
+    # values = (程序名称, 程序归属, 版本, 程序文件) → 程序文件列是 rom
     assert panel.tree.item(top, "values")[3] == "hc_v12.rom"
 
 
@@ -216,7 +217,7 @@ def test_source_column_uses_operator_facing_ownership_label(panel):
     row = ModuleRow(
         label="蓝牙程序",
         source_kind="common",
-        source_label="通用默认",
+        source_label="通用",
         variants=[
             ModuleVariant(
                 asset={
@@ -228,15 +229,15 @@ def test_source_column_uses_operator_facing_ownership_label(panel):
                 name="蓝牙程序",
                 version="V2",
                 source_kind="common",
-                source_label="通用默认",
+                source_label="通用",
             )
         ],
     )
     panel.populate_tree([row])
     top = panel.tree.get_children("")[0]
     assert panel.tree.heading("source", "text") == "程序归属"
-    # values = (程序名称, 版本, 程序归属, 程序文件)
-    assert panel.tree.item(top, "values")[2] == "通用默认"
+    # values = (程序名称, 程序归属, 版本, 程序文件)
+    assert panel.tree.item(top, "values")[1] == "通用"
 
 
 @pytest.mark.ui
@@ -248,6 +249,7 @@ def test_table_headings_use_operator_facing_program_terms(panel):
     assert panel.tree.heading("source", "text") == "程序归属"
     assert panel.tree.heading("program", "text") == "程序文件"
 
+    assert tuple(panel.tree["columns"]) == ("variant", "source", "version", "program")
 
 @pytest.mark.ui
 def test_table_headings_align_with_column_content(panel):
@@ -302,7 +304,7 @@ def test_populate_groups_same_label_cards_into_one_row(panel):
         return ModuleCardData(
             asset={"path": path, "firmware_label": "手控UI", "directory_name": name, "version": "V1"},
             source_type="common_variant",
-            source_label="通用默认",
+            source_label="通用",
             is_fallback=True,
         )
 

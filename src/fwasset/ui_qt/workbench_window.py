@@ -76,8 +76,9 @@ class WorkbenchInterface(QWidget):
     # 类型契约由槽函数 _handle_scan_result 的参数标注承担。
     scan_result_ready = Signal(dict)
     # 后台任务结果回投（对应 CTk BaseFlashPanel 的 queue + after 轮询）
-    _task_done = Signal(str, object, object)   # name, result, on_done
-    _task_failed = Signal(str, str)            # name, error
+    # 传 (task_id, name, result)；on_done 按 id 在 UI 线程查找执行（不 marshal callable）
+    _task_done = Signal(int, str, object)      # task_id, name, result
+    _task_failed = Signal(int, str, str)       # task_id, name, error
     # 日志跨线程回投：worker 线程里调用 _log 时不能直写 QPlainTextEdit
     log_message = Signal(str)
 
@@ -97,6 +98,8 @@ class WorkbenchInterface(QWidget):
         self._file_logger = FileLogger()
         self._busy = False
         self.active_operation_panel = None
+        self._task_seq = 0
+        self._pending_task_callbacks: dict[int, object] = {}
 
         self._build_layout()
 
@@ -224,18 +227,24 @@ class WorkbenchInterface(QWidget):
             self._log(self.scanning_message)
             return
         self._busy = True
+        task_id = self._task_seq
+        self._task_seq += 1
+        # 回调只存 UI 侧 map，Signal 不传 callable（与 CTk「UI 线程 on_done」一致）
+        if callable(on_done):
+            self._pending_task_callbacks[task_id] = on_done
 
         def worker():
             try:
                 result = fn(self._log)
-                self._task_done.emit(name, result, on_done)
+                self._task_done.emit(task_id, name, result)
             except Exception as exc:  # noqa: BLE001
-                self._task_failed.emit(name, str(exc))
+                self._task_failed.emit(task_id, name, str(exc))
 
         threading.Thread(target=worker, daemon=True).start()
 
-    def _on_task_done(self, name: str, result, on_done) -> None:
+    def _on_task_done(self, task_id: int, name: str, result) -> None:
         self._busy = False
+        on_done = self._pending_task_callbacks.pop(task_id, None)
         if callable(on_done):
             try:
                 on_done(result)
@@ -252,8 +261,9 @@ class WorkbenchInterface(QWidget):
         else:
             self._log(f"{name}完成")
 
-    def _on_task_failed(self, name: str, error: str) -> None:
+    def _on_task_failed(self, task_id: int, name: str, error: str) -> None:
         self._busy = False
+        self._pending_task_callbacks.pop(task_id, None)
         self._log(f"{name}失败: {error}")
         QMessageBox.critical(self, f"{name}失败", error)
 

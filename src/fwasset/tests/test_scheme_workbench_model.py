@@ -646,14 +646,14 @@ def test_scheme_module_tree_marks_common_assets_as_common_default(cached_model) 
 
 
 def test_all_modules_ownership_label_includes_scheme_name(l36_tree: Path, tmp_path: Path) -> None:
-    """Issue 20-A：全部视图归属为「通用默认」或「定制专属 · 方案名」。"""
+    """全部视图归属为「通用」或「定制专属 · 方案名」。"""
     model = _bind_model(l36_tree, tmp_path)
     cards = model.get_all_modules("L36")
     assert cards
     for c in cards:
         assert "回源" not in c.source_label
         if c.source_kind == "common":
-            assert c.source_label == "通用默认"
+            assert c.source_label == "通用"
         else:
             scheme = str(c.asset.get("scheme_name", "")).strip()
             if scheme:
@@ -670,9 +670,92 @@ def test_scheme_modules_never_expose_huanyuan_in_card_label(l36_tree: Path, tmp_
     for c in cards:
         assert "回源" not in c.source_label
         if c.is_fallback:
-            assert c.source_label == "通用默认"
+            assert c.source_label == "通用"
         else:
             assert c.source_label == "定制专属"
+
+
+def test_scheme_module_tree_fallback_carries_default_badge(
+    l36_tree: Path, tmp_path: Path
+) -> None:
+    """Issue 13：方案视图回源变体应带 ★默认（含 toml 空默认 = 模块唯一变体）。"""
+    model = _bind_model(l36_tree, tmp_path)
+    tree = model.get_scheme_module_tree("L36", "西班牙")
+    # 西班牙缺 3D / 腿部 → 回源；平台配置二者均为 "" 空默认
+    row_3d = next((r for r in tree if r.label == "3D机芯板程序"), None)
+    assert row_3d is not None and row_3d.variants
+    assert row_3d.variants[0].default_badge == "★默认"
+
+    row_leg = next((r for r in tree if r.label == "腿部程序"), None)
+    assert row_leg is not None and row_leg.variants
+    assert row_leg.variants[0].default_badge == "★默认"
+
+    # 通用区直接列腿部也应有徽章（空默认语义）
+    leg_cards = model.get_common_modules("L36", "腿部程序")
+    assert leg_cards
+    assert leg_cards[0].default_badge == "★默认"
+
+
+def test_empty_default_badge_for_unique_nested_variant(tmp_path: Path) -> None:
+    """空默认 "" 覆盖「唯一嵌套变体」，不要求文件直接位于模块目录。
+
+    结构：通用/语音程序/中文唯一版/voice.bin + defaults 语音程序 = ""
+    """
+    root = tmp_path / "L36程序"
+    _write(
+        root / "平台配置.toml",
+        "\n".join(
+            [
+                "[[platform]]",
+                'name = "标准单机芯3D"',
+                "[platform.defaults]",
+                '"语音程序" = ""',
+            ]
+        ),
+    )
+    _write(root / "通用" / "语音程序" / "中文唯一版" / "voice.bin")
+    # 多变体主板：空默认不应误标（此处不配置主板空默认；另建对照）
+    _write(root / "通用" / "主板程序" / "量产_默认" / "a.bin")
+    _write(root / "通用" / "主板程序" / "防夹功能" / "b.bin")
+    scheme = root / "定制" / "西班牙"
+    _write(scheme / "方案配置.toml", 'name = "西班牙"\nplatform = "标准单机芯3D"\n')
+    _write(scheme / "主板程序" / "custom.bin")
+
+    model = _bind_model(root, tmp_path)
+    voice = model.get_common_modules("L36", "语音程序")
+    assert len(voice) == 1
+    assert voice[0].asset["directory_name"] == "中文唯一版"
+    assert voice[0].default_badge == "★默认"
+
+    # 方案回源语音也应带徽章
+    tree = model.get_scheme_module_tree("L36", "西班牙")
+    row_voice = next((r for r in tree if r.label == "语音程序"), None)
+    assert row_voice is not None and row_voice.variants
+    assert row_voice.variants[0].default_badge == "★默认"
+    assert row_voice.variants[0].name == "中文唯一版"
+
+
+def test_empty_default_does_not_badge_when_multiple_variants(tmp_path: Path) -> None:
+    """空默认但模块下有多份通用变体 → 配置异常，谁都不标 ★默认。"""
+    root = tmp_path / "L36程序"
+    _write(
+        root / "平台配置.toml",
+        "\n".join(
+            [
+                "[[platform]]",
+                'name = "标准单机芯3D"',
+                "[platform.defaults]",
+                '"语音程序" = ""',
+            ]
+        ),
+    )
+    _write(root / "通用" / "语音程序" / "中文版" / "a.bin")
+    _write(root / "通用" / "语音程序" / "英文版" / "b.bin")
+
+    model = _bind_model(root, tmp_path)
+    voice = model.get_common_modules("L36", "语音程序")
+    assert len(voice) == 2
+    assert all(c.default_badge == "" for c in voice)
 
 
 def test_scheme_modules_empty_keyword_returns_full_tree(l36_tree: Path, tmp_path: Path) -> None:

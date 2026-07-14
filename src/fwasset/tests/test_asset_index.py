@@ -3,9 +3,11 @@ from pathlib import Path
 import pytest
 
 from fwasset.core.asset_index import (
+    CONNECT_TIMEOUT_SEC,
     SCHEMA_VERSION,
     AssetIndexError,
     active_workspace_root,
+    connect_asset_index,
     count_assets,
     delete_missing_assets,
     hide_item,
@@ -68,6 +70,30 @@ def test_init_asset_index_creates_schema_and_version(tmp_path: Path):
 
     assert db_path.exists()
     assert schema_version(db_path) == SCHEMA_VERSION
+
+
+def test_connect_asset_index_uses_extended_busy_timeout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Issue 18：连接须使用 CONNECT_TIMEOUT_SEC，而非 SQLite 默认 5s。"""
+    import sqlite3
+
+    import fwasset.core.asset_index as mod
+
+    captured: dict[str, float] = {}
+    real_connect = sqlite3.connect
+
+    def wrap(database, timeout=5.0, **kwargs):
+        captured["timeout"] = float(timeout)
+        return real_connect(database, timeout=timeout, **kwargs)
+
+    monkeypatch.setattr(mod.sqlite3, "connect", wrap)
+    conn = connect_asset_index(tmp_path / "timeout.db")
+    try:
+        assert captured["timeout"] == CONNECT_TIMEOUT_SEC
+        assert CONNECT_TIMEOUT_SEC >= 30.0
+    finally:
+        conn.close()
 
 
 def test_save_and_load_assets_roundtrip(tmp_path: Path):

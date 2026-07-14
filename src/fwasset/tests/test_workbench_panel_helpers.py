@@ -235,6 +235,35 @@ def test_base_panel_and_qt_log_service_result_ok() -> None:
     assert '"ok" in result' in done or "'ok' in result" in done
 
 
+def test_qt_run_task_runs_on_done_on_ui_thread_via_task_id() -> None:
+    """Issue 8：Signal 传 task_id+结果；on_done 在 UI 槽内按 id 取出执行。"""
+    from pathlib import Path
+
+    text = Path("src/fwasset/ui_qt/workbench_window.py").read_text(encoding="utf-8")
+    assert "_task_done = Signal(int, str, object)" in text
+    assert "_pending_task_callbacks" in text
+    run = _method_body(text, "_run_task")
+    compact = run.replace(" ", "")
+    # worker 内只 emit，不直接调 on_done
+    assert "on_done(result)" not in compact
+    assert "_task_done.emit(task_id,name,result)" in compact
+    done = _method_body(text, "_on_task_done")
+    assert "_pending_task_callbacks.pop" in done
+    assert "on_done(result)" in done.replace(" ", "")
+
+
+def test_ctk_handle_scan_result_recovers_root_from_scan_meta() -> None:
+    """Issue 14：CTk 缓存加载路径从 scan_meta 恢复 root（与 Qt 对齐）。"""
+    from pathlib import Path
+
+    body = _method_body(
+        Path("src/fwasset/ui/workbench_panel.py").read_text(encoding="utf-8"),
+        "_handle_scan_result",
+    )
+    assert "scan_meta" in body
+    assert "root_dir" in body
+
+
 def test_model_chip_values_keeps_first_models_visible_when_within_limit() -> None:
     chips, overflow = model_chip_values(["L36", "L30", "X8"], selected="L36", limit=5)
 

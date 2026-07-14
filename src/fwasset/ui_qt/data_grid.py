@@ -21,7 +21,7 @@ class DataGrid(QWidget):
     """整机模块固定层级的可展开树（QTreeWidget 版，语义对齐 ui/panels/data_grid_panel.py）。
 
     顶层 = 模块类型行（ModuleRow），多变体收在该行子节点下，绝不在顶层铺平。
-    程序归属列只显示「定制专属 / 通用默认」，绝不出现"回源"。
+    程序归属列只显示「定制专属 / 通用」，绝不出现"回源"。
     选中变体子节点才发 ModuleVariant；选中多变体父行发 None（等用户展开）。
     """
 
@@ -37,12 +37,12 @@ class DataGrid(QWidget):
 
         self.tree = TreeWidget(self)
         self.tree.setColumnCount(5)
-        self.tree.setHeaderLabels(["程序类型", "程序名称", "版本", "程序归属", "程序文件"])
+        self.tree.setHeaderLabels(["程序类型", "程序名称", "程序归属", "版本", "程序文件"])
         header = self.tree.header()
         for col, width in enumerate(GRID_COL_WIDTHS):
             self.tree.setColumnWidth(col, width)
-            # 归属列（index 3）最小宽度，避免「定制专属 · 方案」被裁成空白
-            if col == 3:
+            # 归属列（index 2）最小宽度，避免「定制专属 · 方案」被裁成空白
+            if col == 2:
                 header.setMinimumSectionSize(160)
         header.setStretchLastSection(True)
         header.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
@@ -70,6 +70,12 @@ class DataGrid(QWidget):
             text = f"{text}  {variant.default_badge}"
         return text
 
+    @staticmethod
+    def _source_text(label: str, source_kind: str) -> str:
+        if label == "通用默认" or (not label and source_kind == "common"):
+            return "通用"
+        return label
+
     def populate_tree(self, rows: list[ModuleRow]) -> None:
         self.tree.blockSignals(True)
         try:
@@ -81,8 +87,8 @@ class DataGrid(QWidget):
                         [
                             row.label,
                             self._variant_text(variant, row.label),
+                            self._source_text(variant.source_label, variant.source_kind),
                             variant.version or "-",
-                            variant.source_label,
                             asset_primary_file_name(variant.asset),
                         ]
                     )
@@ -90,7 +96,7 @@ class DataGrid(QWidget):
                     self.tree.addTopLevelItem(item)
                     continue
 
-                parent = QTreeWidgetItem([row.label, "", "", row.source_label, ""])
+                parent = QTreeWidgetItem([row.label, "", self._source_text(row.source_label, row.source_kind), "", ""])
                 self.tree.addTopLevelItem(parent)
                 for variant in row.variants:
                     name = (variant.name or "默认") + (
@@ -100,8 +106,8 @@ class DataGrid(QWidget):
                         [
                             "",
                             name,
+                            self._source_text(variant.source_label, variant.source_kind),
                             variant.version or "-",
-                            variant.source_label,
                             asset_primary_file_name(variant.asset),
                         ]
                     )
@@ -120,9 +126,9 @@ class DataGrid(QWidget):
             kind = data.source_kind if data.source_kind else ("common" if data.is_fallback else "custom")
             raw = (data.source_label or "").strip()
             if raw and "回源" not in raw:
-                source_label = raw
+                source_label = self._source_text(raw, kind)
             else:
-                source_label = "通用默认" if kind == "common" else "定制专属"
+                source_label = "通用" if kind == "common" else "定制专属"
             variant = ModuleVariant(
                 asset=asset,
                 name=str(asset.get("directory_name", "")),
@@ -140,7 +146,7 @@ class DataGrid(QWidget):
                 ModuleRow(
                     label=label,
                     source_kind=row_kind,
-                    source_label="定制专属" if row_kind == "custom" else "通用默认",
+                    source_label="定制专属" if row_kind == "custom" else "通用",
                     variants=variants,
                 )
             )

@@ -387,6 +387,30 @@ def test_scan_with_last_scan_at_skips_unchanged(tmp_path: Path):
     assert len(assets_past) == 1
 
 
+def test_scan_incremental_still_finds_child_when_parent_mtime_is_old(tmp_path: Path):
+    """Issue 12：父目录 mtime 旧时不得剪枝子树，否则漏扫已更新的子目录资产。"""
+    import os
+    import time
+
+    parent = tmp_path / "L36" / "外壳"
+    child = parent / "主板程序"
+    child.mkdir(parents=True)
+    (child / "main.bin").write_text("firmware", encoding="utf-8")
+
+    # 把父目录 mtime 拨到很早；子目录保持较新
+    old = time.time() - 100_000
+    os.utime(parent, (old, old))
+    # 刷新子目录 mtime 为现在
+    now = time.time()
+    os.utime(child, (now, now))
+
+    # last_scan_at 介于 parent 旧与 child 新之间
+    mid = old + 50_000
+    assets, _errors = scan_firmware_assets(str(tmp_path), last_scan_at=mid)
+    assert len(assets) == 1
+    assert assets[0]["firmware_type"] == "mainboard"
+
+
 def test_scan_without_last_scan_at_finds_all(tmp_path: Path):
     """Without last_scan_at, all directories are scanned."""
     model_dir = tmp_path / "L36" / "主板程序"

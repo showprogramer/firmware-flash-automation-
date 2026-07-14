@@ -95,14 +95,19 @@ def _is_excluded_dir(name: str) -> bool:
 
 
 def scheme_for_path(schemes: list[SchemeConfig], asset_path: Path) -> SchemeConfig | None:
+    """根据资产路径找到所属定制方案（若有）。
+
+    前缀匹配；多候选时取**路径最深**（最长前缀），避免嵌套/重叠方案绑错。
     """
-    根据资产路径，找到它所属的定制方案（如果有）。
-    通过检查资产路径是否以方案目录路径为前缀来判断。
-    """
+    resolved = asset_path.resolve()
+    matches: list[SchemeConfig] = []
     for scheme in schemes:
         try:
-            asset_path.relative_to(scheme.path)
-            return scheme
+            resolved.relative_to(scheme.path.resolve())
+            matches.append(scheme)
         except ValueError:
             continue
-    return None
+    if not matches:
+        return None
+    # 最深路径优先（嵌套方案时绑到内层）
+    return max(matches, key=lambda s: len(str(s.path.resolve())))

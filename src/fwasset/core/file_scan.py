@@ -12,7 +12,6 @@ from fwasset.core.settings import (
     SCAN_VERSION_PATTERNS,
 )
 from fwasset.core.firmware_catalog import DEFAULT_FIRMWARE_CATALOG_PATH, enabled_firmware_types
-from fwasset.core.platform_config import load_platform_config
 from fwasset.core.scheme_config import discover_schemes, scheme_for_path
 from fwasset.core.types import FirmwareAsset, HandcontrolFolder
 
@@ -173,8 +172,7 @@ def scan_firmware_assets(
 
     type_configs = enabled_firmware_types(Path(catalog_path) if catalog_path else DEFAULT_FIRMWARE_CATALOG_PATH)
 
-    # --- 读取 TOML 配置（有则读，没有则向后兼容留空）---
-    platform_defaults = load_platform_config(root_path)
+    # 方案元数据（有则读）；平台默认仅在 workbench 回源时使用，扫描不读 平台配置.toml
     schemes = discover_schemes(root_path)
 
     results: list[FirmwareAsset] = []
@@ -186,7 +184,7 @@ def scan_firmware_assets(
         else:
             errors.append(str(exc))
 
-    for dirpath, _, filenames in os.walk(root_path, onerror=_on_walk_error):
+    for dirpath, dirnames, filenames in os.walk(root_path, onerror=_on_walk_error):
         if cancel_event is not None and cancel_event.is_set():
             errors.append("扫描已被用户取消")
             break
@@ -195,11 +193,15 @@ def scan_firmware_assets(
             try:
                 dir_mtime = Path(dirpath).stat().st_mtime
                 if dir_mtime < last_scan_at:
+                    # 仅跳过本目录的资产匹配，**不**剪枝子树：父目录 mtime 旧
+                    # 不代表子孙未更新（改深层文件常不抬祖先 mtime）。
                     continue
             except OSError:
                 pass
 
         if _is_excluded_dir(dirpath):
+            # 排除目录整棵子树可剪（排除语义是整枝不要，与 mtime 无关）
+            dirnames[:] = []
             continue
         cfg = _match_catalog_type(dirpath, filenames, type_configs)
         if cfg is None:
@@ -333,30 +335,37 @@ def guess_version_from_path(dirpath: str) -> str:
     return ""
 
 
+def handcontrol_folders_from_assets(assets: list[FirmwareAsset]) -> list[HandcontrolFolder]:
+    """从已扫描资产派生手控文件夹列表（不再二次 os.walk）。"""
+    results: list[HandcontrolFolder] = []
+    for asset in assets:
+        if asset.get("firmware_type") != "handcontrol_ui":
+            continue
+        rom_files = [name for name in asset.get("files", []) if _has_allowed_extension(name, SCAN_ROM_EXTENSIONS)]
+        pkg_files = [name for name in asset.get("files", []) if _has_allowed_extension(name, SCAN_PKG_EXTENSIONS)]
+        if not rom_files or not pkg_files:
+            continue
+        results.append(
+            {
+                "path": str(asset.get("path", "")),
+                "rom_file": rom_files[0],
+                "pkg_file": pkg_files[0],
+                "model": str(asset.get("model", "")),
+                "version": str(asset.get("version", "")),
+                "label": (
+                    f"{asset.get('model', '')}  {asset.get('version', '')}  "
+                    f"[{Path(str(asset.get('path', ''))).name}]"
+                ),
+            }
+        )
+    results.sort(key=lambda x: x["path"])
+    return results
+
+
 def find_handcontrol_folders(root: str) -> list[HandcontrolFolder]:
     """
     Recursively scan root and find folders containing both configured ROM and PKG files.
     Priority: ROM filename -> folder/path fallback.
     """
     assets, _errors = scan_firmware_assets(root)
-    results: list[HandcontrolFolder] = []
-    for asset in assets:
-        if asset["firmware_type"] != "handcontrol_ui":
-            continue
-        rom_files = [name for name in asset["files"] if _has_allowed_extension(name, SCAN_ROM_EXTENSIONS)]
-        pkg_files = [name for name in asset["files"] if _has_allowed_extension(name, SCAN_PKG_EXTENSIONS)]
-        if not rom_files or not pkg_files:
-            continue
-        results.append(
-            {
-                "path": asset["path"],
-                "rom_file": rom_files[0],
-                "pkg_file": pkg_files[0],
-                "model": asset["model"],
-                "version": asset["version"],
-                "label": f"{asset['model']}  {asset['version']}  [{Path(asset['path']).name}]",
-            }
-        )
-
-    results.sort(key=lambda x: x["path"])
-    return results
+    return handcontrol_folders_from_assets(assets)

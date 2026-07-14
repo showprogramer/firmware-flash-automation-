@@ -14,12 +14,21 @@ from fwasset.core.types import FirmwareAsset
 SCHEMA_VERSION = 3
 HiddenItemType = Literal["model_directory", "firmware_type", "asset"]
 
+# 连接 busy 等待秒数。扫描写库（DELETE+INSERT）可能较长；默认 5s 易在
+# 读路径（query/缓存加载）上提前抛 OperationalError。
+CONNECT_TIMEOUT_SEC = 30.0
+
 # ---------------------------------------------------------------------------
 # 单工作区语义（非多根并存）
 #
 # 本索引一次只服务一个固件根目录（工作区）。真相源是整理后的目录树 + TOML；
 # SQLite 是搜索/浏览缓存。全量扫描会用当前根的快照整库替换 assets，
 # scan_meta 也只保留当前根一行。换根扫描 = 切换工作区，旧根资产不保留。
+#
+# 并发模型（单写者）：
+# - 预期：同一库文件由本应用单进程使用；写主要在扫描（及未来 CRUD）线程，
+#   读在 UI 查询路径。勿多开多个 fwasset 实例同时写同一 fwasset.db。
+# - 连接 timeout 只缓解短暂锁等待，不替代单写者纪律。
 #
 # 未来应用内 CRUD 落地后，日常走行级写；全量 save_assets 退化为
 # 首次导入 / 索引修复 / 强制对账的冷路径，语义仍是「当前工作区快照」。
@@ -39,10 +48,15 @@ def _db_path(path: str | Path | None = None) -> Path:
 
 
 def connect_asset_index(path: str | Path | None = None) -> sqlite3.Connection:
+    """打开本地资产索引连接。
+
+    使用 :data:`CONNECT_TIMEOUT_SEC` 作为 busy timeout，减轻扫描写事务与
+    并发读之间的短暂争用。仍假定单进程单写者（见模块顶部说明）。
+    """
     db_path = _db_path(path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
     try:
-        conn = sqlite3.connect(db_path)
+        conn = sqlite3.connect(db_path, timeout=CONNECT_TIMEOUT_SEC)
         conn.row_factory = sqlite3.Row
         return conn
     except sqlite3.DatabaseError as exc:

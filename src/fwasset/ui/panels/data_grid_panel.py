@@ -33,7 +33,7 @@ class DataGridPanel(ctk.CTkFrame):
     """整机模块固定层级的可展开树。
 
     顶层 = 模块类型行（ModuleRow），多变体（如手控UI 3 份）收在该行的子节点下，
-    绝不在顶层铺平。程序归属列只显示「定制专属 / 通用默认」，绝不出现"回源"。
+    绝不在顶层铺平。程序归属列只显示「定制专属 / 通用」，绝不出现"回源"。
     选中变体子节点才回传 ModuleVariant；选中多变体父行不选具体变体（等用户展开）。
     大部分机型包含 7 个标准模块，但非完整，缺失的模块不显示。
     """
@@ -57,21 +57,21 @@ class DataGridPanel(ctk.CTkFrame):
         # iid -> ModuleVariant（仅变体子节点登记；父行不登记）
         self._variant_map: dict[str, ModuleVariant] = {}
 
-        columns = ("variant", "version", "source", "program")
+        columns = ("variant", "source", "version", "program")
         self.tree = ttk.Treeview(self, columns=columns, show="tree headings", selectmode="browse")
 
         # #0 列承载程序类型（父）/ 程序名（子）+ 展开箭头
         self.tree.heading("#0", text="程序类型", anchor="w")
         self.tree.heading("variant", text="程序名称", anchor="w")
-        self.tree.heading("version", text="版本", anchor="center")
         self.tree.heading("source", text="程序归属", anchor="w")
+        self.tree.heading("version", text="版本", anchor="center")
         self.tree.heading("program", text="程序文件", anchor="w")
 
         # 归属列加宽以显示「定制专属 · 方案名」（Issue 20-A）
         self.tree.column("#0", width=170, minwidth=130)
         self.tree.column("variant", width=210, minwidth=150)
-        self.tree.column("version", width=80, minwidth=64, anchor="center")
         self.tree.column("source", width=200, minwidth=160, anchor="w")
+        self.tree.column("version", width=80, minwidth=64, anchor="center")
         self.tree.column("program", width=260, minwidth=140)
 
         self._configure_tags()
@@ -107,8 +107,8 @@ class DataGridPanel(ctk.CTkFrame):
     def _source_text(self, label: str) -> str:
         if label == "定制专属":
             return "定制专属"
-        if label == "通用默认":
-            return "通用默认"
+        if label in {"通用", "通用默认"}:
+            return "通用"
         return label
 
     def populate_tree(self, rows: list[ModuleRow]) -> None:
@@ -135,8 +135,8 @@ class DataGridPanel(ctk.CTkFrame):
                     text=row.label,
                     values=(
                         variant_text,
-                        variant.version or "-",
                         self._source_text(variant.source_label),
+                        variant.version or "-",
                         asset_primary_file_name(asset),
                     ),
                     tags=self._row_tags(variant.source_kind, row_index),
@@ -150,7 +150,7 @@ class DataGridPanel(ctk.CTkFrame):
                 "end",
                 iid=mod_iid,
                 text=row.label,
-                values=("", "", self._source_text(row.source_label), ""),
+                values=("", self._source_text(row.source_label), "", ""),
                 tags=self._row_tags(row.source_kind, row_index),
                 open=True,
             )
@@ -168,8 +168,8 @@ class DataGridPanel(ctk.CTkFrame):
                     text="",
                     values=(
                         child_text,
-                        variant.version or "-",
                         self._source_text(variant.source_label),
+                        variant.version or "-",
                         asset_primary_file_name(asset),
                     ),
                     tags=self._row_tags(variant.source_kind, row_index + child_index),
@@ -193,7 +193,7 @@ class DataGridPanel(ctk.CTkFrame):
             if raw and "回源" not in raw:
                 source_label = raw
             else:
-                source_label = "通用默认" if kind == "common" else "定制专属"
+                source_label = "通用" if kind == "common" else "定制专属"
             variant = ModuleVariant(
                 asset=asset,
                 name=str(asset.get("directory_name", "")),
@@ -211,7 +211,7 @@ class DataGridPanel(ctk.CTkFrame):
                 ModuleRow(
                     label=label,
                     source_kind=row_kind,
-                    source_label="定制专属" if row_kind == "custom" else "通用默认",
+                    source_label="定制专属" if row_kind == "custom" else "通用",
                     variants=variants,
                 )
             )

@@ -50,7 +50,7 @@ class ModuleCardData:
     source_type: str               # "common_default" | "custom_exclusive" | "common_fallback" | "common_variant"
     source_label: str              # 用于显示的来源标签文本
     is_fallback: bool              # 是否是回源模块
-    source_kind: str = ""          # "common" | "custom" — coarse bucket for the row-level 定制专属/通用默认 标签
+    source_kind: str = ""          # "common" | "custom" — coarse bucket for the row-level 定制专属/通用 标签
     default_badge: str = ""        # 平台默认徽章文案（如 "★默认"），非默认为空串
 
 
@@ -73,7 +73,7 @@ class ModuleVariant:
     asset: FirmwareAsset
     name: str                      # 变体显示名（目录名）
     version: str
-    source_kind: str               # "custom"（定制专属）/ "common"（通用默认）
+    source_kind: str               # "custom"（定制专属）/ "common"（通用）
     source_label: str              # 用户可读来源文案，绝不含"回源"
     default_badge: str = ""        # 平台默认徽章文案（如 "★默认"），非默认为空串
 
@@ -322,17 +322,49 @@ class SchemeWorkbenchModel:
             return rest[0], ""
         return rest[0], rest[-1]
 
+    def _common_assets_matching_module(
+        self, model_name: str, module_key: str
+    ) -> list[FirmwareAsset]:
+        """当前型号下、匹配平台配置模块键的全部通用资产。"""
+        assets = self._all_assets if self._cache_loaded() else query_assets(path=self.db_path)
+        out: list[FirmwareAsset] = []
+        for a in assets:
+            if str(a.get("category", "")) != "common":
+                continue
+            if not self._belongs_to_model(a, model_name):
+                continue
+            if _module_matches(a, module_key):
+                out.append(a)
+        return out
+
     def default_platforms_for(self, asset: FirmwareAsset) -> list[str]:
-        """返回把该通用变体配置为默认程序的平台名列表（只看资产所属型号的配置）。"""
+        """返回把该通用变体配置为默认程序的平台名列表（只看资产所属型号的配置）。
+
+        平台配置约定：
+        - ``defaults[模块] = "量产_默认"``：变体目录名精确匹配；
+        - ``defaults[模块] = ""``：该模块**唯一**通用变体即默认（可嵌套在
+          ``通用/语音程序/中文唯一版/``，不要求文件直接落在模块目录下）。
+          若匹配该模块的通用资产不止一份，视为配置异常，不标默认。
+        """
         if str(asset.get("category", "")) != "common":
             return []
         dir_name = str(asset.get("directory_name", ""))
         if not dir_name:
             return []
+        model_name = self._model_of_asset(asset)
+        asset_path = str(asset.get("path", ""))
         names: list[str] = []
-        for p in self._platforms_for(self._model_of_asset(asset)):
+        for p in self._platforms_for(model_name):
             for module_key, variant_name in p.defaults.items():
-                if variant_name == dir_name and _module_matches(asset, module_key):
+                if not _module_matches(asset, module_key):
+                    continue
+                configured = str(variant_name or "").strip()
+                if configured == "":
+                    peers = self._common_assets_matching_module(model_name, module_key)
+                    if len(peers) == 1 and str(peers[0].get("path", "")) == asset_path:
+                        names.append(p.platform_name)
+                        break
+                elif configured == dir_name:
                     names.append(p.platform_name)
                     break
         return names
@@ -524,8 +556,8 @@ class SchemeWorkbenchModel:
             is_default = "_默认" in dir_name
 
             source_type = "common_default" if is_default else "common_variant"
-            # 用户可见归属：仅「通用默认」（禁内部路径/回源字样）
-            source_label = "通用默认"
+            # 用户可见归属：仅「通用」（禁内部路径/回源字样）
+            source_label = "通用"
 
             results.append(ModuleCardData(
                 asset=a,
@@ -620,8 +652,8 @@ class SchemeWorkbenchModel:
                         results.append(ModuleCardData(
                             asset=fallback_asset,
                             source_type="common_fallback",
-                            # 用户可见：仅「通用默认」，禁止「回源」字样（Issue 6）
-                            source_label="通用默认",
+                            # 用户可见：仅「通用」，禁止「回源」字样（Issue 6）
+                            source_label="通用",
                             is_fallback=True,
                             source_kind="common",
                             default_badge=self.default_badge(fallback_asset),
@@ -638,7 +670,7 @@ class SchemeWorkbenchModel:
         - 每个模块一行（ModuleRow），多变体（如手控UI 3 份）收在该行的 variants 下，
           不在顶层铺平。
         - 行级来源：只要该模块有任一"定制专属"变体即视为 custom，否则 common。
-        - 用户文案只用「定制专属」/「通用默认」，绝不出现"回源"。
+        - 用户文案只用「定制专属」/「通用」，绝不出现"回源"。
         - 行顺序按 STANDARD_MODULE_ORDER；不在标准列表里的模块（如接线图）排在最后。
         - 大部分机型包含 7 个标准模块，但非完整，缺失的模块不显示。
         """
@@ -650,9 +682,9 @@ class SchemeWorkbenchModel:
             # source_kind is set by the producer (get_scheme_modules etc.). Fall
             # back to the legacy is_fallback inference for safety.
             kind = c.source_kind or ("common" if c.is_fallback else "custom")
-            # 卡片层 source_label 已是用户文案；树行仍统一 定制专属/通用默认
+            # 卡片层 source_label 已是用户文案；树行仍统一 定制专属/通用
             display = c.source_label if c.source_label and "回源" not in c.source_label else (
-                "通用默认" if kind == "common" else "定制专属"
+                "通用" if kind == "common" else "定制专属"
             )
             variant = ModuleVariant(
                 asset=c.asset,
@@ -675,7 +707,7 @@ class SchemeWorkbenchModel:
                 ModuleRow(
                     label=label,
                     source_kind=row_kind,
-                    source_label="定制专属" if row_kind == "custom" else "通用默认",
+                    source_label="定制专属" if row_kind == "custom" else "通用",
                     variants=variants,
                 )
             )
@@ -684,7 +716,7 @@ class SchemeWorkbenchModel:
     def get_all_modules(self, model_name: str, keyword: str = "") -> list[ModuleCardData]:
         """获取指定型号下的所有模块（不回源，仅展示物理存在的模块）。
 
-        归属文案（Issue 20-A）：``通用默认`` 或 ``定制专属 · {scheme_name}``。
+        归属文案：``通用`` 或 ``定制专属 · {scheme_name}``。
         程序名称由 UI 使用 ``directory_name`` 展示，本方法不折叠。
         """
         assets = self._filter_assets(keyword=keyword)
@@ -698,7 +730,7 @@ class SchemeWorkbenchModel:
             if cat == "common":
                 is_default = "_默认" in dir_name
                 source_type = "common_default" if is_default else "common_variant"
-                source_label = "通用默认"
+                source_label = "通用"
             elif cat == "custom":
                 scheme = str(a.get("scheme_name", "")).strip()
                 source_type = "custom_exclusive"
