@@ -38,12 +38,22 @@ class DataGrid(QWidget):
         self.tree = TreeWidget(self)
         self.tree.setColumnCount(5)
         self.tree.setHeaderLabels(["程序类型", "程序名称", "版本", "程序归属", "程序文件"])
+        header = self.tree.header()
         for col, width in enumerate(GRID_COL_WIDTHS):
             self.tree.setColumnWidth(col, width)
-        self.tree.header().setStretchLastSection(True)
+            # 归属列（index 3）最小宽度，避免「定制专属 · 方案」被裁成空白
+            if col == 3:
+                header.setMinimumSectionSize(160)
+        header.setStretchLastSection(True)
+        header.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         self.tree.setAlternatingRowColors(True)
         self.tree.setBorderVisible(True)
         self.tree.setBorderRadius(GRID_BORDER_RADIUS)
+        # 略增行高，中文归属文案更易读
+        self.tree.setStyleSheet(
+            "TreeWidget { font-size: 13px; }"
+            "TreeWidget::item { min-height: 28px; padding: 2px 4px; }"
+        )
         layout.addWidget(self.tree)
 
         self.tree.itemSelectionChanged.connect(self._on_selection)
@@ -54,47 +64,52 @@ class DataGrid(QWidget):
     # --- 渲染 ---
     @staticmethod
     def _variant_text(variant: ModuleVariant, label: str) -> str:
-        text = "默认" if variant.name == label else variant.name
+        # Issue 20-A：始终用变体目录名；空名才退回「默认」
+        text = variant.name or "默认"
         if variant.default_badge:
             text = f"{text}  {variant.default_badge}"
         return text
 
     def populate_tree(self, rows: list[ModuleRow]) -> None:
-        self.tree.clear()
-        for row in rows:
-            if len(row.variants) == 1:
-                variant = row.variants[0]
-                item = QTreeWidgetItem(
-                    [
-                        row.label,
-                        self._variant_text(variant, row.label),
-                        variant.version or "-",
-                        variant.source_label,
-                        asset_primary_file_name(variant.asset),
-                    ]
-                )
-                item.setData(0, _VARIANT_ROLE, variant)
-                self.tree.addTopLevelItem(item)
-                continue
+        self.tree.blockSignals(True)
+        try:
+            self.tree.clear()
+            for row in rows:
+                if len(row.variants) == 1:
+                    variant = row.variants[0]
+                    item = QTreeWidgetItem(
+                        [
+                            row.label,
+                            self._variant_text(variant, row.label),
+                            variant.version or "-",
+                            variant.source_label,
+                            asset_primary_file_name(variant.asset),
+                        ]
+                    )
+                    item.setData(0, _VARIANT_ROLE, variant)
+                    self.tree.addTopLevelItem(item)
+                    continue
 
-            parent = QTreeWidgetItem([row.label, "", "", row.source_label, ""])
-            self.tree.addTopLevelItem(parent)
-            for variant in row.variants:
-                # 多变体子行显示原始变体名（与 CTk 版一致）：同模块多份时
-                # 「默认」映射会让子行无法区分，故不走 _variant_text。
-                name = variant.name + (f"  {variant.default_badge}" if variant.default_badge else "")
-                child = QTreeWidgetItem(
-                    [
-                        "",
-                        name,
-                        variant.version or "-",
-                        variant.source_label,
-                        asset_primary_file_name(variant.asset),
-                    ]
-                )
-                child.setData(0, _VARIANT_ROLE, variant)
-                parent.addChild(child)
-            parent.setExpanded(True)
+                parent = QTreeWidgetItem([row.label, "", "", row.source_label, ""])
+                self.tree.addTopLevelItem(parent)
+                for variant in row.variants:
+                    name = (variant.name or "默认") + (
+                        f"  {variant.default_badge}" if variant.default_badge else ""
+                    )
+                    child = QTreeWidgetItem(
+                        [
+                            "",
+                            name,
+                            variant.version or "-",
+                            variant.source_label,
+                            asset_primary_file_name(variant.asset),
+                        ]
+                    )
+                    child.setData(0, _VARIANT_ROLE, variant)
+                    parent.addChild(child)
+                parent.setExpanded(True)
+        finally:
+            self.tree.blockSignals(False)
 
     def populate(self, data_list: list[ModuleCardData]) -> None:
         """兼容旧调用（通用/全部视图）：按模块类型归组后走 populate_tree。"""
@@ -103,12 +118,17 @@ class DataGrid(QWidget):
             asset = data.asset
             label = str(asset.get("firmware_label", "")) or str(asset.get("firmware_type", ""))
             kind = data.source_kind if data.source_kind else ("common" if data.is_fallback else "custom")
+            raw = (data.source_label or "").strip()
+            if raw and "回源" not in raw:
+                source_label = raw
+            else:
+                source_label = "通用默认" if kind == "common" else "定制专属"
             variant = ModuleVariant(
                 asset=asset,
                 name=str(asset.get("directory_name", "")),
                 version=str(asset.get("version", "")),
                 source_kind=kind,
-                source_label="通用默认" if kind == "common" else "定制专属",
+                source_label=source_label,
                 default_badge=data.default_badge,
             )
             grouped.setdefault(label, []).append(variant)

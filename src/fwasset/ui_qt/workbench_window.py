@@ -5,7 +5,7 @@ import sys
 import threading
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtCore import QItemSelectionModel, Qt, QTimer, Signal
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QApplication,
@@ -455,6 +455,76 @@ class WorkbenchInterface(QWidget):
             self._on_model_changed(name)
 
     # ------------------------------------------------------------------ 侧边树
+    def _nav_entry_matches_selection(self, kind: str, key: str) -> bool:
+        sel = self.current_selection
+        if kind == "all":
+            return sel.node_type == "all"
+        if kind == "common_type":
+            return sel.node_type == "common_type" and sel.common_type == key
+        if kind == "custom_scheme":
+            return sel.node_type == "custom_scheme" and sel.scheme_name == key
+        return False
+
+    def _clear_nav_pointer_highlight(self) -> None:
+        """清除 qfluentwidgets delegate 缓存的鼠标瞬态行。"""
+        self.nav._setPressedRow(-1)
+        self.nav._setHoverRow(-1)
+
+    def _apply_nav_selection_highlight(self) -> None:
+        """按 current_selection 定位高亮（重建列表后索引会变，不能依赖旧 currentRow）。"""
+        target = -1
+        for i, (kind, key) in enumerate(self._nav_entries):
+            if kind == "section":
+                continue
+            if self._nav_entry_matches_selection(kind, key):
+                target = i
+                break
+        # qfluentwidgets 的 delegate 会独立缓存鼠标按压/悬停行。搜索态点击后
+        # 立即重建完整列表时，旧行号会映射到另一个项目并留下伪高亮。
+        self._clear_nav_pointer_highlight()
+        self.nav.blockSignals(True)
+        try:
+            if target >= 0:
+                self.nav.setCurrentRow(
+                    target,
+                    QItemSelectionModel.SelectionFlag.ClearAndSelect,
+                )
+                item = self.nav.item(target)
+                if item is not None:
+                    self.nav.scrollToItem(item)
+            else:
+                self.nav.setCurrentRow(-1)
+        finally:
+            self.nav.blockSignals(False)
+        # currentRowChanged 在 mousePressEvent 内同步触发；上述代码返回后，
+        # 外层点击仍会把旧行重新写入 selection model。下一轮事件循环必须
+        # 重新执行完整选择，而不只是清 delegate 的鼠标状态。
+        QTimer.singleShot(0, self._finalize_nav_selection_highlight)
+
+    def _finalize_nav_selection_highlight(self) -> None:
+        """鼠标点击调用栈结束后，按逻辑选择强制同步 Qt 与 QFluent 状态。"""
+        target = next(
+            (
+                i
+                for i, (kind, key) in enumerate(self._nav_entries)
+                if kind != "section" and self._nav_entry_matches_selection(kind, key)
+            ),
+            -1,
+        )
+        self._clear_nav_pointer_highlight()
+        self.nav.blockSignals(True)
+        try:
+            if target >= 0:
+                self.nav.setCurrentRow(
+                    target,
+                    QItemSelectionModel.SelectionFlag.ClearAndSelect,
+                )
+            else:
+                self.nav.clearSelection()
+                self.nav.setCurrentRow(-1)
+        finally:
+            self.nav.blockSignals(False)
+
     def _refresh_sidebar_tree(self) -> None:
         self.nav.blockSignals(True)
         self.nav.clear()
@@ -468,12 +538,10 @@ class WorkbenchInterface(QWidget):
         tree_data = self.workbench_model.build_sidebar_tree(model_name)
         search_kw = self.search_edit.text().lower().strip()
 
-        def _add_entry(text: str, kind: str, key: str, selected: bool) -> None:
+        def _add_entry(text: str, kind: str, key: str) -> None:
             item = QListWidgetItem(text)
             self.nav.addItem(item)
             self._nav_entries.append((kind, key))
-            if selected:
-                self.nav.setCurrentItem(item)
 
         def _add_section(text: str) -> None:
             item = QListWidgetItem(text)
@@ -481,34 +549,25 @@ class WorkbenchInterface(QWidget):
             self.nav.addItem(item)
             self._nav_entries.append(("section", ""))
 
-        sel = self.current_selection
-        _add_entry("全部程序与模块", "all", "", sel.node_type == "all")
+        _add_entry("全部程序与模块", "all", "")
 
         if tree_data["common"]:
             _add_section("── 通用模块 ──")
             for fw_label, count in tree_data["common"].items():
                 if search_kw and search_kw not in fw_label.lower():
                     continue
-                _add_entry(
-                    f"{fw_label} ({count})",
-                    "common_type",
-                    fw_label,
-                    sel.node_type == "common_type" and sel.common_type == fw_label,
-                )
+                _add_entry(f"{fw_label} ({count})", "common_type", fw_label)
 
         if tree_data["custom"]:
             _add_section("── 定制方案 ──")
             for scheme in tree_data["custom"]:
                 if search_kw and search_kw not in scheme.lower():
                     continue
-                _add_entry(
-                    f"◆ {scheme}",
-                    "custom_scheme",
-                    scheme,
-                    sel.node_type == "custom_scheme" and sel.scheme_name == scheme,
-                )
+                _add_entry(f"◆ {scheme}", "custom_scheme", scheme)
 
         self.nav.blockSignals(False)
+        # 重建后按逻辑选中项高亮（勿保留点击时的旧行号）
+        self._apply_nav_selection_highlight()
 
     def _on_nav_changed(self, row: int) -> None:
         if not (0 <= row < len(self._nav_entries)):
@@ -524,6 +583,14 @@ class WorkbenchInterface(QWidget):
         elif kind == "custom_scheme":
             self.current_selection.node_type = "custom_scheme"
             self.current_selection.scheme_name = key
+            # Issue 19-A：进入方案默认满树，清掉全局搜索残留（避免「以色列」滤成只剩手控）。
+            # 必须同步重建侧栏：blockSignals 清搜索不会触发 debounce，否则侧栏
+            # 仍按旧关键词过滤，其它定制方案会「消失」。重建后按 scheme 重定位高亮。
+            if self.search_edit.text().strip():
+                self.search_edit.blockSignals(True)
+                self.search_edit.clear()
+                self.search_edit.blockSignals(False)
+                self._refresh_sidebar_tree()
         self._refresh_main_grid()
 
     # ------------------------------------------------------------------ 搜索

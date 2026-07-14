@@ -202,6 +202,26 @@ def test_workbench_scan_task_mutual_exclusion_contract() -> None:
     assert "is_scanning" in _method_body(qt, "_run_task")
 
 
+def test_select_custom_scheme_clears_search_contract() -> None:
+    """Issue 19-A：进入定制方案须清空搜索并重建侧栏，避免其它方案「消失」。"""
+    from pathlib import Path
+
+    ctk = Path("src/fwasset/ui/workbench_panel.py").read_text(encoding="utf-8")
+    body = _method_body(ctk, "_select_custom_scheme")
+    assert "search_var" in body and 'set("")' in body.replace(" ", "")
+    assert "_refresh_sidebar_tree" in body
+
+    qt = Path("src/fwasset/ui_qt/workbench_window.py").read_text(encoding="utf-8")
+    # _on_nav_changed 内 custom_scheme 分支
+    nav = _method_body(qt, "_on_nav_changed")
+    assert "custom_scheme" in nav
+    assert "search_edit.clear" in nav or "clear()" in nav
+    assert "_refresh_sidebar_tree" in nav
+    # 重建后按逻辑选中重定位高亮，不能依赖旧 currentRow
+    assert "_apply_nav_selection_highlight" in qt
+    assert "setCurrentRow" in _method_body(qt, "_apply_nav_selection_highlight")
+
+
 def test_base_panel_and_qt_log_service_result_ok() -> None:
     """任务完成路径须按 ServiceResult.ok 区分完成/失败。"""
     from pathlib import Path

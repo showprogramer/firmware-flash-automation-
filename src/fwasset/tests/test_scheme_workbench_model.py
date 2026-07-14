@@ -645,6 +645,76 @@ def test_scheme_module_tree_marks_common_assets_as_common_default(cached_model) 
         )
 
 
+def test_all_modules_ownership_label_includes_scheme_name(l36_tree: Path, tmp_path: Path) -> None:
+    """Issue 20-A：全部视图归属为「通用默认」或「定制专属 · 方案名」。"""
+    model = _bind_model(l36_tree, tmp_path)
+    cards = model.get_all_modules("L36")
+    assert cards
+    for c in cards:
+        assert "回源" not in c.source_label
+        if c.source_kind == "common":
+            assert c.source_label == "通用默认"
+        else:
+            scheme = str(c.asset.get("scheme_name", "")).strip()
+            if scheme:
+                assert c.source_label == f"定制专属 · {scheme}"
+            else:
+                assert c.source_label == "定制专属"
+
+
+def test_scheme_modules_never_expose_huanyuan_in_card_label(l36_tree: Path, tmp_path: Path) -> None:
+    """Issue 6：get_scheme_modules 卡片层也不得出现「回源」。"""
+    model = _bind_model(l36_tree, tmp_path)
+    cards = model.get_scheme_modules("L36", "西班牙")
+    assert cards
+    for c in cards:
+        assert "回源" not in c.source_label
+        if c.is_fallback:
+            assert c.source_label == "通用默认"
+        else:
+            assert c.source_label == "定制专属"
+
+
+def test_scheme_modules_empty_keyword_returns_full_tree(l36_tree: Path, tmp_path: Path) -> None:
+    """Issue 19-A：无 keyword 时方案满树（定制 + 回源），不因路径名关键字而缩水。"""
+    model = _bind_model(l36_tree, tmp_path)
+    full = model.get_scheme_modules("L36", "西班牙")
+    labels = {str(c.asset.get("firmware_label", "")) for c in full}
+    assert "主板程序" in labels
+    # 西班牙缺 3D → 回源
+    assert "3D机芯板程序" in labels
+
+
+def test_scheme_modules_keyword_uses_tokenized_multi_field_filter(
+    l36_tree: Path, tmp_path: Path
+) -> None:
+    """Issue 7/19：方案内 keyword 走分词多字段，不是仅 label/directory 整串。"""
+    model = _bind_model(l36_tree, tmp_path)
+    # 单 token 类型名应能命中
+    by_type = model.get_scheme_modules("L36", "西班牙", keyword="主板")
+    assert by_type
+    assert all("主板" in str(c.asset.get("firmware_label", "")) for c in by_type)
+
+    # 残留「以色列」类方案名词不应只靠文件名；西班牙方案无「以色列」→ 空
+    residual = model.get_scheme_modules("L36", "西班牙", keyword="以色列")
+    assert residual == []
+
+    # 空串 = 满树
+    assert len(model.get_scheme_modules("L36", "西班牙", keyword="")) >= len(by_type)
+
+
+def test_scheme_keyword_does_not_fake_fallback_for_filtered_custom(
+    l36_tree: Path, tmp_path: Path
+) -> None:
+    """搜仅命中回源模块的词时，不得把已有定制主板当「未覆盖」再回源一份。"""
+    model = _bind_model(l36_tree, tmp_path)
+    # 用足够长的类型标签，避免路径里偶然出现的短 token「3D」
+    cards = model.get_scheme_modules("L36", "西班牙", keyword="3D机芯板")
+    mainboards = [c for c in cards if c.asset.get("firmware_label") == "主板程序"]
+    assert mainboards == [], "filtered-out custom mainboard must not reappear as fallback"
+    assert any(c.asset.get("firmware_label") == "3D机芯板程序" for c in cards)
+
+
 def test_unbound_model_falls_back_to_query_assets(monkeypatch: pytest.MonkeyPatch) -> None:
     """If someone calls a view method before bind() (or with an empty cache),
     the model must still work by going to the DB. This protects against the

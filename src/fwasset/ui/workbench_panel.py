@@ -483,6 +483,12 @@ class WorkbenchPanel(BaseFlashPanel):
     def _select_custom_scheme(self, scheme_name: str):
         self.current_selection.node_type = "custom_scheme"
         self.current_selection.scheme_name = scheme_name
+        # Issue 19-A：进入方案默认满树，清掉全局搜索残留，并重建侧栏
+        # （否则其它方案仍被旧关键词滤掉；重建后按 scheme_name 重绘高亮按钮）。
+        if self.search_var.get().strip():
+            self.search_var.set("")
+        # 始终重建侧栏，保证「马来西亚」高亮在满列表中的正确位置
+        self._refresh_sidebar_tree()
         self._refresh_main_grid()
 
     def _refresh_main_grid(self):
@@ -510,8 +516,8 @@ class WorkbenchPanel(BaseFlashPanel):
         elif node_type == "custom_scheme":
             scheme_name = self.current_selection.scheme_name
             self.header_title.configure(text=f"定制方案: {scheme_name}")
-            self.header_badge.configure(text="整机七程序")
-            # 定制方案走"整机七程序固定层级"可展开树（多变体收在模块行下）
+            self.header_badge.configure(text="整机模块")
+            # 定制方案走整机模块固定层级可展开树（多变体收在模块行下）
             rows = self.workbench_model.get_scheme_module_tree(model_name, scheme_name, search_kw)
             self.grid_panel.populate_tree(rows)
             self._on_grid_selection_changed(None)

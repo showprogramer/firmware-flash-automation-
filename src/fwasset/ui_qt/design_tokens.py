@@ -24,4 +24,5 @@ LOG_TEXT_HEIGHT = 140
 # --- DataGrid ---
 GRID_BORDER_RADIUS = 8
 # 列宽：程序类型 / 程序名称 / 版本 / 程序归属（程序文件列自动伸展）
-GRID_COL_WIDTHS = (190, 250, 92, 118)
+# 归属列需容纳「定制专属 · {方案名}」（Issue 20-A），118px 会截断不可读
+GRID_COL_WIDTHS = (170, 220, 80, 200)

@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### fix(ui): 方案树满树 + 全部视图名称/归属可辨认（Issue 19–20）
+
+- **Issue 19-A**：点定制方案时清空顶部搜索，默认展示完整整机树（定制专属 + 通用默认回源），避免残留词把方案滤成空白/只剩手控。
+- **方案内搜索**：`get_scheme_modules` 与 `_filter_assets` 统一空格分词多字段；覆盖判定用完整定制集，防止 keyword 误回源。
+- **Issue 20-A**：全部视图程序名称始终用变体目录名；程序归属为 `通用默认` 或 `定制专属 · {方案名}`。
+- **Issue 6**：卡片层禁止「回源」字样。CTk 方案头徽章统一为「整机模块」。
+
+- **侧栏高亮**：过滤态点方案后重建完整侧栏时，按方案名重定位；清除 QFluent pressed/hover 伪高亮（`singleShot` finalize）。
+
+验证:
+- `uv run python -m pytest src/fwasset/tests/test_scheme_workbench_model.py src/fwasset/tests/test_workbench_panel_helpers.py src/fwasset/tests/test_data_grid_panel.py src/fwasset/tests/test_qt_smoke.py -q --no-cov` → **83 passed**
+- 用户人工验证通过
+
 ### fix(core,ui): 扫描/任务并发与结果契约（审查 Issue 2–5）
 
 - **缓存加载**：`build_cached_scan_result` 宽捕获所有异常 → `index_unavailable`，启动锁库不再裸抛。

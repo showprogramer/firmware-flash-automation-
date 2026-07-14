@@ -66,8 +66,8 @@ def test_populate_tree_empty_is_noop(qapp) -> None:
     assert grid.get_selected_variant() is None
 
 
-def test_single_variant_collapses_with_default_text_and_badge(qapp) -> None:
-    """单变体折叠为一行；变体名 == 模块名时显示「默认」；徽章拼接在程序名称列。"""
+def test_single_variant_collapses_with_directory_name_and_badge(qapp) -> None:
+    """单变体折叠为一行；程序名称始终用目录名（Issue 20-A）；徽章拼在名称列。"""
     row = ModuleRow(
         label="主板程序",
         source_kind="common",
@@ -81,7 +81,7 @@ def test_single_variant_collapses_with_default_text_and_badge(qapp) -> None:
     item = grid.tree.topLevelItem(0)
     assert item.childCount() == 0
     assert item.text(0) == "主板程序"
-    assert item.text(1) == "默认  ★默认"
+    assert item.text(1) == "主板程序  ★默认"
     assert item.text(3) == "通用默认"
     assert "回源" not in item.text(3)
 
@@ -204,6 +204,92 @@ def test_model_switch_is_debounced_and_prefix_safe(qapp) -> None:
     # 防呆兜底：_on_model_changed 直接收到假型号也不切
     w._on_model_changed("L5")
     assert w.current_selection.model_name == "L36双机芯-上3D-下2D"
+
+
+def test_sidebar_rebuild_clears_stale_pressed_and_hover_rows(qapp) -> None:
+    """搜索结果展开为完整侧栏后，旧点击位置不得保留伪高亮。"""
+    from PySide6.QtWidgets import QListWidgetItem
+
+    from fwasset.ui_qt.workbench_window import WorkbenchInterface
+
+    w = WorkbenchInterface()
+    w.current_selection.node_type = "custom_scheme"
+    w.current_selection.scheme_name = "马来西亚"
+    w._nav_entries = [
+        ("all", ""),
+        ("section", ""),
+        ("common_type", "主板程序"),
+        ("common_type", "语音程序"),
+        ("section", ""),
+        ("custom_scheme", "德国"),
+        ("custom_scheme", "马来西亚"),
+        ("custom_scheme", "西班牙"),
+    ]
+    for i in range(len(w._nav_entries)):
+        w.nav.addItem(QListWidgetItem(str(i)))
+
+    # 搜索态点击时「马来西亚」位于第 2 行；恢复完整侧栏后它移动到第 6 行。
+    w.nav.delegate.setPressedRow(2)
+    w.nav.delegate.setHoverRow(2)
+
+    w._apply_nav_selection_highlight()
+
+    assert w.nav.currentRow() == 6
+    assert w.nav.delegate.selectedRows == {6}
+    assert w.nav.delegate.pressedRow == -1
+    assert w.nav.delegate.hoverRow == -1
+
+def test_click_filtered_scheme_reselects_its_new_row_after_sidebar_rebuild(qapp) -> None:
+    """真实鼠标点击返回后，delegate 选中集合必须跟随方案的新行号。"""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    from fwasset.ui.view_models.scheme_workbench_model import WorkbenchSelection
+    from fwasset.ui_qt.workbench_window import WorkbenchInterface
+
+    w = WorkbenchInterface()
+    w._search_timer.stop()
+    w._model_switch_timer.stop()
+    w._refresh_main_grid = lambda: None  # type: ignore[method-assign]
+    w.workbench_model.build_sidebar_tree = lambda _model: {  # type: ignore[method-assign]
+        "common": {"主板程序": 2, "手控UI": 3, "语音程序": 1},
+        "custom": ["德国", "马来西亚", "美国", "西班牙"],
+    }
+    w.current_selection = WorkbenchSelection(model_name="L36", node_type="all")
+    w.search_edit.blockSignals(True)
+    w.search_edit.setText("马来西亚")
+    w.search_edit.blockSignals(False)
+    w._refresh_sidebar_tree()
+    w.resize(1200, 800)
+    w.show()
+    qapp.processEvents()
+
+    old_row = next(
+        i for i, entry in enumerate(w._nav_entries)
+        if entry == ("custom_scheme", "马来西亚")
+    )
+    old_item = w.nav.item(old_row)
+    click_pos = w.nav.visualItemRect(old_item).center()
+
+    QTest.mouseClick(
+        w.nav.viewport(),
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+        click_pos,
+    )
+    qapp.processEvents()
+
+    target_row = next(
+        i for i, entry in enumerate(w._nav_entries)
+        if entry == ("custom_scheme", "马来西亚")
+    )
+    selected_rows = {index.row() for index in w.nav.selectedIndexes()}
+
+    assert target_row != old_row
+    assert w.nav.currentRow() == target_row
+    assert selected_rows == {target_row}
+    assert w.nav.delegate.selectedRows == {target_row}
+    assert w.nav.currentItem().text() == "◆ 马来西亚"
 
 
 # ---------------------------------------------------------------------------

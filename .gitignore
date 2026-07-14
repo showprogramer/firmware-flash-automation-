@@ -3,6 +3,8 @@ massagechairproject.md
 specs/project-overview.md
 specs/archive/
 specs/ui-reactor/new_uigemini.py
+# 临时沟通用提示词草稿（可本地编辑，不进版本库）
+specs/prompts/
 config.toml
 fwasset.db
 .runtime/

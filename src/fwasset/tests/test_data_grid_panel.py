@@ -34,13 +34,21 @@ def tk_root():
         root.destroy()
 
 
-def _variant(path: str, name: str, version: str, kind: str) -> ModuleVariant:
+def _variant(
+    path: str,
+    name: str,
+    version: str,
+    kind: str,
+    source_label: str | None = None,
+) -> ModuleVariant:
     return ModuleVariant(
         asset={"path": path, "directory_name": name, "version": version, "flash_mode": "auto_usb"},
         name=name,
         version=version,
         source_kind=kind,
-        source_label="定制专属" if kind == "custom" else "通用默认",
+        source_label=source_label
+        if source_label is not None
+        else ("定制专属" if kind == "custom" else "通用默认"),
     )
 
 
@@ -145,33 +153,40 @@ def test_single_variant_module_is_a_leaf_row(panel):
 
 
 @pytest.mark.ui
-def test_single_variant_name_uses_default_when_equal_to_program_type(panel):
-    """程序名只在 == 程序类型名时显示「默认」（消除 `主板程序/主板程序` 重复）；
-    若变体名有区分信息（如 `主板程序-减少灯光`）则照常显示，否则看不出是哪一份。"""
+def test_single_variant_name_always_shows_directory_name(panel):
+    """Issue 20-A：程序名称始终用变体目录名，不再压成「默认」；
+    同类型靠目录名 + 归属列（定制专属 · 方案）区分。"""
     rows = [
-        # 程序名 == 程序类型 → 显示默认（真重复）
         ModuleRow(
             label="主板程序",
             source_kind="custom",
-            source_label="定制专属",
-            variants=[_variant("/p/mb", "主板程序", "V40", "custom")],
+            source_label="定制专属 · 马来西亚",
+            variants=[
+                _variant(
+                    "/p/mb",
+                    "主板程序",
+                    "V40",
+                    "custom",
+                    source_label="定制专属 · 马来西亚",
+                )
+            ],
         ),
-        # 程序名 ≠ 程序类型 → 照常显示（有用的区分信息）
         ModuleRow(
-            label="主板程序",  # 用相同 label 测分支，但实际是另一行；改用不同 label 避免 iid 撞
+            label="主板程序-变体",
             source_kind="custom",
             source_label="定制专属",
             variants=[_variant("/p/mb2", "主板程序-减少灯光", "V41", "custom")],
         ),
     ]
-    # 两行 label 相同会撞 iid，单独各测一次更干净
     panel.populate_tree([rows[0]])
     top = panel.tree.get_children("")[0]
-    assert panel.tree.item(top, "values")[0] == "默认"  # 重复名 → 默认
+    vals = panel.tree.item(top, "values")
+    assert vals[0] == "主板程序"
+    assert vals[2] == "定制专属 · 马来西亚"
 
     panel.populate_tree([rows[1]])
     top = panel.tree.get_children("")[0]
-    assert panel.tree.item(top, "values")[0] == "主板程序-减少灯光"  # 有区分信息 → 显示
+    assert panel.tree.item(top, "values")[0] == "主板程序-减少灯光"
 
 
 @pytest.mark.ui
@@ -242,7 +257,7 @@ def test_table_headings_align_with_column_content(panel):
     assert str(panel.tree.heading("variant", "anchor")) == str(panel.tree.column("variant", "anchor")) == "w"
     assert str(panel.tree.heading("program", "anchor")) == str(panel.tree.column("program", "anchor")) == "w"
     assert str(panel.tree.heading("version", "anchor")) == str(panel.tree.column("version", "anchor")) == "center"
-    assert str(panel.tree.heading("source", "anchor")) == str(panel.tree.column("source", "anchor")) == "center"
+    assert str(panel.tree.heading("source", "anchor")) == str(panel.tree.column("source", "anchor")) == "w"  # 长归属左对齐
 
 
 @pytest.mark.ui

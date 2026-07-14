@@ -162,6 +162,35 @@ class SchemeWorkbenchModel:
             if model and mdp and model not in self._model_root_paths:
                 self._model_root_paths[model] = mdp
 
+    # 与 query_assets / _filter_assets 共用的跨字段分词搜索字段
+    _KEYWORD_FIELDS = (
+        "series",
+        "model",
+        "version",
+        "firmware_label",
+        "directory_name",
+        "model_directory_name",
+        "path",
+        "flash_mode",
+        "scheme_name",
+        "platform",
+    )
+
+    def _asset_matches_keyword(self, asset: FirmwareAsset, keyword: str) -> bool:
+        """空格分词 AND：每个 token 在 _KEYWORD_FIELDS 任一字段命中（OR）。"""
+        tokens = keyword.split() if keyword else []
+        if not tokens:
+            return True
+        for token in tokens:
+            needle = token.lower()
+            hit = any(
+                needle in str(asset.get(field, "")).lower()
+                for field in self._KEYWORD_FIELDS
+            )
+            if not hit:
+                return False
+        return True
+
     def _filter_assets(
         self,
         *,
@@ -185,22 +214,6 @@ class SchemeWorkbenchModel:
         out: list[FirmwareAsset] = []
         # scheme_name uses a substring LIKE in query_assets; mirror that.
         scheme_needle = scheme_name.strip().lower() if scheme_name else ""
-        # Tokenize the keyword exactly as query_assets does: whitespace split,
-        # every token must hit at least one of the 10 keyword fields (OR),
-        # all tokens must hit (AND). Empty keyword = no filter.
-        tokens = keyword.split() if keyword else []
-        keyword_fields = (
-            "series",
-            "model",
-            "version",
-            "firmware_label",
-            "directory_name",
-            "model_directory_name",
-            "path",
-            "flash_mode",
-            "scheme_name",
-            "platform",
-        )
         for a in self._all_assets:
             if category and str(a.get("category", "")) != category:
                 continue
@@ -208,19 +221,8 @@ class SchemeWorkbenchModel:
                 sn = str(a.get("scheme_name", "")).lower()
                 if scheme_needle not in sn:
                     continue
-            if tokens:
-                keep = True
-                for token in tokens:
-                    needle = token.lower()
-                    hit = any(
-                        needle in str(a.get(field, "")).lower()
-                        for field in keyword_fields
-                    )
-                    if not hit:
-                        keep = False
-                        break
-                if not keep:
-                    continue
+            if not self._asset_matches_keyword(a, keyword):
+                continue
             out.append(a)
         return out
 
@@ -522,7 +524,8 @@ class SchemeWorkbenchModel:
             is_default = "_默认" in dir_name
 
             source_type = "common_default" if is_default else "common_variant"
-            source_label = f"通用/{dir_name}" + (" (默认)" if is_default else "")
+            # 用户可见归属：仅「通用默认」（禁内部路径/回源字样）
+            source_label = "通用默认"
 
             results.append(ModuleCardData(
                 asset=a,
@@ -536,17 +539,25 @@ class SchemeWorkbenchModel:
         return results
 
     def get_scheme_modules(self, model_name: str, scheme_name: str, keyword: str = "") -> list[ModuleCardData]:
-        """点击定制方案时，返回完整模块清单（含回源）"""
-        # 1. 查找属于这个方案的定制模块
-        custom_assets = self._filter_assets(category="custom", scheme_name=scheme_name)
-        # 如果方案被关键字过滤掉了，说明用户正在搜索，我们需要让全局过滤生效
-        if keyword:
-            custom_assets = [a for a in custom_assets if keyword.lower() in str(a.get("label", "")).lower() or keyword.lower() in str(a.get("directory_name", "")).lower()]
+        """点击定制方案时，返回完整模块清单（含回源）。
 
-        # 获取方案所属的平台名
+        keyword 过滤与 ``_filter_assets`` / ``query_assets`` 一致（空格分词 + 多字段）。
+        UI 层进入方案时应清空搜索框，使默认展示满树（Issue 19-A）。
+        """
+        # 1. 本方案定制模块（keyword 走统一分词，不再只扫 label/directory_name）
+        custom_assets = self._filter_assets(
+            category="custom",
+            scheme_name=scheme_name,
+            keyword=keyword,
+        )
+        # 回源覆盖判定必须基于「未按 keyword 缩小」的完整方案定制集，
+        # 否则搜「手控」时会把未命中的主板当成「未覆盖」而错误回源一份通用主板。
+        all_scheme_custom = self._filter_assets(category="custom", scheme_name=scheme_name)
+
+        # 获取方案所属的平台名（用完整定制集，避免 keyword 漏掉带 platform 的资产）
         platform_name = ""
         model_root = self._get_model_root(model_name)
-        for a in custom_assets:
+        for a in all_scheme_custom:
             if a.get("platform"):
                 platform_name = str(a.get("platform", ""))
                 break
@@ -556,13 +567,13 @@ class SchemeWorkbenchModel:
         # 它来自固件目录本身；而 firmware_label 来自 catalog，二者可能有用字差异
         # （例如目录"3D机芯版程序"vs catalog"3D机芯板程序"，版/板不同）。
         # 因此覆盖判定用 _module_matches：标签相等或键命中资产路径任一段即视为覆盖。
-        covered_assets = list(custom_assets)
+        covered_assets = list(all_scheme_custom)
 
         for a in custom_assets:
             results.append(ModuleCardData(
                 asset=a,
                 source_type="custom_exclusive",
-                source_label=f"定制/{scheme_name} (专属)",
+                source_label="定制专属",
                 is_fallback=False,
                 source_kind="custom",
             ))
@@ -601,19 +612,19 @@ class SchemeWorkbenchModel:
                             break
 
                     if fallback_asset:
-                        # 应用关键字过滤
-                        if keyword and keyword.lower() not in str(fallback_asset.get("label", "")).lower() and keyword.lower() not in str(fallback_asset.get("directory_name", "")).lower():
+                        if not self._asset_matches_keyword(fallback_asset, keyword):
                             continue
 
                         # 加入覆盖集，避免同一模块（含别名平台）重复回源
                         covered_assets.append(fallback_asset)
-                        src_dir = default_dir or str(fallback_asset.get("directory_name", ""))
                         results.append(ModuleCardData(
                             asset=fallback_asset,
                             source_type="common_fallback",
-                            source_label=f"通用/{src_dir} (回源)",
+                            # 用户可见：仅「通用默认」，禁止「回源」字样（Issue 6）
+                            source_label="通用默认",
                             is_fallback=True,
                             source_kind="common",
+                            default_badge=self.default_badge(fallback_asset),
                         ))
 
         return results
@@ -639,12 +650,17 @@ class SchemeWorkbenchModel:
             # source_kind is set by the producer (get_scheme_modules etc.). Fall
             # back to the legacy is_fallback inference for safety.
             kind = c.source_kind or ("common" if c.is_fallback else "custom")
+            # 卡片层 source_label 已是用户文案；树行仍统一 定制专属/通用默认
+            display = c.source_label if c.source_label and "回源" not in c.source_label else (
+                "通用默认" if kind == "common" else "定制专属"
+            )
             variant = ModuleVariant(
                 asset=c.asset,
                 name=str(c.asset.get("directory_name", "")),
                 version=str(c.asset.get("version", "")),
                 source_kind=kind,
-                source_label="通用默认" if kind == "common" else "定制专属",
+                source_label=display,
+                default_badge=c.default_badge,
             )
             grouped.setdefault(label, []).append(variant)
 
@@ -666,7 +682,11 @@ class SchemeWorkbenchModel:
         return rows
 
     def get_all_modules(self, model_name: str, keyword: str = "") -> list[ModuleCardData]:
-        """获取指定型号下的所有模块（不回源，仅展示物理存在的模块）"""
+        """获取指定型号下的所有模块（不回源，仅展示物理存在的模块）。
+
+        归属文案（Issue 20-A）：``通用默认`` 或 ``定制专属 · {scheme_name}``。
+        程序名称由 UI 使用 ``directory_name`` 展示，本方法不折叠。
+        """
         assets = self._filter_assets(keyword=keyword)
         results: list[ModuleCardData] = []
         for a in assets:
@@ -674,19 +694,19 @@ class SchemeWorkbenchModel:
                 continue
             cat = str(a.get("category", ""))
             dir_name = str(a.get("directory_name", ""))
-            
+
             if cat == "common":
                 is_default = "_默认" in dir_name
                 source_type = "common_default" if is_default else "common_variant"
-                source_label = f"通用/{dir_name}" + (" (默认)" if is_default else "")
+                source_label = "通用默认"
             elif cat == "custom":
-                scheme = str(a.get("scheme_name", ""))
+                scheme = str(a.get("scheme_name", "")).strip()
                 source_type = "custom_exclusive"
-                source_label = f"定制/{scheme}" if scheme else "定制专属"
+                source_label = f"定制专属 · {scheme}" if scheme else "定制专属"
             else:
                 source_type = "unknown"
                 source_label = "未知来源"
-                
+
             results.append(ModuleCardData(
                 asset=a,
                 source_type=source_type,

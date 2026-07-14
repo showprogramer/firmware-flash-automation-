@@ -64,14 +64,15 @@ class DataGridPanel(ctk.CTkFrame):
         self.tree.heading("#0", text="程序类型", anchor="w")
         self.tree.heading("variant", text="程序名称", anchor="w")
         self.tree.heading("version", text="版本", anchor="center")
-        self.tree.heading("source", text="程序归属", anchor="center")
+        self.tree.heading("source", text="程序归属", anchor="w")
         self.tree.heading("program", text="程序文件", anchor="w")
 
-        self.tree.column("#0", width=190, minwidth=150)
-        self.tree.column("variant", width=230, minwidth=160)
-        self.tree.column("version", width=92, minwidth=72, anchor="center")
-        self.tree.column("source", width=128, minwidth=104, anchor="center")
-        self.tree.column("program", width=310, minwidth=180)
+        # 归属列加宽以显示「定制专属 · 方案名」（Issue 20-A）
+        self.tree.column("#0", width=170, minwidth=130)
+        self.tree.column("variant", width=210, minwidth=150)
+        self.tree.column("version", width=80, minwidth=64, anchor="center")
+        self.tree.column("source", width=200, minwidth=160, anchor="w")
+        self.tree.column("program", width=260, minwidth=140)
 
         self._configure_tags()
 
@@ -118,13 +119,13 @@ class DataGridPanel(ctk.CTkFrame):
         for row_index, row in enumerate(rows):
             mod_iid = f"{self._MOD_PREFIX}{row.label}"
 
-            # 单变体模块：折叠成一行叶子。版本/归属/程序文件直接落在模块行上；
-            # 程序名仅在 == 程序类型名时显示「默认」（消除 `主板程序/主板程序` 真重复），
-            # 若变体名有区分信息（如 `主板程序-减少灯光`）则照常显示，否则看不出是哪一份。
+            # 单变体模块：折叠成一行叶子。版本/归属/程序文件直接落在模块行上。
+            # Issue 20-A：程序名称始终用变体目录名（directory_name），不再压成「默认」；
+            # 同类型多条靠目录名 + 归属列（定制专属 · 方案）区分。
             if len(row.variants) == 1:
                 variant = row.variants[0]
                 asset = variant.asset
-                variant_text = "默认" if variant.name == row.label else variant.name
+                variant_text = variant.name or "默认"
                 if variant.default_badge:
                     variant_text = f"{variant_text}  {variant.default_badge}"
                 self.tree.insert(
@@ -187,7 +188,12 @@ class DataGridPanel(ctk.CTkFrame):
             # Prefer the explicit source_kind set by the model layer.
             # Fall back to is_fallback only for legacy callers that omit it.
             kind = data.source_kind if data.source_kind else ("common" if data.is_fallback else "custom")
-            source_label = "通用默认" if kind == "common" else "定制专属"
+            # Issue 20-A：保留 model 给出的归属文案（如「定制专属 · 马来西亚」）
+            raw = (data.source_label or "").strip()
+            if raw and "回源" not in raw:
+                source_label = raw
+            else:
+                source_label = "通用默认" if kind == "common" else "定制专属"
             variant = ModuleVariant(
                 asset=asset,
                 name=str(asset.get("directory_name", "")),
