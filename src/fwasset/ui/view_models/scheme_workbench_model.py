@@ -5,8 +5,10 @@ from pathlib import Path
 
 from fwasset.core.asset_index import query_assets
 from fwasset.core.platform_config import load_platform_config, default_variant_for, PlatformDefaults
+from fwasset.core.scheme_config import discover_schemes
 from fwasset.core.services.platform_default_service import (
-    set_default_variant as _set_default_variant_service,
+    canonical_module_dir,
+    set_module_default_for_model as _set_module_default_for_model,
 )
 from fwasset.core.types import FirmwareAsset
 
@@ -22,16 +24,20 @@ def _strip_model_suffix(name: str) -> str:
 def _module_matches(asset: FirmwareAsset, module_key: str) -> bool:
     """判断资产是否属于平台配置里的某个模块键。
 
-    平台配置.toml 的 defaults 键是"模块目录名"（来自固件目录，如 主板程序 /
-    3D机芯版程序），而 asset 的 firmware_label 来自 catalog，可能有用字差异
-    （版/板）。因此除标签相等外，再检查 module_key 是否命中资产路径任一段。
+    规范名统一为「机芯板」（catalog）；磁盘/toml 历史笔误「机芯版」仍可读。
+    除标签/规范名相等外，检查 module_key 或规范名是否命中路径任一段。
     """
     key = str(module_key or "").strip()
     if not key:
         return False
-    if str(asset.get("firmware_label", "")) == key:
+    canon = canonical_module_dir(key)
+    label = str(asset.get("firmware_label", "")).strip()
+    if label == key or label == canon or canonical_module_dir(label) == canon:
         return True
-    return key in Path(str(asset.get("path", ""))).parts
+    parts = Path(str(asset.get("path", ""))).parts
+    if key in parts or canon in parts:
+        return True
+    return any(canonical_module_dir(p) == canon for p in parts)
 
 
 @dataclass
@@ -337,6 +343,27 @@ class SchemeWorkbenchModel:
                 out.append(a)
         return out
 
+    def _module_key_for_asset(self, asset: FirmwareAsset) -> str:
+        """模块键：catalog label 优先，否则路径段；并归一机芯板。"""
+        label = str(asset.get("firmware_label", "")).strip()
+        if label:
+            return canonical_module_dir(label)
+        module_dir, _ = self._common_module_parts(asset)
+        return canonical_module_dir(module_dir)
+
+    def _module_has_defaults_key(
+        self, platforms: list[PlatformDefaults], module_key: str
+    ) -> bool:
+        """任一配置块是否已有该模块（含版/板同义）的 defaults 键。"""
+        canon = canonical_module_dir(module_key)
+        if not canon:
+            return False
+        for p in platforms:
+            for key in p.defaults:
+                if canonical_module_dir(key) == canon:
+                    return True
+        return False
+
     def default_platforms_for(self, asset: FirmwareAsset) -> list[str]:
         """返回把该通用变体配置为默认程序的平台名列表（只看资产所属型号的配置）。
 
@@ -345,6 +372,8 @@ class SchemeWorkbenchModel:
         - ``defaults[模块] = ""``：该模块**唯一**通用变体即默认（可嵌套在
           ``通用/语音程序/中文唯一版/``，不要求文件直接落在模块目录下）。
           若匹配该模块的通用资产不止一份，视为配置异常，不标默认。
+        - **A4 无键推断**：配置块存在但该模块无键、且通用区仅一份变体 → 视为
+          各块隐式默认（不猜多变体）。
         """
         if str(asset.get("category", "")) != "common":
             return []
@@ -353,8 +382,9 @@ class SchemeWorkbenchModel:
             return []
         model_name = self._model_of_asset(asset)
         asset_path = str(asset.get("path", ""))
+        platforms = self._platforms_for(model_name)
         names: list[str] = []
-        for p in self._platforms_for(model_name):
+        for p in platforms:
             for module_key, variant_name in p.defaults.items():
                 if not _module_matches(asset, module_key):
                     continue
@@ -367,16 +397,32 @@ class SchemeWorkbenchModel:
                 elif configured == dir_name:
                     names.append(p.platform_name)
                     break
-        return names
+        if names:
+            return names
+        # A4：无键且唯一变体 → 隐式默认（有配置块时标全部块名；无块时标空列表由徽章处理）
+        module_key = self._module_key_for_asset(asset)
+        if not module_key or self._module_has_defaults_key(platforms, module_key):
+            return []
+        peers = self._common_assets_matching_module(model_name, module_key)
+        if len(peers) == 1 and str(peers[0].get("path", "")) == asset_path:
+            if platforms:
+                return [p.platform_name for p in platforms]
+            return ["*"]
+        return []
 
     def default_badge(self, asset: FirmwareAsset) -> str:
         """默认徽章文案：该型号单平台只标 ★默认，多平台附上平台名。"""
         names = self.default_platforms_for(asset)
         if not names:
             return ""
-        if len(self._platforms_for(self._model_of_asset(asset))) <= 1:
+        platforms = self._platforms_for(self._model_of_asset(asset))
+        # A4 无配置块时的隐式唯一默认：只标 ★默认，不展示内部名
+        if not platforms or names == ["*"] or len(platforms) <= 1:
             return "★默认"
-        return "★默认·" + "/".join(names)
+        real = [n for n in names if n != "*"]
+        if len(real) <= 1:
+            return "★默认"
+        return "★默认·" + "/".join(real)
 
     def _platform_config_root(self, model_name: str) -> str:
         """平台配置.toml 的落盘目录。
@@ -403,36 +449,56 @@ class SchemeWorkbenchModel:
         return str(candidates[0]) if candidates else ""
 
     def set_default_variant(
-        self, model_name: str, platform_name: str, asset: FirmwareAsset, log_fn=print
+        self,
+        model_name: str,
+        asset: FirmwareAsset,
+        log_fn=print,
+        platform_name: str = "",  # 兼容旧调用；已忽略，默认按型号+模块写入全部配置块
     ) -> dict:
-        """把选中的通用变体设为指定平台的默认程序（写入 平台配置.toml）。
+        """把选中的通用变体设为该型号下该模块的默认版本（写入 平台配置.toml）。
 
-        成功后就地重载平台配置，回源与徽章立即生效——不需要重新扫描。
+        业务维度是「型号 + 模块」（如 L36 蓝牙），不是 toml 里的 name
+       （标准单机芯3D 等仅为方案回源分组）。成功后同步该型号根下所有
+        [[platform]] 的同名模块键，并就地重载配置。
         """
+        del platform_name  # 显式忽略：避免再按「平台」分叉写默认
         module_dir, variant_name = self._common_module_parts(asset)
         if not module_dir:
             return {
                 "ok": False,
                 "code": "invalid_args",
-                "message": "设置默认失败：该程序不在通用区，无法作为平台默认",
+                "message": "设置默认失败：该程序不在通用区，无法设为模块默认版本",
                 "payload": {},
             }
-        # 平台配置里可能已存在用字略有差异的模块键（如 版/板），沿用旧键，
-        # 避免同一模块出现两个 defaults 条目。
-        for p in self._platforms_for(model_name):
-            if p.platform_name != platform_name:
-                continue
-            for key in p.defaults:
-                if _module_matches(asset, key):
-                    module_dir = key
-                    break
-            break
-        result = _set_default_variant_service(
-            self._platform_config_root(model_name), platform_name, module_dir, variant_name, log_fn=log_fn
+        # 规范模块名：优先 catalog label（板），否则路径段归一「版」→「板」
+        label = str(asset.get("firmware_label", "")).strip()
+        module_dir = canonical_module_dir(label or module_dir)
+        result = _set_module_default_for_model(
+            self._platform_config_root(model_name),
+            module_dir,
+            variant_name,
+            log_fn=log_fn,
+            model_name=model_name,
         )
         if result["ok"]:
             self._load_platforms_for_all_models()
         return result
+
+    def is_model_module_default(self, asset: FirmwareAsset) -> bool:
+        """该通用变体是否已是本型号下该模块的默认（所有配置块一致指向它）。
+
+        仅依据已落盘的 ``平台配置.toml``（``_platforms_for``），不用资产上的
+        platform 字段冒充「已有配置」。无落盘配置时返回 False，以便 UI 仍可
+        点「设为默认」触发 A2 建文件（A4 隐式唯一默认只影响徽章/回源，不锁菜单）。
+        """
+        if str(asset.get("category", "")) != "common":
+            return False
+        model_name = self._model_of_asset(asset)
+        platforms = self._platforms_for(model_name)
+        if not platforms:
+            return False
+        current = set(self.default_platforms_for(asset))
+        return set(p.platform_name for p in platforms) <= current
 
     def _structural_model(self) -> str:
         """从扫描根目录名推导结构化型号（如 'L36程序' → 'L36'）。
@@ -586,19 +652,16 @@ class SchemeWorkbenchModel:
         # 否则搜「手控」时会把未命中的主板当成「未覆盖」而错误回源一份通用主板。
         all_scheme_custom = self._filter_assets(category="custom", scheme_name=scheme_name)
 
-        # 获取方案所属的平台名（用完整定制集，避免 keyword 漏掉带 platform 的资产）
-        platform_name = ""
         model_root = self._get_model_root(model_name)
-        for a in all_scheme_custom:
-            if a.get("platform"):
-                platform_name = str(a.get("platform", ""))
-                break
+        # 方案 platform：优先 方案配置.toml / discover_schemes；资产字段仅旧索引兼容回退
+        platform_name = self._resolve_scheme_platform(
+            model_name, scheme_name, all_scheme_custom
+        )
 
         results: list[ModuleCardData] = []
-        # 平台配置 defaults 的键是"模块目录名"（如 主板程序 / 3D机芯版程序），
-        # 它来自固件目录本身；而 firmware_label 来自 catalog，二者可能有用字差异
-        # （例如目录"3D机芯版程序"vs catalog"3D机芯板程序"，版/板不同）。
-        # 因此覆盖判定用 _module_matches：标签相等或键命中资产路径任一段即视为覆盖。
+        # 平台配置 defaults 的键是模块目录名（如 主板程序 / 3D机芯板程序）。
+        # 磁盘与历史 toml 可能误写「机芯版」；_module_matches 统一为「机芯板」再比对。
+        # 覆盖判定：标签/规范名相等，或键命中资产路径任一段。
         covered_assets = list(all_scheme_custom)
 
         for a in custom_assets:
@@ -611,55 +674,143 @@ class SchemeWorkbenchModel:
             ))
 
         # 2. 从 platform_config 中寻找缺失的通用模块（回源）
-        # 平台按型号隔离；如果不知道 platform，则从该型号所有平台找（退化处理）
+        # 平台按型号隔离；方案声明了 platform 则必须匹配配置块（A5）。
+        # 回源作用域 = 本型号根内通用 + 本型号默认/A4 推断；禁止跨型号静默补。
         model_platforms = self._platforms_for(model_name)
-        relevant_platforms = model_platforms
         if platform_name:
-            relevant_platforms = [p for p in model_platforms if p.platform_name == platform_name]
+            relevant_platforms = [
+                p for p in model_platforms if p.platform_name == platform_name
+            ]
+            # 方案声明了 platform 但 TOML 无对应块 → 通用回源失败（含禁止 A4）
+            if not relevant_platforms:
+                return results
+        else:
+            # 未声明 platform：退化用该型号全部配置块
+            relevant_platforms = model_platforms
 
-        if relevant_platforms and model_root:
+        if model_root:
             common_assets = self._filter_assets(category="common")
-            # 过滤出同型号的通用资产
             model_common = [a for a in common_assets if self._belongs_to_model(a, model_name)]
+
+            def _append_fallback(fallback_asset: FirmwareAsset) -> None:
+                if not self._asset_matches_keyword(fallback_asset, keyword):
+                    return
+                covered_assets.append(fallback_asset)
+                results.append(
+                    ModuleCardData(
+                        asset=fallback_asset,
+                        source_type="common_fallback",
+                        source_label="通用",
+                        is_fallback=True,
+                        source_kind="common",
+                        default_badge=self.default_badge(fallback_asset),
+                    )
+                )
+
+            def _pick_fallback(module_key: str, default_dir: str) -> FirmwareAsset | None:
+                """按 defaults 值选回源变体，与 default_platforms_for 契约一致。
+
+                - 非空：按 directory_name 精确匹配；
+                - 空串 ``""``：仅当该模块通用区**唯一**变体时返回，多变体视为配置异常不猜。
+                """
+                candidates = [ca for ca in model_common if _module_matches(ca, module_key)]
+                if not candidates:
+                    return None
+                if default_dir:
+                    for ca in candidates:
+                        if str(ca.get("directory_name", "")) == default_dir:
+                            return ca
+                    return None
+                if len(candidates) == 1:
+                    return candidates[0]
+                return None
 
             for p in relevant_platforms:
                 for module_key, default_dir in p.defaults.items():
-                    # 该模块已被定制方案提供（或已回源），无需重复
                     if any(_module_matches(a, module_key) for a in covered_assets):
                         continue
-
-                    # 找到对应的通用资产：
-                    # - default_dir 非空 → 在该模块下按变体目录名精确匹配（如 量产_默认）
-                    # - default_dir 为空 → 该模块在通用区唯一一份，按模块匹配
-                    fallback_asset = None
-                    for ca in model_common:
-                        if not _module_matches(ca, module_key):
-                            continue
-                        if default_dir:
-                            if str(ca.get("directory_name", "")) == default_dir:
-                                fallback_asset = ca
-                                break
-                        else:
-                            fallback_asset = ca
-                            break
-
+                    fallback_asset = _pick_fallback(module_key, str(default_dir or ""))
                     if fallback_asset:
-                        if not self._asset_matches_keyword(fallback_asset, keyword):
-                            continue
+                        _append_fallback(fallback_asset)
 
-                        # 加入覆盖集，避免同一模块（含别名平台）重复回源
-                        covered_assets.append(fallback_asset)
-                        results.append(ModuleCardData(
-                            asset=fallback_asset,
-                            source_type="common_fallback",
-                            # 用户可见：仅「通用」，禁止「回源」字样（Issue 6）
-                            source_label="通用",
-                            is_fallback=True,
-                            source_kind="common",
-                            default_badge=self.default_badge(fallback_asset),
-                        ))
+            # A4：配置无该模块键时，唯一通用变体可作回源。
+            # 注意：方案已声明 platform 且块匹配失败时已在上方 return，不会走到这里。
+            seen_module_keys: set[str] = set()
+            for ca in model_common:
+                mkey = self._module_key_for_asset(ca)
+                if not mkey or mkey in seen_module_keys:
+                    continue
+                seen_module_keys.add(mkey)
+                if any(_module_matches(a, mkey) for a in covered_assets):
+                    continue
+                if self._module_has_defaults_key(relevant_platforms, mkey):
+                    continue
+                peers = self._common_assets_matching_module(model_name, mkey)
+                if len(peers) == 1:
+                    _append_fallback(peers[0])
 
         return results
+
+    def _scheme_discovery_roots(self, model_name: str) -> list[Path]:
+        """用于 ``discover_schemes`` 的候选型号根（有序去重）。
+
+        ``_get_model_root`` 可能落在 ``通用/``（scanner 的 model_directory_path），
+        其下没有 ``定制/``，故还需扫描根、平台配置所在目录及其父级。
+        """
+        candidates: list[Path] = []
+        cfg = self._platform_config_root(model_name)
+        if cfg:
+            candidates.append(Path(cfg))
+        if not self._single_model_root and self.root_dir is not None:
+            dir_name = self._multi_model_dirs.get(model_name, "")
+            if dir_name:
+                candidates.append(self.root_dir / dir_name)
+        if self.root_dir is not None:
+            candidates.append(self.root_dir)
+        model_root = self._get_model_root(model_name)
+        if model_root:
+            p = Path(model_root)
+            candidates.append(p)
+            if p.name == "通用":
+                candidates.append(p.parent)
+        seen: set[str] = set()
+        out: list[Path] = []
+        for d in candidates:
+            try:
+                key = str(d.resolve()) if d.exists() else str(d)
+            except OSError:
+                key = str(d)
+            if key in seen:
+                continue
+            seen.add(key)
+            if d.is_dir():
+                out.append(d)
+        return out
+
+    def _resolve_scheme_platform(
+        self,
+        model_name: str,
+        scheme_name: str,
+        scheme_custom_assets: list[FirmwareAsset],
+    ) -> str:
+        """解析方案所属 platform 名。
+
+        优先 ``discover_schemes`` / 方案配置.toml（即使方案无任何定制固件资产）；
+        资产上的 ``platform`` 字段仅作旧索引兼容回退。
+        """
+        want = str(scheme_name or "").strip()
+        if want:
+            for root in self._scheme_discovery_roots(model_name):
+                for scheme in discover_schemes(root):
+                    if scheme.name == want or scheme.path.name == want:
+                        platform = str(scheme.platform or "").strip()
+                        if platform:
+                            return platform
+        for a in scheme_custom_assets:
+            pn = str(a.get("platform", "")).strip()
+            if pn:
+                return pn
+        return ""
 
     def get_scheme_module_tree(
         self, model_name: str, scheme_name: str, keyword: str = ""

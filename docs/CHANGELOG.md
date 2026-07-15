@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### feat(core,ui): 软件接管型号配置 Phase A（无 toml 可设默认）
+
+- **型号+模块默认**：右键「设为「L36」模块默认版本」；同步写入该型号根下全部 `[[platform]]` 块；业务主语是型号+模块，不展示配置块名。
+- **无配置可设默认**：去掉「未找到平台配置」禁用；首次写入按方案 `platform` 名 bootstrap 配置块（无方案才用内部块 `默认`）；已有 toml 时补全缺失方案 platform 块。
+- **机芯版→板**：配置键与匹配统一为 catalog 规范「机芯板」。
+- **方案回源 A5**：platform 优先从 `方案配置.toml`/`discover_schemes` 解析（空方案仅 toml 亦可）；声明的 platform 无对应块时停止全部通用回源（含 A4）。
+- **空默认 `""`**：多变体时不猜第一项（徽章与方案回源与 `default_platforms_for` 一致）；唯一变体可隐式默认/回源。
+- **文档**：`TASK-20260714-config-takeover` 为主线；PySide6 Phase 4.3+ 暂停。
+
+验证:
+- `uv run python -m pytest src/fwasset/tests/test_platform_default_service.py src/fwasset/tests/test_scheme_workbench_model.py src/fwasset/tests/test_platform_config.py src/fwasset/tests/test_workbench_panel_helpers.py -q --no-cov`
+- 用户人工验证 Phase A 通过
+
 ### fix(core,ui): 审查 Issue 8–18 收尾 + 归属文案/列序
 
 - **Issue 8**：Qt 任务回调按 `task_id` 在 UI 线程执行（不跨线程传 callable）。

@@ -12,6 +12,14 @@ except ImportError:
         tomllib = None  # type: ignore[assignment]
 
 
+def canonical_module_dir(name: str) -> str:
+    """模块目录/配置键规范名。
+
+    磁盘与历史 toml 曾误写「机芯版」；规范统一为 catalog 的「机芯板」。
+    """
+    return str(name or "").strip().replace("机芯版", "机芯板")
+
+
 @dataclass
 class PlatformDefaults:
     """单个平台的默认模块变体声明。"""
@@ -64,10 +72,23 @@ def default_variant_for(
     """
     根据平台名和模块目录名，查找该模块的默认变体子目录名。
     找不到时返回空字符串。
+
+    键查找容忍历史笔误「机芯版」↔ 规范「机芯板」（catalog / 磁盘目录）。
     """
+    want = canonical_module_dir(module_dir)
+    if not want:
+        return ""
     for p in platforms:
-        if p.platform_name == platform_name:
-            return p.defaults.get(module_dir, "")
+        if p.platform_name != platform_name:
+            continue
+        if module_dir in p.defaults:
+            return p.defaults[module_dir]
+        if want in p.defaults:
+            return p.defaults[want]
+        for key, value in p.defaults.items():
+            if canonical_module_dir(key) == want:
+                return value
+        return ""
     return ""
 
 

@@ -51,7 +51,13 @@ from fwasset.ui.view_models.scheme_workbench_model import (
     SchemeWorkbenchModel,
     WorkbenchSelection,
 )
-from fwasset.ui.workbench_helpers import flash_mode_label, model_chip_values
+from fwasset.ui.workbench_helpers import (
+    flash_mode_label,
+    model_chip_values,
+    module_label_from_asset,
+    set_default_action_label,
+    set_default_confirm_message,
+)
 from fwasset.ui_qt.data_grid import DataGrid
 from fwasset.ui_qt.operation_panels import get_panel
 from fwasset.ui_qt.design_tokens import (
@@ -676,41 +682,27 @@ class WorkbenchInterface(QWidget):
         self.ops_layout.addWidget(panel)
         self.active_operation_panel = panel
 
-    # ------------------------------------------------------------------ 右键菜单（设为平台默认）
+    # ------------------------------------------------------------------ 右键菜单（设为「型号」模块默认版本）
     def _on_grid_right_click(self, variant: ModuleVariant, global_pos) -> None:
         menu = QMenu(self)
 
         asset = variant.asset
+        model_name = self.current_selection.model_name
+        module = module_label_from_asset(asset)
         is_common = variant.source_kind == "common" and str(asset.get("category", "")) == "common"
         if is_common:
-            platforms = self.workbench_model.platform_names(self.current_selection.model_name)
-            current_defaults = set(self.workbench_model.default_platforms_for(asset))
-            if not platforms:
-                action = QAction("设为平台默认（未找到平台配置）", menu)
+            # 无 toml 也可设默认（软件自动创建配置）；已是默认则灰掉
+            if self.workbench_model.is_model_module_default(asset):
+                action = QAction(
+                    set_default_action_label(model_name, module, is_current=True),
+                    menu,
+                )
                 action.setEnabled(False)
                 menu.addAction(action)
-            elif len(platforms) == 1:
-                p = platforms[0]
-                if p in current_defaults:
-                    action = QAction(f"✓ 已是「{p}」默认程序", menu)
-                    action.setEnabled(False)
-                    menu.addAction(action)
-                else:
-                    action = QAction(f"设为「{p}」默认程序", menu)
-                    action.triggered.connect(lambda _c=False, name=p: self._set_default_variant(name, variant))
-                    menu.addAction(action)
             else:
-                submenu = menu.addMenu("设为平台默认")
-                for p in platforms:
-                    if p in current_defaults:
-                        action = QAction(f"✓ {p}（当前默认）", submenu)
-                        action.setEnabled(False)
-                    else:
-                        action = QAction(p, submenu)
-                        action.triggered.connect(
-                            lambda _c=False, name=p: self._set_default_variant(name, variant)
-                        )
-                    submenu.addAction(action)
+                action = QAction(set_default_action_label(model_name, module), menu)
+                action.triggered.connect(lambda _c=False: self._set_default_variant(variant))
+                menu.addAction(action)
             menu.addSeparator()
 
         open_action = QAction("打开目录", menu)
@@ -722,20 +714,20 @@ class WorkbenchInterface(QWidget):
 
         menu.exec(global_pos)
 
-    def _set_default_variant(self, platform_name: str, variant: ModuleVariant) -> None:
+    def _set_default_variant(self, variant: ModuleVariant) -> None:
         asset = variant.asset
-        module = str(asset.get("firmware_label", "")) or str(asset.get("firmware_type", ""))
+        model_name = self.current_selection.model_name
+        module = module_label_from_asset(asset)
         shown = variant.name or str(asset.get("directory_name", ""))
         answer = QMessageBox.question(
             self,
-            "设为平台默认",
-            f"将「{module} / {shown}」设为平台「{platform_name}」的默认程序？\n\n"
-            "定制方案缺少该模块时，将使用此程序补齐。",
+            "设为默认版本",
+            set_default_confirm_message(model_name, module, shown),
         )
         if answer != QMessageBox.StandardButton.Yes:
             return
         result = self.workbench_model.set_default_variant(
-            self.current_selection.model_name, platform_name, asset, log_fn=self._log
+            model_name, asset, log_fn=self._log
         )
         if not result["ok"]:
             self._log(result["message"])

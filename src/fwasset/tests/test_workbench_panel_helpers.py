@@ -3,7 +3,36 @@ from __future__ import annotations
 import inspect
 
 from fwasset.ui.view_models.scheme_workbench_model import WorkbenchSelection
+from fwasset.ui.workbench_helpers import (
+    set_default_action_label,
+    set_default_confirm_message,
+)
 from fwasset.ui.workbench_panel import WorkbenchPanel, flash_mode_label, model_chip_values
+
+
+def test_set_default_action_label_uses_model_and_module() -> None:
+    """菜单文案：设为「L36」蓝牙程序默认版本（型号+模块，不出现配置块名）。"""
+    assert (
+        set_default_action_label("L36", "蓝牙程序")
+        == "设为「L36」蓝牙程序默认版本"
+    )
+    assert (
+        set_default_action_label("L36", "蓝牙程序", is_current=True)
+        == "✓ 已是「L36」蓝牙程序默认版本"
+    )
+    assert (
+        set_default_action_label("L36", "主板程序")
+        == "设为「L36」主板程序默认版本"
+    )
+    # 不得再把「标准单机芯3D」塞进菜单
+    assert "标准单机芯" not in set_default_action_label("L36", "主板程序")
+
+
+def test_set_default_confirm_message_mentions_module() -> None:
+    msg = set_default_confirm_message("L36", "蓝牙程序", "中文-通用_默认")
+    assert "「中文-通用_默认」" in msg
+    assert "「L36」蓝牙程序默认版本" in msg
+    assert "标准单机芯" not in msg
 
 
 def test_shared_actions_uses_design_tokens_not_magic_numbers() -> None:

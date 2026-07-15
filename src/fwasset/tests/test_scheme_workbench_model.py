@@ -248,7 +248,7 @@ def test_multi_model_set_default_writes_into_model_dir(multi_model_tree: Path, t
     cards = model.get_common_modules("L36", "主板程序")
     fangjia = next(c.asset for c in cards if c.asset["directory_name"] == "防夹功能")
 
-    result = model.set_default_variant("L36", "标准单机芯3D", fangjia, log_fn=lambda _m: None)
+    result = model.set_default_variant("L36", fangjia, log_fn=lambda _m: None)
     assert result["ok"] is True, result["message"]
 
     from fwasset.core.platform_config import load_platform_config
@@ -291,7 +291,7 @@ def test_set_default_variant_writes_config_and_moves_badge(l36_tree: Path, tmp_p
     cards = model.get_common_modules("L36", "主板程序")
     fangjia = next(c.asset for c in cards if c.asset["directory_name"] == "防夹功能")
 
-    result = model.set_default_variant("L36", "标准单机芯3D", fangjia, log_fn=lambda _m: None)
+    result = model.set_default_variant("L36", fangjia, log_fn=lambda _m: None)
     assert result["ok"] is True, result["message"]
 
     # toml 落盘
@@ -325,29 +325,29 @@ def test_set_default_variant_changes_scheme_fallback(l36_tree: Path, tmp_path: P
 
     cards = model.get_common_modules("L36", "主板程序")
     fangjia = next(c.asset for c in cards if c.asset["directory_name"] == "防夹功能")
-    result = model.set_default_variant("L36", "标准单机芯3D", fangjia, log_fn=lambda _m: None)
+    result = model.set_default_variant("L36", fangjia, log_fn=lambda _m: None)
     assert result["ok"] is True, result["message"]
 
     assert _mainboard_fallback_dir() == "防夹功能"
 
 
-def test_set_default_variant_reuses_existing_module_key(l36_tree: Path, tmp_path: Path) -> None:
-    """平台配置已有用字差异的模块键（版/板）时沿用旧键，不产生重复条目。"""
+def test_set_default_variant_rewrites_typo_module_key_to_board(l36_tree: Path, tmp_path: Path) -> None:
+    """磁盘/历史 toml 的「机芯版」笔误：设默认后统一为 catalog 规范「机芯板」，不留双键。"""
     model = _bind_model(l36_tree, tmp_path)
     cards = model.get_all_modules("L36")
     core_3d = next(
         c.asset for c in cards if c.asset["firmware_label"] == "3D机芯板程序"
     )
 
-    result = model.set_default_variant("L36", "标准单机芯3D", core_3d, log_fn=lambda _m: None)
+    result = model.set_default_variant("L36", core_3d, log_fn=lambda _m: None)
     assert result["ok"] is True, result["message"]
 
     from fwasset.core.platform_config import load_platform_config
 
     defaults = load_platform_config(l36_tree)[0].defaults
-    # 沿用 toml 里既有的 "3D机芯版程序" 键（版），不新增 "3D机芯板程序"（板）
     keys_3d = [k for k in defaults if "机芯" in k and "3D" in k]
-    assert keys_3d == ["3D机芯版程序"]
+    assert keys_3d == ["3D机芯板程序"]
+    assert "3D机芯版程序" not in defaults
 
 
 def test_set_default_variant_rejects_custom_asset(l36_tree: Path, tmp_path: Path) -> None:
@@ -355,9 +355,142 @@ def test_set_default_variant_rejects_custom_asset(l36_tree: Path, tmp_path: Path
     model = _bind_model(l36_tree, tmp_path)
     cards = model.get_scheme_modules("L36", "西班牙")
     custom = next(c.asset for c in cards if c.source_type == "custom_exclusive")
-    result = model.set_default_variant("L36", "标准单机芯3D", custom, log_fn=lambda _m: None)
+    result = model.set_default_variant("L36", custom, log_fn=lambda _m: None)
     assert result["ok"] is False
     assert result["code"] == "invalid_args"
+
+
+def test_first_set_default_without_toml_uses_scheme_platform_names(
+    tmp_path: Path,
+) -> None:
+    """验收场景 5：无 toml 但方案有 platform → 首次设默认建同名块，回源立即生效。"""
+    root = tmp_path / "L36程序"
+    _write(root / "通用" / "主板程序" / "量产_默认" / "main.bin")
+    _write(root / "通用" / "主板程序" / "防夹功能" / "fang.bin")
+    _write(root / "通用" / "腿部程序" / "leg.hex")
+    scheme = root / "定制" / "西班牙"
+    _write(scheme / "方案配置.toml", 'name = "西班牙"\nplatform = "标准单机芯3D"\n')
+    _write(scheme / "手控UI" / "ui.rom")  # 有定制手控，缺主板 → 回源主板
+
+    model = _bind_model(root, tmp_path)
+    assert model._platforms_for("L36") == []
+
+    cards = model.get_common_modules("L36", "主板程序")
+    fangjia = next(c.asset for c in cards if c.asset["directory_name"] == "防夹功能")
+    # 无配置时菜单可点：未落盘不算 is_model_module_default
+    assert model.is_model_module_default(fangjia) is False
+
+    result = model.set_default_variant("L36", fangjia, log_fn=lambda _m: None)
+    assert result["ok"] is True, result["message"]
+
+    from fwasset.core.platform_config import load_platform_config
+
+    loaded = load_platform_config(root)
+    assert len(loaded) == 1
+    assert loaded[0].platform_name == "标准单机芯3D"
+    assert loaded[0].defaults["主板程序"] == "防夹功能"
+    assert "默认" not in {p.platform_name for p in loaded}
+
+    scheme_cards = model.get_scheme_modules("L36", "西班牙")
+    fb = [
+        c
+        for c in scheme_cards
+        if c.is_fallback and c.asset.get("firmware_label") == "主板程序"
+    ]
+    assert fb and fb[0].asset["directory_name"] == "防夹功能"
+
+
+def test_unique_common_module_inferred_as_fallback_without_defaults_key(
+    tmp_path: Path,
+) -> None:
+    """A4：配置块无该模块键时，唯一通用变体仍可回源到方案。"""
+    root = tmp_path / "L36程序"
+    _write(
+        root / "平台配置.toml",
+        '[[platform]]\nname = "标准单机芯3D"\n[platform.defaults]\n"主板程序" = "量产_默认"\n',
+    )
+    _write(root / "通用" / "主板程序" / "量产_默认" / "main.bin")
+    _write(root / "通用" / "腿部程序" / "only_leg.hex")  # 唯一腿部，toml 无键
+    scheme = root / "定制" / "西班牙"
+    _write(scheme / "方案配置.toml", 'name = "西班牙"\nplatform = "标准单机芯3D"\n')
+    _write(scheme / "手控UI" / "ui.rom")
+
+    model = _bind_model(root, tmp_path)
+    cards = model.get_scheme_modules("L36", "西班牙")
+    leg_fb = [
+        c for c in cards if c.is_fallback and c.asset.get("firmware_label") == "腿部程序"
+    ]
+    assert leg_fb, "unique 腿部 should fall back without defaults key"
+    assert leg_fb[0].asset["directory_name"] == "腿部程序" or "only" in str(
+        leg_fb[0].asset.get("path", "")
+    )
+
+
+def test_empty_scheme_uses_platform_from_scheme_toml_not_asset(
+    tmp_path: Path,
+) -> None:
+    """仅有方案配置、无定制固件：按 方案配置.toml 的 platform 选配置块，不扫全部块。"""
+    root = tmp_path / "L36程序"
+    _write(
+        root / "平台配置.toml",
+        "\n".join(
+            [
+                "[[platform]]",
+                'name = "标准单机芯3D"',
+                "[platform.defaults]",
+                '"蓝牙程序" = "中文版本"',
+                "",
+                "[[platform]]",
+                'name = "双机芯"',
+                "[platform.defaults]",
+                '"蓝牙程序" = "英文版本"',
+            ]
+        ),
+    )
+    _write(root / "通用" / "蓝牙程序" / "中文版本" / "bt_zh.bin")
+    _write(root / "通用" / "蓝牙程序" / "英文版本" / "bt_en.bin")
+    # 空方案：只有 toml，没有任何定制固件 → 索引无 custom 资产
+    scheme = root / "定制" / "纯回源方案"
+    _write(scheme / "方案配置.toml", 'name = "纯回源方案"\nplatform = "双机芯"\n')
+
+    model = _bind_model(root, tmp_path)
+    cards = model.get_scheme_modules("L36", "纯回源方案")
+    assert not any(c.source_type == "custom_exclusive" for c in cards)
+    bt = [
+        c
+        for c in cards
+        if c.is_fallback and c.asset.get("firmware_label") == "蓝牙程序"
+    ]
+    assert len(bt) == 1
+    assert bt[0].asset["directory_name"] == "英文版本"
+    assert not any(c.asset.get("directory_name") == "中文版本" for c in bt)
+
+
+def test_scheme_platform_mismatch_blocks_all_common_fallback(
+    tmp_path: Path,
+) -> None:
+    """方案声明 platform=B 但 TOML 只有 A：通用回源失败，A4 唯一变体也不得补入。"""
+    root = tmp_path / "L36程序"
+    _write(
+        root / "平台配置.toml",
+        '[[platform]]\nname = "标准单机芯3D"\n[platform.defaults]\n"蓝牙程序" = "中文版本"\n',
+    )
+    _write(root / "通用" / "蓝牙程序" / "中文版本" / "bt.bin")
+    _write(root / "通用" / "腿部程序" / "only_leg.hex")  # 唯一变体，易被错误 A4 补入
+    scheme = root / "定制" / "错配方案"
+    _write(scheme / "方案配置.toml", 'name = "错配方案"\nplatform = "双机芯"\n')
+    # 有一份定制固件，确保方案可进视图；platform 与 TOML 块名对不上
+    _write(scheme / "主板程序" / "custom_main.bin")
+
+    model = _bind_model(root, tmp_path)
+    cards = model.get_scheme_modules("L36", "错配方案")
+    assert any(c.source_type == "custom_exclusive" for c in cards)
+    # 不得回源蓝牙（块 A）或唯一腿部（A4）
+    assert not any(c.is_fallback for c in cards), [
+        (c.asset.get("firmware_label"), c.asset.get("directory_name"))
+        for c in cards
+        if c.is_fallback
+    ]
 
 
 def test_platform_names_prefers_config(l36_tree: Path, tmp_path: Path) -> None:
@@ -756,6 +889,45 @@ def test_empty_default_does_not_badge_when_multiple_variants(tmp_path: Path) -> 
     voice = model.get_common_modules("L36", "语音程序")
     assert len(voice) == 2
     assert all(c.default_badge == "" for c in voice)
+
+
+def test_empty_default_multi_variant_does_not_scheme_fallback(tmp_path: Path) -> None:
+    """空默认 + 多变体：方案页不得猜测回源第一份（与徽章契约一致）。"""
+    root = tmp_path / "L36程序"
+    _write(
+        root / "平台配置.toml",
+        "\n".join(
+            [
+                "[[platform]]",
+                'name = "标准单机芯3D"',
+                "[platform.defaults]",
+                '"语音程序" = ""',
+                '"主板程序" = "量产_默认"',
+            ]
+        ),
+    )
+    _write(root / "通用" / "语音程序" / "中文版" / "a.bin")
+    _write(root / "通用" / "语音程序" / "英文版" / "b.bin")
+    _write(root / "通用" / "主板程序" / "量产_默认" / "main.bin")
+    scheme = root / "定制" / "西班牙"
+    _write(scheme / "方案配置.toml", 'name = "西班牙"\nplatform = "标准单机芯3D"\n')
+    # 方案自带主板，缺语音 → 若错误回源会冒出中文版/英文版
+    _write(scheme / "主板程序" / "custom.bin")
+
+    model = _bind_model(root, tmp_path)
+    cards = model.get_scheme_modules("L36", "西班牙")
+    voice_any = [
+        c for c in cards if c.asset.get("firmware_label") == "语音程序"
+    ]
+    assert voice_any == [], (
+        "empty default with multiple voice variants must not scheme-fallback; "
+        f"got {[c.asset.get('directory_name') for c in voice_any]}"
+    )
+    # 主板为定制专属，不因语音异常而整树失败
+    assert any(
+        c.source_type == "custom_exclusive" and c.asset.get("firmware_label") == "主板程序"
+        for c in cards
+    )
 
 
 def test_scheme_modules_empty_keyword_returns_full_tree(l36_tree: Path, tmp_path: Path) -> None:

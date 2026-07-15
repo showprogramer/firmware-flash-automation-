@@ -4,9 +4,97 @@ from pathlib import Path
 
 from fwasset.core.platform_config import (
     PlatformDefaults,
+    canonical_module_dir,
     load_platform_config,
     save_platform_config,
 )
+from fwasset.core.scheme_config import discover_schemes
+
+# 再导出，便于 view model / 测试从 service 侧一并导入
+__all__ = [
+    "canonical_module_dir",
+    "bootstrap_platform_blocks",
+    "ensure_platform_blocks",
+    "set_default_variant",
+    "set_module_default_for_model",
+]
+
+_INTERNAL_DEFAULT_BLOCK = "默认"
+
+
+def _scheme_platform_names(model_root: Path) -> list[str]:
+    """本型号根内方案配置中的 platform 名（去重、去空、保序）。"""
+    names: list[str] = []
+    seen: set[str] = set()
+    for scheme in discover_schemes(model_root):
+        name = str(scheme.platform or "").strip()
+        if name and name not in seen:
+            seen.add(name)
+            names.append(name)
+    return names
+
+
+def bootstrap_platform_blocks(model_root: Path | str) -> list[PlatformDefaults]:
+    """无配置时初始化 [[platform]] 块（TASK A2）。
+
+    1. 收集本型号根方案中的 platform 名称；
+    2. 有名称 → 每个名称一块；
+    3. 无方案/无 platform → 单一内部块 ``默认``（不对用户作主语展示）。
+    """
+    root = Path(model_root)
+    names = _scheme_platform_names(root)
+    if names:
+        return [PlatformDefaults(platform_name=n, defaults={}) for n in names]
+    return [PlatformDefaults(platform_name=_INTERNAL_DEFAULT_BLOCK, defaults={})]
+
+
+def ensure_platform_blocks(
+    model_root: Path | str, platforms: list[PlatformDefaults]
+) -> list[PlatformDefaults]:
+    """保证写盘前有配置块：空则 bootstrap；已有则补全方案声明但尚未建块的 platform。
+
+    不删除历史块。
+    """
+    root = Path(model_root)
+    if not platforms:
+        return bootstrap_platform_blocks(root)
+    existing = {p.platform_name for p in platforms}
+    for name in _scheme_platform_names(root):
+        if name not in existing:
+            platforms.append(PlatformDefaults(platform_name=name, defaults={}))
+            existing.add(name)
+    return platforms
+
+
+def _alias_keys(defaults: dict[str, str], module: str) -> list[str]:
+    """在 defaults 中找与 module 同义的全部键（含版/板笔误）。"""
+    canon = canonical_module_dir(module)
+    if not canon:
+        return []
+    return [key for key in defaults if canonical_module_dir(key) == canon]
+
+
+def _apply_module_default(
+    target: PlatformDefaults, module: str, variant: str
+) -> str:
+    """写入一块 [[platform]] 的模块默认；返回该块上一次的变体名。
+
+    - 若块内已有同义键（版/板），全部删除后只保留规范键「板」，避免重复。
+    - 若无键，用规范模块名新增。
+    - 多键并存时 previous 优先取规范键上的值，否则取第一个同义键。
+    """
+    canon = canonical_module_dir(module)
+    aliases = _alias_keys(target.defaults, module)
+    previous = ""
+    if aliases:
+        if canon in target.defaults:
+            previous = target.defaults.get(canon, "")
+        else:
+            previous = target.defaults.get(aliases[0], "")
+        for key in aliases:
+            del target.defaults[key]
+    target.defaults[canon] = str(variant or "")
+    return previous
 
 
 def set_default_variant(
@@ -16,20 +104,19 @@ def set_default_variant(
     variant_name: str,
     log_fn=print,
 ) -> dict:
-    """把某平台下某模块的默认变体写入 `平台配置.toml`。
+    """把某 [[platform]] 条目下某模块的默认变体写入 `平台配置.toml`。
 
-    - 平台不存在时新建 `[[platform]]` 条目（文件缺失时整体新建）。
-    - 已存在的其他平台/模块条目原样保留。
-    - variant_name 允许为空串（表示该模块在通用区唯一，回源时按模块匹配）。
+    低层 API（按配置块名写入）。产品「型号+模块默认」请用
+    :func:`set_module_default_for_model`。
     """
     root = str(model_root or "").strip()
     platform = str(platform_name or "").strip()
-    module = str(module_dir or "").strip()
+    module = canonical_module_dir(module_dir)
     if not root or not platform or not module:
         return {
             "ok": False,
             "code": "invalid_args",
-            "message": "设置默认失败：型号根目录、平台名与模块名均不能为空",
+            "message": "设置默认失败：型号根目录、配置块名与模块名均不能为空",
             "payload": {},
         }
 
@@ -48,8 +135,7 @@ def set_default_variant(
         if target is None:
             target = PlatformDefaults(platform_name=platform)
             platforms.append(target)
-        previous = target.defaults.get(module, "")
-        target.defaults[module] = str(variant_name or "")
+        previous = _apply_module_default(target, module, str(variant_name or ""))
         toml_path = save_platform_config(root_path, platforms)
     except Exception as exc:  # noqa: BLE001
         message = f"写入平台配置失败: {exc}"
@@ -57,7 +143,7 @@ def set_default_variant(
         return {"ok": False, "code": "write_failed", "message": message, "payload": {}}
 
     shown = variant_name or module
-    message = f"已将「{shown}」设为平台「{platform}」的默认程序"
+    message = f"已将「{shown}」设为模块「{module}」默认版本"
     log_fn(message)
     return {
         "ok": True,
@@ -69,5 +155,75 @@ def set_default_variant(
             "module_dir": module,
             "variant_name": str(variant_name or ""),
             "previous_variant": previous,
+        },
+    }
+
+
+def set_module_default_for_model(
+    model_root: str,
+    module_dir: str,
+    variant_name: str,
+    log_fn=print,
+    *,
+    model_name: str = "",
+) -> dict:
+    """按「型号 + 模块」设默认：同步该型号根下所有 [[platform]]。
+
+    每块用自身已有同义键更新并归一为规范名「机芯板」；无键则新增规范名。
+    业务主语是型号与模块（如 L36 蓝牙），toml 的 name（标准单机芯3D）仅作回源分组。
+    """
+    root = str(model_root or "").strip()
+    module = canonical_module_dir(module_dir)
+    if not root or not module:
+        return {
+            "ok": False,
+            "code": "invalid_args",
+            "message": "设置默认失败：型号根目录与模块名均不能为空",
+            "payload": {},
+        }
+
+    root_path = Path(root)
+    if not root_path.is_dir():
+        return {
+            "ok": False,
+            "code": "invalid_args",
+            "message": f"设置默认失败：型号根目录不存在 ({root})",
+            "payload": {},
+        }
+
+    variant = str(variant_name or "")
+    try:
+        platforms = ensure_platform_blocks(root_path, load_platform_config(root_path))
+
+        previous = ""
+        updated_blocks: list[str] = []
+        for target in platforms:
+            previous = _apply_module_default(target, module, variant) or previous
+            updated_blocks.append(target.platform_name)
+
+        toml_path = save_platform_config(root_path, platforms)
+    except Exception as exc:  # noqa: BLE001
+        message = f"写入平台配置失败: {exc}"
+        log_fn(message)
+        return {"ok": False, "code": "write_failed", "message": message, "payload": {}}
+
+    shown = variant or module
+    model_shown = (model_name or "").strip()
+    if model_shown:
+        message = f"已将「{shown}」设为「{model_shown}」{module}默认版本"
+    else:
+        message = f"已将「{shown}」设为{module}默认版本"
+    log_fn(message)
+    return {
+        "ok": True,
+        "code": "ok",
+        "message": message,
+        "payload": {
+            "config_path": str(toml_path),
+            "module_dir": module,
+            "variant_name": variant,
+            "previous_variant": previous,
+            "updated_platforms": updated_blocks,
+            "model_name": model_shown,
         },
     }

@@ -31,3 +31,46 @@ def flash_mode_label(mode: str) -> str:
         "disabled": "不可烧录",
     }
     return labels.get(mode, mode or "-")
+
+
+def module_label_from_asset(asset: dict) -> str:
+    """资产的模块显示名（如 蓝牙程序、主板程序）。"""
+    return (
+        str(asset.get("firmware_label", "")).strip()
+        or str(asset.get("firmware_type", "")).strip()
+        or "程序"
+    )
+
+
+def set_default_action_label(
+    model_name: str,
+    module: str,
+    *,
+    is_current: bool = False,
+) -> str:
+    """右键「设默认」菜单文案：型号 + 模块，不出现配置块名（如标准单机芯3D）。
+
+    例：``设为「L36」蓝牙程序默认版本`` / ``✓ 已是「L36」蓝牙程序默认版本``
+    """
+    model = (model_name or "").strip() or "当前型号"
+    mod = (module or "").strip() or "程序"
+    core = f"「{model}」{mod}默认版本"
+    if is_current:
+        return f"✓ 已是{core}"
+    return f"设为{core}"
+
+
+def set_default_confirm_message(
+    model_name: str,
+    module: str,
+    variant_name: str,
+) -> str:
+    """设默认确认框正文（型号 + 模块）。"""
+    model = (model_name or "").strip() or "当前型号"
+    mod = (module or "").strip() or "程序"
+    shown = (variant_name or "").strip() or "-"
+    target = f"「{model}」{mod}默认版本"
+    return (
+        f"将「{shown}」设为{target}？\n\n"
+        "定制方案缺少该模块时，将使用此程序补齐。"
+    )

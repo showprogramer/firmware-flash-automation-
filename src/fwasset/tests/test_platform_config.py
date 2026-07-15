@@ -7,6 +7,7 @@ import pytest
 
 from fwasset.core.platform_config import (
     PlatformDefaults,
+    canonical_module_dir,
     default_variant_for,
     load_platform_config,
     save_platform_config,
@@ -113,3 +114,10 @@ class TestDefaultVariantFor:
     def test_empty_platforms_list(self):
         result = default_variant_for([], "标准单机芯3D", "主板程序")
         assert result == ""
+
+    def test_matches_typo_ban_key_when_query_uses_board(self):
+        platforms = [
+            PlatformDefaults("标准单机芯3D", {"3D机芯版程序": "量产"}),
+        ]
+        assert default_variant_for(platforms, "标准单机芯3D", "3D机芯板程序") == "量产"
+        assert canonical_module_dir("3D机芯版程序") == "3D机芯板程序"

@@ -47,13 +47,14 @@ from fwasset.ui.view_models.scheme_workbench_model import (
     ModuleVariant,
 )
 from fwasset.ui.view_models.scan_state_model import ScanStateModel
-
-
-# 纯函数助手移至 workbench_helpers（CTk/Qt 双壳共用）；此处 re-export 保持旧导入路径。
-from fwasset.ui.workbench_helpers import (  # noqa: F401  (re-export for tests/back-compat)
+# 纯函数助手在 workbench_helpers；re-export 保持 tests 的旧导入路径。
+from fwasset.ui.workbench_helpers import (  # noqa: F401
     MODEL_CHIP_LIMIT,
     flash_mode_label,
     model_chip_values,
+    module_label_from_asset,
+    set_default_action_label,
+    set_default_confirm_message,
 )
 
 SEARCH_REFRESH_DEBOUNCE_MS = 180
@@ -569,37 +570,26 @@ class WorkbenchPanel(BaseFlashPanel):
         self.active_operation_panel.pack(fill="both", expand=True)
         self.active_operation_panel.build()
 
-    # --- 右键菜单（设为平台默认） ---
+    # --- 右键菜单（设为「型号」模块默认版本） ---
     def _on_grid_right_click(self, variant: ModuleVariant, x_root: int, y_root: int):
         menu = tk.Menu(self, tearoff=0)
 
         asset = variant.asset
+        model_name = self.current_selection.model_name
+        module = module_label_from_asset(asset)
         is_common = variant.source_kind == "common" and str(asset.get("category", "")) == "common"
         if is_common:
-            platforms = self.workbench_model.platform_names(self.current_selection.model_name)
-            current_defaults = set(self.workbench_model.default_platforms_for(asset))
-            if not platforms:
-                menu.add_command(label="设为平台默认（未找到平台配置）", state="disabled")
-            elif len(platforms) == 1:
-                p = platforms[0]
-                if p in current_defaults:
-                    menu.add_command(label=f"✓ 已是「{p}」默认程序", state="disabled")
-                else:
-                    menu.add_command(
-                        label=f"设为「{p}」默认程序",
-                        command=lambda: self._set_default_variant(p, variant),
-                    )
+            # 无 toml 也可设默认（软件自动创建配置）；已是默认则灰掉
+            if self.workbench_model.is_model_module_default(asset):
+                menu.add_command(
+                    label=set_default_action_label(model_name, module, is_current=True),
+                    state="disabled",
+                )
             else:
-                submenu = tk.Menu(menu, tearoff=0)
-                for p in platforms:
-                    if p in current_defaults:
-                        submenu.add_command(label=f"✓ {p}（当前默认）", state="disabled")
-                    else:
-                        submenu.add_command(
-                            label=p,
-                            command=lambda name=p: self._set_default_variant(name, variant),
-                        )
-                menu.add_cascade(label="设为平台默认", menu=submenu)
+                menu.add_command(
+                    label=set_default_action_label(model_name, module),
+                    command=lambda: self._set_default_variant(variant),
+                )
             menu.add_separator()
 
         menu.add_command(label="打开目录", command=self._open_current_asset_dir)
@@ -610,22 +600,20 @@ class WorkbenchPanel(BaseFlashPanel):
         finally:
             menu.grab_release()
 
-    def _set_default_variant(self, platform_name: str, variant: ModuleVariant):
+    def _set_default_variant(self, variant: ModuleVariant):
         asset = variant.asset
-        module = str(asset.get("firmware_label", "")) or str(asset.get("firmware_type", ""))
+        model_name = self.current_selection.model_name
+        module = module_label_from_asset(asset)
         shown = variant.name or str(asset.get("directory_name", ""))
         confirmed = messagebox.askyesno(
-            title="设为平台默认",
-            message=(
-                f"将「{module} / {shown}」设为平台「{platform_name}」的默认程序？\n\n"
-                "定制方案缺少该模块时，将使用此程序补齐。"
-            ),
+            title="设为默认版本",
+            message=set_default_confirm_message(model_name, module, shown),
             parent=self.winfo_toplevel(),
         )
         if not confirmed:
             return
         result = self.workbench_model.set_default_variant(
-            self.current_selection.model_name, platform_name, asset, log_fn=self._log
+            model_name, asset, log_fn=self._log
         )
         if not result["ok"]:
             self._log(result["message"])
