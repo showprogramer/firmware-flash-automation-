@@ -33,4 +33,4 @@ uv run python -m pytest -m "not ui" -q
 
 ## 相关 Commit
 
-见本分支 `feat(core): 型号持久 id（Phase B0）` 提交。
+`1c287b8` feat(core): 型号持久 id（Phase B0）
