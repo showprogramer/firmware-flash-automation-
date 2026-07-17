@@ -59,17 +59,20 @@ def resolve_shared_module(
             ref=ref, status="missing", reason="path_not_found"
         )
 
+    # 拒绝相对段中的 . / ..，防止「首段型号 id 校验」与 resolve 后真实路径脱节
+    # 例：L36程序/../L50程序/... 会解析到 L50，但若只校验 L36 会误 hit
+    parts = Path(rel).parts
+    if not parts or any(p in (".", "..") for p in parts):
+        return SharedModuleResolution(
+            ref=ref, status="missing", reason="out_of_workspace"
+        )
+
     abs_path = (ws / rel).resolve()
     if not _is_under_workspace(abs_path, ws):
         return SharedModuleResolution(
             ref=ref, status="missing", reason="out_of_workspace"
         )
 
-    parts = Path(rel).parts
-    if not parts:
-        return SharedModuleResolution(
-            ref=ref, status="missing", reason="path_not_found"
-        )
     first = parts[0]
     source_dir = (ws / first).resolve()
 
@@ -95,6 +98,13 @@ def resolve_shared_module(
     if mapped is not None and mapped.resolve() != source_dir:
         return SharedModuleResolution(
             ref=ref, status="missing", reason="id_mismatch"
+        )
+
+    # 双保险：resolve 后的目标必须仍落在已校验的 source_dir 下
+    # （即使将来放宽对 .. 的拒绝，也不能跨到其它型号根）
+    if not _is_under_workspace(abs_path, source_dir):
+        return SharedModuleResolution(
+            ref=ref, status="missing", reason="out_of_workspace"
         )
 
     if not abs_path.exists():

@@ -168,6 +168,37 @@ def test_out_of_workspace(tmp_path: Path):
     assert res.reason == "out_of_workspace"
 
 
+def test_dotdot_cannot_bypass_source_model_id_check(tmp_path: Path):
+    """P1：L36/../L50/... 不得因只校验首段 L36 的 id 而误 hit 到 L50 真身。"""
+    ws = tmp_path / "ws"
+    l36 = ws / "L36程序"
+    l50 = ws / "L50程序"
+    l36.mkdir(parents=True)
+    _write(l50 / "通用" / "快捷键" / "贝乐" / "k.hex")
+    save_model_id(l36, "l36")
+    save_model_id(l50, "l50")
+    lookup = _id_lookup(ws)
+
+    # 声称源是 l36，路径却用 .. 跳到 L50 实物
+    sneaky = "L36程序/../L50程序/通用/快捷键/贝乐"
+    res = resolve_shared_module(
+        _ref(sneaky, sid="l36"),
+        ws,
+        lambda i: lookup.get(i),
+    )
+    assert res.status == "missing", res
+    assert res.reason == "out_of_workspace"
+    assert res.resolved_path is None
+
+    # 直接指 L50 且 id=l50 仍应 hit（正常路径）
+    ok = resolve_shared_module(
+        _ref("L50程序/通用/快捷键/贝乐", sid="l50", key="快捷键程序"),
+        ws,
+        lambda i: lookup.get(i),
+    )
+    assert ok.status == "hit"
+
+
 def test_no_cross_model_search(tmp_path: Path):
     """源段缺失时不落到另一型号同名路径。"""
     ws = tmp_path / "ws"
