@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### feat(core): 共享引用 schema + 解析器（Phase B1 / TASK-20260718）
+
+- `型号配置.toml` 支持 `[shared_modules.*]`：load/save/remove；与 `model_id` 统一 dict 合并写（`tomli-w` + `atomic_write_text`）。
+- `resolve_shared_module`：命中/缺失一套路径（源未导入、路径无、id 不符、越界）；`variants` 叶子/模块目录判定。
+- 工作台 `get_shared_modules` / `resolve_shared_module`；**不**参与方案回源（B4）。
+- 依赖：`tomli-w`；`save_model_id` 弃行级替换。
+
+验证:
+- `uv run python -m pytest -m "not ui" -q` → 330 passed，coverage 86.11%
+- 数据层脚本验收四场景通过（缺失/命中/B4 隔离/设默认不毁共享）；本阶段无 UI 表面
+
 ### chore(build): 收紧 Python 下限到 3.11，移除 tomli 依赖
 
 - `requires-python` `>=3.8` → `>=3.11`（实际运行环境 3.11.8；3.8 下限从未验证/维护）。

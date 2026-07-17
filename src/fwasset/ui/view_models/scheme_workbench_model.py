@@ -4,13 +4,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from fwasset.core.asset_index import query_assets
-from fwasset.core.model_config import load_model_config
+from fwasset.core.model_config import SharedModuleRef, load_model_config, load_shared_modules
 from fwasset.core.platform_config import load_platform_config, default_variant_for, PlatformDefaults
 from fwasset.core.scheme_config import discover_schemes
 from fwasset.core.services.model_id_service import ensure_model_ids
 from fwasset.core.services.platform_default_service import (
     canonical_module_dir,
     set_module_default_for_model as _set_module_default_for_model,
+)
+from fwasset.core.shared_module_resolver import (
+    SharedModuleResolution,
+    resolve_shared_module as resolve_shared_module_core,
 )
 from fwasset.core.types import FirmwareAsset
 
@@ -253,6 +257,53 @@ class SchemeWorkbenchModel:
         if not mid:
             return None
         return self._root_by_model_id.get(mid)
+
+    def _model_root_path_for_name(self, model_name: str) -> Path | None:
+        """display_name → 型号根（不落 通用/）。"""
+        name = str(model_name or "").strip()
+        if not name or self.root_dir is None:
+            return None
+        if self._single_model_root:
+            if name == self._structural_model() or name == self.root_dir.name:
+                return self.root_dir
+            # 兼容传入目录名
+            if name == self.root_dir.name:
+                return self.root_dir
+            return self.root_dir if _strip_model_suffix(self.root_dir.name) == name else None
+        dir_name = self._multi_model_dirs.get(name, "")
+        if dir_name:
+            p = self.root_dir / dir_name
+            return p if p.is_dir() else None
+        # 直接当 dir_name
+        p = self.root_dir / name
+        return p if p.is_dir() else None
+
+    def get_shared_modules(self, model_name: str) -> list[SharedModuleRef]:
+        """读取该型号根 ``型号配置.toml`` 的共享引用；损坏/缺失 → []。"""
+        root = self._model_root_path_for_name(model_name)
+        if root is None:
+            return []
+        try:
+            return load_shared_modules(root)
+        except Exception:  # noqa: BLE001
+            return []
+
+    def resolve_shared_module(
+        self, model_name: str, module_key: str
+    ) -> SharedModuleResolution | None:
+        """解析该型号某模块的共享引用；无引用 → None。"""
+        key = canonical_module_dir(module_key)
+        if not key or self.root_dir is None:
+            return None
+        refs = self.get_shared_modules(model_name)
+        ref = next((r for r in refs if r.module_key == key), None)
+        if ref is None:
+            return None
+        return resolve_shared_module_core(
+            ref,
+            workspace_root=self.root_dir,
+            root_for_model_id=self.model_root_for_id,
+        )
 
     # 与 query_assets / _filter_assets 共用的跨字段分词搜索字段
     _KEYWORD_FIELDS = (

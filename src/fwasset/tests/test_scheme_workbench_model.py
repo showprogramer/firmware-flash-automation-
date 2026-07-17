@@ -247,6 +247,93 @@ def test_bind_damaged_model_config_does_not_crash(tmp_path: Path) -> None:
     assert (root / "型号配置.toml").read_bytes() == original
 
 
+def test_get_and_resolve_shared_modules_hit(tmp_path: Path) -> None:
+    """B1：工作台读共享引用；源在同工作区则 hit。"""
+    from fwasset.core.model_config import SharedModuleRef, save_model_id, save_shared_module
+
+    parent = tmp_path / "按摩器程序"
+    l36 = parent / "L36程序"
+    dual = parent / "L36双机芯-上3D-下2D程序"
+    _write(l36 / "通用" / "快捷键" / "贝乐" / "k.hex")
+    _write(dual / "主板程序" / "main.bin")
+    save_model_id(l36, "l36")
+    save_model_id(dual, "dual")
+    save_shared_module(
+        dual,
+        SharedModuleRef(
+            module_key="快捷键程序",
+            source_model_id="l36",
+            source_group="l36-single",
+            source_module="快捷键程序",
+            source_relative_path="L36程序/通用/快捷键/贝乐",
+        ),
+    )
+    model = _bind_model(parent, tmp_path)
+    refs = model.get_shared_modules("L36双机芯-上3D-下2D")
+    assert len(refs) == 1
+    assert refs[0].module_key == "快捷键程序"
+    res = model.resolve_shared_module("L36双机芯-上3D-下2D", "快捷键程序")
+    assert res is not None
+    assert res.status == "hit"
+
+
+def test_resolve_shared_source_not_imported(tmp_path: Path) -> None:
+    from fwasset.core.model_config import SharedModuleRef, save_model_id, save_shared_module
+
+    # 单型号根需含 通用/ 以便布局检测
+    root = tmp_path / "L36双机芯-上3D-下2D程序"
+    _write(root / "通用" / "主板程序" / "main.bin")
+    save_model_id(root, "dual")
+    save_shared_module(
+        root,
+        SharedModuleRef(
+            module_key="蓝牙程序",
+            source_model_id="l50",
+            source_group="l50s",
+            source_module="蓝牙程序",
+            source_relative_path="L50程序/通用/蓝牙/中文",
+        ),
+    )
+    model = _bind_model(root, tmp_path)
+    res = model.resolve_shared_module("L36双机芯-上3D-下2D", "蓝牙程序")
+    assert res is not None
+    assert res.status == "missing"
+    assert res.reason == "source_not_imported"
+
+
+def test_scheme_modules_ignore_shared_refs(tmp_path: Path) -> None:
+    """B4：方案回源不吃 shared_modules。"""
+    from fwasset.core.model_config import SharedModuleRef, save_model_id, save_shared_module
+
+    root = tmp_path / "L36程序"
+    _write(
+        root / "平台配置.toml",
+        '[[platform]]\nname = "标准单机芯3D"\n[platform.defaults]\n"主板程序" = "量产_默认"\n',
+    )
+    _write(root / "通用" / "主板程序" / "量产_默认" / "main.bin")
+    # 无腿部通用；共享指向不存在的源
+    save_model_id(root, "l36")
+    save_shared_module(
+        root,
+        SharedModuleRef(
+            module_key="腿部程序",
+            source_model_id="l50",
+            source_group="x",
+            source_module="腿部程序",
+            source_relative_path="L50程序/通用/腿部程序",
+        ),
+    )
+    scheme = root / "定制" / "西班牙"
+    _write(scheme / "方案配置.toml", 'name = "西班牙"\nplatform = "标准单机芯3D"\n')
+    _write(scheme / "手控UI" / "ui.rom")
+
+    model = _bind_model(root, tmp_path)
+    cards = model.get_scheme_modules("L36", "西班牙")
+    assert not any(c.asset.get("firmware_label") == "腿部程序" for c in cards)
+    labels = {str(c.asset.get("firmware_label", "")) for c in cards}
+    assert "手控UI" in labels or any("手控" in x for x in labels)
+
+
 def test_multi_model_assets_do_not_leak_across_models(multi_model_tree: Path, tmp_path: Path) -> None:
     """双机芯主板不出现在 L36 视图里，反之亦然（文件名噪声不参与归属）。"""
     model = _bind_model(multi_model_tree, tmp_path)
