@@ -28,4 +28,4 @@ uv run python -m pytest -m "not ui" -q
 
 ## 相关 Commit
 
-见本分支 `feat(core): 共享引用 schema + 解析器（Phase B1）`。
+`4c8b6db` feat(core): 共享引用 schema + 解析器（Phase B1）
