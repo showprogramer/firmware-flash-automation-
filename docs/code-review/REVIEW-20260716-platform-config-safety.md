@@ -35,4 +35,4 @@ uv run python -m pytest -m "not ui" -q
 
 ## 相关 Commit
 
-`fea6006` fix(core): 平台配置严格读取与原子写盘（TASK-20260716）
+`72d1cca` fix(core): 平台配置严格读取与原子写盘（TASK-20260716）
