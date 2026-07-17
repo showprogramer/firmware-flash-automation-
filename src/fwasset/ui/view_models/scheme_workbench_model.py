@@ -4,8 +4,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from fwasset.core.asset_index import query_assets
+from fwasset.core.model_config import load_model_config
 from fwasset.core.platform_config import load_platform_config, default_variant_for, PlatformDefaults
 from fwasset.core.scheme_config import discover_schemes
+from fwasset.core.services.model_id_service import ensure_model_ids
 from fwasset.core.services.platform_default_service import (
     canonical_module_dir,
     set_module_default_for_model as _set_module_default_for_model,
@@ -104,6 +106,10 @@ class SchemeWorkbenchModel:
         self._single_model_root: bool = True
         self._multi_model_dirs: dict[str, str] = {}  # model_name → 一级子目录名
         self._platforms_by_model: dict[str, list[PlatformDefaults]] = {}
+        # 型号持久 id 映射（B0）；UI 选型键仍为 display_name
+        self._model_id_by_dir: dict[str, str] = {}  # dir_name → model_id
+        self._model_id_by_display: dict[str, str] = {}  # display_name → model_id
+        self._root_by_model_id: dict[str, Path] = {}  # model_id → 型号根 Path
         # Single-shot in-memory asset cache. Populated by bind() so the hot
         # path (sidebar rebuild on every search keystroke) does not re-query
         # SQLite. Methods that previously called query_assets() now read from
@@ -123,6 +129,7 @@ class SchemeWorkbenchModel:
         self._single_model_root = self._detect_single_model_root()
         self._load_multi_model_dirs()
         self._load_model_root_paths()
+        self._load_model_ids()
         self._load_platforms_for_all_models()
 
     def _detect_single_model_root(self) -> bool:
@@ -167,6 +174,85 @@ class SchemeWorkbenchModel:
             mdp = str(a.get("model_directory_path", ""))
             if model and mdp and model not in self._model_root_paths:
                 self._model_root_paths[model] = mdp
+
+    def _enumerate_model_roots(self) -> list[Path]:
+        """型号根目录列表（不落在 ``通用/``）。
+
+        单型号根 → 扫描根自身；多型号父根 → ``root_dir / dir_name``。
+        """
+        if self.root_dir is None or not self.root_dir.is_dir():
+            return []
+        if self._single_model_root:
+            return [self.root_dir]
+        roots: list[Path] = []
+        for dir_name in self._multi_model_dirs.values():
+            p = self.root_dir / dir_name
+            if p.is_dir():
+                roots.append(p)
+        return roots
+
+    def _load_model_ids(self) -> None:
+        """ensure_model_ids 后建立 id 映射；单根损坏不阻断。"""
+        self._model_id_by_dir.clear()
+        self._model_id_by_display.clear()
+        self._root_by_model_id.clear()
+        roots = self._enumerate_model_roots()
+        if not roots:
+            return
+        try:
+            ensure_model_ids(roots, log_fn=lambda _m: None)
+        except Exception:  # noqa: BLE001
+            # 不因 id 服务异常阻断工作台
+            pass
+        for root in roots:
+            try:
+                mid, status, _err = load_model_config(root)
+            except Exception:  # noqa: BLE001
+                continue
+            if status != "ok" or not mid:
+                continue
+            dir_name = root.name
+            display = _strip_model_suffix(dir_name)
+            self._model_id_by_dir[dir_name] = mid
+            if display:
+                self._model_id_by_display[display] = mid
+            self._root_by_model_id[mid] = root
+
+    def ensure_model_id(self, model_root: str | Path) -> str:
+        """返回型号根持久 id；缺失时触发写入后返回。"""
+        root = Path(model_root)
+        mid, status, _ = load_model_config(root)
+        if status == "ok" and mid:
+            return mid
+        ensure_model_ids([root], log_fn=lambda _m: None)
+        mid, status, _ = load_model_config(root)
+        if status == "ok" and mid:
+            dir_name = root.name
+            display = _strip_model_suffix(dir_name)
+            self._model_id_by_dir[dir_name] = mid
+            if display:
+                self._model_id_by_display[display] = mid
+            self._root_by_model_id[mid] = root
+            return mid
+        return ""
+
+    def resolve_model_id(self, name: str) -> str | None:
+        """display_name 或 dir_name → model_id。"""
+        key = str(name or "").strip()
+        if not key:
+            return None
+        if key in self._model_id_by_dir:
+            return self._model_id_by_dir[key]
+        if key in self._model_id_by_display:
+            return self._model_id_by_display[key]
+        return None
+
+    def model_root_for_id(self, model_id: str) -> Path | None:
+        """model_id → 型号根 Path；工作区内无此 id → None。"""
+        mid = str(model_id or "").strip()
+        if not mid:
+            return None
+        return self._root_by_model_id.get(mid)
 
     # 与 query_assets / _filter_assets 共用的跨字段分词搜索字段
     _KEYWORD_FIELDS = (

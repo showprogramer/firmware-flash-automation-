@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### feat(core): 型号持久 id（Phase B0 / TASK-20260717）
+
+- 新增 `型号配置.toml` 独立 load/save（`model_id` 读写-合并-写回，保留未知键；`atomic_write_text`）。
+- `ensure_model_ids`：先读全量已有 id 再 slug 生成；碰撞 `-2/-3`；改名不变；损坏根跳过不覆盖。
+- 工作台 `bind` 建立 `model_id ↔ dir_name ↔ display` 映射；API：`ensure_model_id` / `resolve_model_id` / `model_root_for_id`。
+- UI 选型键仍为 display_name；不写 `通用/`、不碰 `平台配置.toml` / `shared_modules` 业务。
+
+验证:
+- `uv run python -m pytest -m "not ui" -q` → 305 passed，coverage 85.25%
+- 用户人工验证通过（测试副本：损坏容错 / 改名不变 / 首次生成）
+
 ### fix(core): 平台配置严格读取与原子写盘（TASK-20260716）
 
 - **严格读取**：`load_platform_config_with_status` 区分 `ok` / `missing` / `parse_error` / `parser_missing`；结构错误不再当「无配置」。

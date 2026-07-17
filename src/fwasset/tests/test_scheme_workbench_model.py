@@ -205,6 +205,48 @@ def test_multi_model_root_lists_both_models(multi_model_tree: Path, tmp_path: Pa
     assert model.load_all_models() == ["L36", "L36双机芯-上3D-下2D"]
 
 
+def test_multi_model_persistent_id_mapping(multi_model_tree: Path, tmp_path: Path) -> None:
+    """B0：display / dir 解析到同一 id；型号配置落在型号根而非 通用/。"""
+    model = _bind_model(multi_model_tree, tmp_path)
+    id_l36 = model.resolve_model_id("L36")
+    assert id_l36
+    assert model.resolve_model_id("L36程序") == id_l36
+    root = model.model_root_for_id(id_l36)
+    assert root is not None and root.is_dir()
+    assert (root / "型号配置.toml").is_file()
+    assert not (root / "通用" / "型号配置.toml").exists()
+    assert model.model_root_for_id("no-such-id") is None
+
+    dual_id = model.resolve_model_id("L36双机芯-上3D-下2D")
+    assert dual_id
+    assert dual_id != id_l36
+    dual_root = model.model_root_for_id(dual_id)
+    assert dual_root is not None
+    assert (dual_root / "型号配置.toml").is_file()
+
+
+def test_single_model_root_gets_model_id(l36_tree: Path, tmp_path: Path) -> None:
+    model = _bind_model(l36_tree, tmp_path)
+    mid = model.resolve_model_id("L36")
+    assert mid
+    assert (l36_tree / "型号配置.toml").is_file()
+    assert not (l36_tree / "通用" / "型号配置.toml").exists()
+    assert model.model_root_for_id(mid) == l36_tree.resolve() or model.model_root_for_id(
+        mid
+    ) == l36_tree
+
+
+def test_bind_damaged_model_config_does_not_crash(tmp_path: Path) -> None:
+    root = tmp_path / "L36程序"
+    _write(root / "型号配置.toml", "[[broken\n")
+    _write(root / "通用" / "主板程序" / "量产_默认" / "a.bin")
+    original = (root / "型号配置.toml").read_bytes()
+    model = _bind_model(root, tmp_path)
+    assert model.load_all_models() == ["L36"]
+    assert model.resolve_model_id("L36") is None
+    assert (root / "型号配置.toml").read_bytes() == original
+
+
 def test_multi_model_assets_do_not_leak_across_models(multi_model_tree: Path, tmp_path: Path) -> None:
     """双机芯主板不出现在 L36 视图里，反之亦然（文件名噪声不参与归属）。"""
     model = _bind_model(multi_model_tree, tmp_path)
