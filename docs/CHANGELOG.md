@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### fix(core): 平台配置严格读取与原子写盘（TASK-20260716）
+
+- **严格读取**：`load_platform_config_with_status` 区分 `ok` / `missing` / `parse_error` / `parser_missing`；结构错误不再当「无配置」。
+- **写服务**：设默认前严格读；损坏配置返回 `config_parse_error` 并**保留原文件**；解析器缺失返回 `parser_missing`。
+- **原子写**：`atomic_write_text`（同目录临时文件 + fsync + `os.replace`）；`save_platform_config` 接入。
+- 兼容只读 `load_platform_config` 仍对失败返回 `[]`。不涉及 `型号配置.toml` / Phase B。
+
+验证:
+- `uv run python -m pytest -m "not ui" -q` → 281 passed，coverage 84.58%
+- 用户人工验证通过（测试副本：合法 / 无配置 / 损坏禁止覆盖）
+
 ### feat(core,ui): 软件接管型号配置 Phase A（无 toml 可设默认）
 
 - **型号+模块默认**：右键「设为「L36」模块默认版本」；同步写入该型号根下全部 `[[platform]]` 块；业务主语是型号+模块，不展示配置块名。

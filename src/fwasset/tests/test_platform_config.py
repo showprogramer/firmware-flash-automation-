@@ -5,11 +5,16 @@ from pathlib import Path
 
 import pytest
 
+import os
+
+from fwasset.core import config_io
+from fwasset.core import platform_config as platform_config_mod
 from fwasset.core.platform_config import (
     PlatformDefaults,
     canonical_module_dir,
     default_variant_for,
     load_platform_config,
+    load_platform_config_with_status,
     save_platform_config,
 )
 
@@ -62,6 +67,86 @@ class TestLoadPlatformConfig:
         assert result == []
 
 
+class TestLoadPlatformConfigWithStatus:
+    def test_missing_file(self, tmp_path: Path):
+        platforms, status, error = load_platform_config_with_status(tmp_path)
+        assert platforms == []
+        assert status == "missing"
+        assert error == ""
+
+    def test_ok_single_platform(self, tmp_path: Path):
+        make_platform_toml(
+            tmp_path,
+            '[[platform]]\nname = "标准单机芯3D"\n[platform.defaults]\n"主板程序" = "量产_默认"\n',
+        )
+        platforms, status, error = load_platform_config_with_status(tmp_path)
+        assert status == "ok"
+        assert error == ""
+        assert len(platforms) == 1
+        assert platforms[0].platform_name == "标准单机芯3D"
+
+    def test_ok_empty_file_or_no_platform_key(self, tmp_path: Path):
+        (tmp_path / "平台配置.toml").write_text("# only comment\n", encoding="utf-8")
+        platforms, status, error = load_platform_config_with_status(tmp_path)
+        assert status == "ok"
+        assert platforms == []
+        assert error == ""
+
+    def test_ok_all_platforms_without_name_not_parse_error(self, tmp_path: Path):
+        make_platform_toml(
+            tmp_path,
+            "[[platform]]\n[platform.defaults]\n"
+            '"主板程序" = "量产_默认"\n'
+            "[[platform]]\nname = \"\"\n[platform.defaults]\n"
+            '"腿部程序" = ""\n',
+        )
+        platforms, status, error = load_platform_config_with_status(tmp_path)
+        assert status == "ok"
+        assert platforms == []
+        assert error == ""
+
+    def test_parse_error_on_syntax(self, tmp_path: Path):
+        (tmp_path / "平台配置.toml").write_text("[[platform\n", encoding="utf-8")
+        platforms, status, error = load_platform_config_with_status(tmp_path)
+        assert platforms == []
+        assert status == "parse_error"
+        assert error
+
+    def test_parse_error_when_platform_is_table_not_array(self, tmp_path: Path):
+        (tmp_path / "平台配置.toml").write_text(
+            '[platform]\nname = "x"\n',
+            encoding="utf-8",
+        )
+        platforms, status, error = load_platform_config_with_status(tmp_path)
+        assert status == "parse_error"
+        assert platforms == []
+        assert "array" in error or "platform" in error
+
+    def test_parse_error_when_defaults_not_table(self, tmp_path: Path):
+        (tmp_path / "平台配置.toml").write_text(
+            '[[platform]]\nname = "标准"\ndefaults = "bad"\n',
+            encoding="utf-8",
+        )
+        platforms, status, error = load_platform_config_with_status(tmp_path)
+        assert status == "parse_error"
+        assert platforms == []
+
+    def test_parser_missing(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        make_platform_toml(
+            tmp_path,
+            '[[platform]]\nname = "标准"\n[platform.defaults]\n',
+        )
+        monkeypatch.setattr(platform_config_mod, "tomllib", None)
+        platforms, status, error = load_platform_config_with_status(tmp_path)
+        assert status == "parser_missing"
+        assert platforms == []
+        assert error
+
+    def test_compat_load_still_returns_empty_on_damage(self, tmp_path: Path):
+        (tmp_path / "平台配置.toml").write_text("[[platform\n", encoding="utf-8")
+        assert load_platform_config(tmp_path) == []
+
+
 class TestSavePlatformConfig:
     def test_round_trip(self, tmp_path: Path):
         platforms = [
@@ -90,6 +175,26 @@ class TestSavePlatformConfig:
         loaded = load_platform_config(tmp_path)
         assert loaded[0].platform_name == '平台"A"'
         assert loaded[0].defaults == {'模块\\x': '变体"y"'}
+
+    def test_replace_failure_keeps_existing_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        original = (
+            '[[platform]]\nname = "旧平台"\n[platform.defaults]\n'
+            '"主板程序" = "旧默认"\n'
+        )
+        path = tmp_path / "平台配置.toml"
+        path.write_text(original, encoding="utf-8")
+        original_bytes = path.read_bytes()
+
+        def boom(_src: str, _dst: str) -> None:
+            raise OSError("replace failed")
+
+        monkeypatch.setattr(config_io.os, "replace", boom)
+        with pytest.raises(OSError, match="replace failed"):
+            save_platform_config(tmp_path, [PlatformDefaults("新", {"主板程序": "新"})])
+        assert path.read_bytes() == original_bytes
+        assert list(tmp_path.glob(".平台配置.toml.*.tmp")) == []
 
 
 class TestDefaultVariantFor:

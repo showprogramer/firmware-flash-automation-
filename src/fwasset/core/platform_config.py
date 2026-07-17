@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
+
+from fwasset.core.config_io import atomic_write_text
 
 try:
     import tomllib
@@ -10,6 +13,14 @@ except ImportError:
         import tomli as tomllib  # type: ignore[no-redef]
     except ImportError:
         tomllib = None  # type: ignore[assignment]
+
+
+PlatformConfigStatus = Literal[
+    "ok",
+    "missing",
+    "parse_error",
+    "parser_missing",
+]
 
 
 def canonical_module_dir(name: str) -> str:
@@ -28,40 +39,66 @@ class PlatformDefaults:
     defaults: dict[str, str] = field(default_factory=dict)  # module_dir_name -> variant_name
 
 
-def load_platform_config(model_root: Path) -> list[PlatformDefaults]:
-    """
-    读取型号根目录下的 `平台配置.toml`。
-    文件不存在或无法解析时静默返回空列表，保证向后兼容。
+def load_platform_config_with_status(
+    model_root: Path,
+) -> tuple[list[PlatformDefaults], PlatformConfigStatus, str]:
+    """严格读取型号根下的 ``平台配置.toml``。
 
-    TOML 格式示例：
-        [[platform]]
-        name = "标准单机芯3D"
-        [platform.defaults]
-        主板程序 = "量产_默认"
-        手控UI = "量产中性_默认"
+    返回 ``(platforms, status, error)``：
+    - ``ok``：可解析且结构合法（允许 0 个 platform 块）
+    - ``missing``：文件不存在
+    - ``parse_error``：语法或结构不符合契约
+    - ``parser_missing``：tomllib/tomli 均不可用
     """
-    toml_path = model_root / "平台配置.toml"
+    toml_path = Path(model_root) / "平台配置.toml"
     if not toml_path.exists():
-        return []
+        return [], "missing", ""
     if tomllib is None:
-        return []
+        return [], "parser_missing", "TOML 解析组件不可用（需要 tomllib 或 tomli）"
+
     try:
         with open(toml_path, "rb") as f:
             data = tomllib.load(f)
-    except Exception:
-        return []
+    except Exception as exc:  # noqa: BLE001
+        return [], "parse_error", f"平台配置 TOML 解析失败: {exc}"
+
+    if not isinstance(data, dict):
+        return [], "parse_error", "平台配置顶层必须是 table"
+
+    if "platform" not in data:
+        return [], "ok", ""
+
+    platform_raw = data.get("platform")
+    if not isinstance(platform_raw, list):
+        return [], "parse_error", "platform 必须是 array of tables"
 
     results: list[PlatformDefaults] = []
-    for entry in data.get("platform", []):
+    for entry in platform_raw:
+        if not isinstance(entry, dict):
+            return [], "parse_error", "每个 [[platform]] 条目必须是 table"
+        defaults_raw = entry.get("defaults", {})
+        if defaults_raw is None:
+            defaults_raw = {}
+        if not isinstance(defaults_raw, dict):
+            return [], "parse_error", "platform.defaults 必须是 table"
         name = str(entry.get("name", "")).strip()
         if not name:
             continue
-        defaults = {
-            str(k): str(v)
-            for k, v in entry.get("defaults", {}).items()
-        }
+        defaults = {str(k): str(v) for k, v in defaults_raw.items()}
         results.append(PlatformDefaults(platform_name=name, defaults=defaults))
-    return results
+    return results, "ok", ""
+
+
+def load_platform_config(model_root: Path) -> list[PlatformDefaults]:
+    """
+    读取型号根目录下的 `平台配置.toml`。
+    文件不存在或无法解析时静默返回空列表，保证只读路径向后兼容。
+
+    会写盘的服务必须改用 :func:`load_platform_config_with_status`，
+    禁止再用 ``[]`` 推断「文件不存在」。
+    """
+    platforms, status, _error = load_platform_config_with_status(model_root)
+    return platforms if status == "ok" else []
 
 
 def default_variant_for(
@@ -101,8 +138,8 @@ def _toml_str(value: str) -> str:
 def save_platform_config(model_root: Path, platforms: list[PlatformDefaults]) -> Path:
     """把平台默认配置写回型号根目录下的 `平台配置.toml`。
 
-    以规范格式整体重写（应用托管该文件）；写入失败向上抛异常，由服务层
-    包装为 ServiceResult。返回写入的文件路径。
+    以规范格式整体重写（应用托管该文件）；经同目录临时文件 + os.replace 原子落盘。
+    写入失败向上抛异常，由服务层包装为 ServiceResult。返回写入的文件路径。
     """
     lines: list[str] = [
         "# 本文件由 fwasset 管理（工作台「设为平台默认」会改写它）。",
@@ -115,6 +152,6 @@ def save_platform_config(model_root: Path, platforms: list[PlatformDefaults]) ->
         lines.append("[platform.defaults]")
         for module_dir, variant_name in p.defaults.items():
             lines.append(f"{_toml_str(module_dir)} = {_toml_str(variant_name)}")
-    toml_path = model_root / "平台配置.toml"
-    toml_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    toml_path = Path(model_root) / "平台配置.toml"
+    atomic_write_text(toml_path, "\n".join(lines) + "\n")
     return toml_path

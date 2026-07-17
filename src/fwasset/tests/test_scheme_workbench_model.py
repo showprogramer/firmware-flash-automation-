@@ -360,6 +360,26 @@ def test_set_default_variant_rejects_custom_asset(l36_tree: Path, tmp_path: Path
     assert result["code"] == "invalid_args"
 
 
+def test_set_default_variant_damaged_platform_config_is_not_overwritten(
+    tmp_path: Path,
+) -> None:
+    """损坏的平台配置：服务拒绝写入；view model 透传错误且不伪造 platforms。"""
+    root = tmp_path / "L36程序"
+    damaged = "[[platform\nbad"
+    _write(root / "平台配置.toml", damaged)
+    _write(root / "通用" / "主板程序" / "量产_默认" / "main.bin")
+    original = (root / "平台配置.toml").read_bytes()
+
+    model = _bind_model(root, tmp_path)
+    cards = model.get_common_modules("L36", "主板程序")
+    asset = cards[0].asset
+    result = model.set_default_variant("L36", asset, log_fn=lambda _m: None)
+    assert result["ok"] is False
+    assert result["code"] == "config_parse_error"
+    assert (root / "平台配置.toml").read_bytes() == original
+    assert model._platforms_for("L36") == []
+
+
 def test_first_set_default_without_toml_uses_scheme_platform_names(
     tmp_path: Path,
 ) -> None:

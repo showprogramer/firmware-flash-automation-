@@ -3,7 +3,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
+from fwasset.core import config_io
+from fwasset.core import platform_config as platform_config_mod
 from fwasset.core.platform_config import load_platform_config
+from fwasset.core.services import platform_default_service as pds
 from fwasset.core.services.platform_default_service import (
     set_default_variant,
     set_module_default_for_model,
@@ -235,3 +240,125 @@ class TestSetModuleDefaultForModel:
         assert canonical_module_dir("3D机芯版程序") == "3D机芯板程序"
         assert canonical_module_dir("2D机芯板程序") == "2D机芯板程序"
         assert canonical_module_dir("  3D机芯版程序  ") == "3D机芯板程序"
+
+
+_DAMAGED = "[[platform\nnot valid"
+
+
+def _assert_write_safety_common(result: dict, path: Path, original: bytes) -> None:
+    assert result["ok"] is False
+    assert result["code"] == "config_parse_error"
+    assert "已停止写入" in result["message"]
+    assert "保留原文件" in result["message"]
+    assert path.read_bytes() == original
+
+
+class TestWriteSafetyDamagedConfig:
+    def test_set_default_variant_refuses_damaged_toml(self, tmp_path: Path):
+        path = tmp_path / "平台配置.toml"
+        path.write_text(_DAMAGED, encoding="utf-8")
+        original = path.read_bytes()
+        result = set_default_variant(
+            str(tmp_path), "标准单机芯3D", "主板程序", "量产_默认", log_fn=_silent
+        )
+        _assert_write_safety_common(result, path, original)
+
+    def test_set_module_default_refuses_damaged_toml(self, tmp_path: Path):
+        path = tmp_path / "平台配置.toml"
+        path.write_text(_DAMAGED, encoding="utf-8")
+        original = path.read_bytes()
+        result = set_module_default_for_model(
+            str(tmp_path), "主板程序", "量产_默认", log_fn=_silent, model_name="L36"
+        )
+        _assert_write_safety_common(result, path, original)
+
+    def test_damaged_does_not_call_ensure_or_apply(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        path = tmp_path / "平台配置.toml"
+        path.write_text(_DAMAGED, encoding="utf-8")
+
+        def boom(*_a, **_k):
+            raise AssertionError("must not mutate before strict-load reject")
+
+        monkeypatch.setattr(pds, "ensure_platform_blocks", boom)
+        monkeypatch.setattr(pds, "_apply_module_default", boom)
+        r1 = set_default_variant(
+            str(tmp_path), "标准", "主板程序", "x", log_fn=_silent
+        )
+        r2 = set_module_default_for_model(
+            str(tmp_path), "主板程序", "x", log_fn=_silent
+        )
+        assert r1["code"] == "config_parse_error"
+        assert r2["code"] == "config_parse_error"
+
+    def test_parser_missing(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        path = tmp_path / "平台配置.toml"
+        path.write_text(
+            '[[platform]]\nname = "标准"\n[platform.defaults]\n',
+            encoding="utf-8",
+        )
+        original = path.read_bytes()
+        monkeypatch.setattr(platform_config_mod, "tomllib", None)
+        result = set_module_default_for_model(
+            str(tmp_path), "主板程序", "量产", log_fn=_silent
+        )
+        assert result["ok"] is False
+        assert result["code"] == "parser_missing"
+        assert "已停止写入" in result["message"]
+        assert path.read_bytes() == original
+
+    def test_os_replace_failure_write_failed(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        path = tmp_path / "平台配置.toml"
+        path.write_text(
+            '[[platform]]\nname = "标准"\n[platform.defaults]\n"主板程序" = "旧"\n',
+            encoding="utf-8",
+        )
+        original = path.read_bytes()
+
+        def boom(_src: str, _dst: str) -> None:
+            raise OSError("replace failed")
+
+        monkeypatch.setattr(config_io.os, "replace", boom)
+        result = set_module_default_for_model(
+            str(tmp_path), "主板程序", "新", log_fn=_silent
+        )
+        assert result["ok"] is False
+        assert result["code"] == "write_failed"
+        assert path.read_bytes() == original
+        assert list(tmp_path.glob(".平台配置.toml.*.tmp")) == []
+
+    def test_os_fsync_failure_write_failed(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        path = tmp_path / "平台配置.toml"
+        path.write_text(
+            '[[platform]]\nname = "标准"\n[platform.defaults]\n"主板程序" = "旧"\n',
+            encoding="utf-8",
+        )
+        original = path.read_bytes()
+
+        def boom(_fd: int) -> None:
+            raise OSError("fsync failed")
+
+        monkeypatch.setattr(config_io.os, "fsync", boom)
+        result = set_module_default_for_model(
+            str(tmp_path), "主板程序", "新", log_fn=_silent
+        )
+        assert result["ok"] is False
+        assert result["code"] == "write_failed"
+        assert path.read_bytes() == original
+        assert list(tmp_path.glob(".平台配置.toml.*.tmp")) == []
+
+    def test_empty_comment_only_file_still_bootstraps(self, tmp_path: Path):
+        (tmp_path / "平台配置.toml").write_text("# empty\n", encoding="utf-8")
+        result = set_module_default_for_model(
+            str(tmp_path), "主板程序", "量产_默认", log_fn=_silent, model_name="L36"
+        )
+        assert result["ok"] is True
+        loaded = load_platform_config(tmp_path)
+        assert loaded[0].defaults["主板程序"] == "量产_默认"

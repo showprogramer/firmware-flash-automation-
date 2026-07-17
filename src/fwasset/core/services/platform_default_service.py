@@ -5,7 +5,7 @@ from pathlib import Path
 from fwasset.core.platform_config import (
     PlatformDefaults,
     canonical_module_dir,
-    load_platform_config,
+    load_platform_config_with_status,
     save_platform_config,
 )
 from fwasset.core.scheme_config import discover_schemes
@@ -97,6 +97,37 @@ def _apply_module_default(
     return previous
 
 
+def _load_platforms_for_write(
+    root_path: Path, log_fn
+) -> tuple[list[PlatformDefaults] | None, dict | None]:
+    """严格读取平台配置供写服务使用。
+
+    成功返回 ``(platforms, None)``（``missing`` 时 platforms 为空列表）。
+    失败返回 ``(None, ServiceResult)``，且**尚未**做任何 mutate/bootstrap。
+    """
+    platforms, status, error = load_platform_config_with_status(root_path)
+    if status in ("ok", "missing"):
+        return platforms, None
+    if status == "parser_missing":
+        message = "平台配置读取组件不可用，已停止写入"
+        log_fn(message)
+        return None, {
+            "ok": False,
+            "code": "parser_missing",
+            "message": message,
+            "payload": {"detail": error},
+        }
+    # parse_error
+    message = "平台配置读取失败，已停止写入并保留原文件"
+    log_fn(message)
+    return None, {
+        "ok": False,
+        "code": "config_parse_error",
+        "message": message,
+        "payload": {"detail": error},
+    }
+
+
 def set_default_variant(
     model_root: str,
     platform_name: str,
@@ -129,8 +160,12 @@ def set_default_variant(
             "payload": {},
         }
 
+    platforms, err = _load_platforms_for_write(root_path, log_fn)
+    if err is not None:
+        return err
+
     try:
-        platforms = load_platform_config(root_path)
+        assert platforms is not None
         target = next((p for p in platforms if p.platform_name == platform), None)
         if target is None:
             target = PlatformDefaults(platform_name=platform)
@@ -191,9 +226,14 @@ def set_module_default_for_model(
             "payload": {},
         }
 
+    platforms, err = _load_platforms_for_write(root_path, log_fn)
+    if err is not None:
+        return err
+
     variant = str(variant_name or "")
     try:
-        platforms = ensure_platform_blocks(root_path, load_platform_config(root_path))
+        assert platforms is not None
+        platforms = ensure_platform_blocks(root_path, platforms)
 
         previous = ""
         updated_blocks: list[str] = []
