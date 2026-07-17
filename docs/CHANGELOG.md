@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### chore(build): 收紧 Python 下限到 3.11，移除 tomli 依赖
+
+- `requires-python` `>=3.8` → `>=3.11`（实际运行环境 3.11.8；3.8 下限从未验证/维护）。
+- 移除 `tomli>=2.0.0; python_version < '3.11'` 条件依赖——3.11 起 `tomllib` 为 stdlib。
+- 同步 `docs/README.md` 技术栈标注为 Python ≥ 3.11。
+- 源码 `import tomllib` fallback 分支保留（3.11 下走 stdlib，无害）；历史 spec/review 未改。
+
+验证:
+- `uv run python -m pytest -m "not ui" -q` → 305 passed，coverage 85.25%
+- 用户人工验证通过
+
 ### feat(core): 型号持久 id（Phase B0 / TASK-20260717）
 
 - 新增 `型号配置.toml` 独立 load/save（`model_id` 读写-合并-写回，保留未知键；`atomic_write_text`）。

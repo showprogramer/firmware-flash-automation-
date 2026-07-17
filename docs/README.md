@@ -289,7 +289,7 @@ uv run python -m pytest src/fwasset/tests/test_asset_index.py -q --no-cov
 
 ## 技术栈
 
-- **Python** >= 3.8
+- **Python** >= 3.11
 - **CustomTkinter** — 现代 Tkinter GUI 框架
 - **psutil** — U 盘/磁盘分区检测
 - **SQLite** — 资产索引持久化
