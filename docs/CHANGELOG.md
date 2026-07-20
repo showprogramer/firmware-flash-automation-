@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### fix(core): B1 二轮审查修复（remove 空写 / 解析器映射误判）
+
+- `remove_shared_module`：对无 `型号配置.toml` 的型号根短路返回，不再凭空创建仅含头注释的空配置（避免后续 `ensure_model_ids` 误当 no_id 重新 slug）。
+- `resolve_shared_module`：以 `source_dir` 盘上 `model_id` 为权威，删除与 bind 内存映射的交叉比对；避免映射滞后/异路径规范化导致误判 `id_mismatch`。`root_for_model_id` 参数保留为可选（兼容注入点）。
+- 清理 `_model_root_path_for_name` 单型号根分支死码；更正 `_merge_write_model_config` 注释。
+- 回归测试：`test_remove_on_missing_file_is_noop`、`test_stale_id_map_does_not_force_mismatch`、`test_resolver_without_id_map`。
+
+验证:
+- `uv run python -m pytest -m "not ui" -q` → 334 passed，coverage 86.17%
+- 审查记录见 `docs/code-review/REVIEW-20260718-shared-module-schema.md`（二轮独立审查）
+
 ### feat(core): 共享引用 schema + 解析器（Phase B1 / TASK-20260718）
 
 - `型号配置.toml` 支持 `[shared_modules.*]`：load/save/remove；与 `model_id` 统一 dict 合并写（`tomli-w` + `atomic_write_text`）。

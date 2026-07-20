@@ -87,6 +87,12 @@ def test_remove_shared_module(tmp_path: Path):
     assert load_model_config(tmp_path)[0] == "keep"
 
 
+def test_remove_on_missing_file_is_noop(tmp_path: Path):
+    """审查 #1：对无 型号配置.toml 的根 remove，不得凭空建文件。"""
+    remove_shared_module(tmp_path, "快捷键程序")
+    assert not (tmp_path / "型号配置.toml").exists()
+
+
 def test_save_model_id_and_shared_roundtrip(tmp_path: Path):
     save_model_id(tmp_path, "first")
     save_shared_module(tmp_path, _ref())

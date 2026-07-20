@@ -264,12 +264,14 @@ class SchemeWorkbenchModel:
         if not name or self.root_dir is None:
             return None
         if self._single_model_root:
-            if name == self._structural_model() or name == self.root_dir.name:
+            # 接受结构化型号名、目录名、或去尾缀后与目录名相等的传入
+            if (
+                name == self._structural_model()
+                or name == self.root_dir.name
+                or _strip_model_suffix(self.root_dir.name) == name
+            ):
                 return self.root_dir
-            # 兼容传入目录名
-            if name == self.root_dir.name:
-                return self.root_dir
-            return self.root_dir if _strip_model_suffix(self.root_dir.name) == name else None
+            return None
         dir_name = self._multi_model_dirs.get(name, "")
         if dir_name:
             p = self.root_dir / dir_name

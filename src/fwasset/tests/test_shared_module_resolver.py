@@ -199,6 +199,34 @@ def test_dotdot_cannot_bypass_source_model_id_check(tmp_path: Path):
     assert ok.status == "hit"
 
 
+def test_stale_id_map_does_not_force_mismatch(tmp_path: Path):
+    """审查 #3：盘上 model_id 相符即 hit，不因 bind 映射滞后/异路径而误判 id_mismatch。"""
+    ws = tmp_path / "ws"
+    src = ws / "L36程序"
+    leaf = src / "通用" / "快捷键" / "贝乐"
+    _write(leaf / "k.hex")
+    save_model_id(src, "l36")
+    # 映射函数故意返回一个与 source_dir 不同的路径（模拟滞后/异规范化）
+    res = resolve_shared_module(
+        _ref("L36程序/通用/快捷键/贝乐", sid="l36"),
+        ws,
+        lambda _i: tmp_path / "别处" / "L36程序",
+    )
+    assert res.status == "hit", res
+    assert res.resolved_path == leaf.resolve()
+
+
+def test_resolver_without_id_map(tmp_path: Path):
+    """审查 #3：root_for_model_id 可省略，盘上校验仍成立。"""
+    ws = tmp_path / "ws"
+    src = ws / "L36程序"
+    leaf = src / "通用" / "快捷键" / "贝乐"
+    _write(leaf / "k.hex")
+    save_model_id(src, "l36")
+    res = resolve_shared_module(_ref("L36程序/通用/快捷键/贝乐", sid="l36"), ws)
+    assert res.status == "hit"
+
+
 def test_no_cross_model_search(tmp_path: Path):
     """源段缺失时不落到另一型号同名路径。"""
     ws = tmp_path / "ws"

@@ -48,9 +48,13 @@ def _list_variant_dirs(abs_path: Path) -> list[Path]:
 def resolve_shared_module(
     ref: SharedModuleRef,
     workspace_root: Path,
-    root_for_model_id: Callable[[str], Path | None],
+    root_for_model_id: Callable[[str], Path | None] | None = None,
 ) -> SharedModuleResolution:
-    """解析一条共享引用 → hit 或 missing（同一路径，无第二套逻辑）。"""
+    """解析一条共享引用 → hit 或 missing（同一路径，无第二套逻辑）。
+
+    ``root_for_model_id`` 为兼容保留（B0 bind 映射注入点）；B1 解析以
+    ``source_dir`` 盘上 ``model_id`` 为权威，不依赖该映射（审查 #3）。
+    """
     ws = Path(workspace_root).resolve()
     rel = str(ref.source_relative_path or "").strip().replace("\\", "/")
     want_id = str(ref.source_model_id or "").strip()
@@ -93,12 +97,10 @@ def resolve_shared_module(
             ref=ref, status="missing", reason="id_mismatch"
         )
 
-    # 与 bind 映射交叉校验：id 应对到同一型号根（若映射已建立）
-    mapped = root_for_model_id(want_id)
-    if mapped is not None and mapped.resolve() != source_dir:
-        return SharedModuleResolution(
-            ref=ref, status="missing", reason="id_mismatch"
-        )
+    # 权威来源 = source_dir 磁盘上的 model_id（上面已校验）。
+    # 不再与 bind 内存映射交叉比对：该映射可能滞后于盘上文件，或因大小写/
+    # 规范化差异把同一根解析成不同 Path，导致误判 id_mismatch（审查 #3）。
+    # .. 越界由前置段校验与下方 source_dir 归属双保险覆盖。
 
     # 双保险：resolve 后的目标必须仍落在已校验的 source_dir 下
     # （即使将来放宽对 .. 的拒绝，也不能跨到其它型号根）

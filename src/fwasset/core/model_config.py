@@ -171,7 +171,7 @@ def _merge_write_model_config(
     data, status, error = _load_raw_dict(root)
     if status in ("parse_error", "parser_missing"):
         raise OSError(error or f"型号配置不可读: {status}")
-    # missing / ok / no_id (ok with empty id treated as empty dict already)
+    # _load_raw_dict 只返回 missing / ok（损坏已在上面抛）；missing → 空 dict 起写
     if status == "ok":
         working = deepcopy(data)
     else:
@@ -221,7 +221,14 @@ def save_shared_module(model_root: Path, ref: SharedModuleRef) -> Path:
 
 
 def remove_shared_module(model_root: Path, module_key: str) -> Path:
-    """删除一条共享引用（仅 toml）；不删固件文件。"""
+    """删除一条共享引用（仅 toml）；不删固件文件。
+
+    文件缺失时短路返回，不凭空创建仅含头注释的空配置（审查 #1）。
+    """
+    root = Path(model_root)
+    path = root / MODEL_CONFIG_FILENAME
+    if not path.exists():
+        return path
     key = canonical_module_dir(module_key)
 
     def _mut(data: dict[str, Any]) -> None:
@@ -232,4 +239,4 @@ def remove_shared_module(model_root: Path, module_key: str) -> Path:
         if not shared:
             data.pop("shared_modules", None)
 
-    return _merge_write_model_config(Path(model_root), _mut)
+    return _merge_write_model_config(root, _mut)
