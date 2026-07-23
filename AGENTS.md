@@ -143,6 +143,48 @@ Defines 20 firmware type entries. Each entry maps `dir_keywords` (Chinese string
 3. 人工确认后，按 `docs/COMMIT_TEMPLATE.md` 格式生成 Conventional Commit 并提交。
 4. 同步更新 `docs/CHANGELOG.md`。
 5. 如果任务对应 `specs/active/` 中的计划，完成后将对应条目标记为已完成。
+6. **立项硬约束**：复杂度判定为 `xhigh` 的 TASK **必须先拆子 TASK 才能立项**；不拆直接立 xhigh 视为流程违规（见下方「复杂度标注」节）。
+
+## 复杂度标注
+
+每个 TASK 实施计划里的 **`### Task N` 子项**与 REVIEW **每条审查议题**（`### Issue N` / `### Rn`）都必须标注复杂度，供排期、风险预判与回归范围决策。一个 TASK 含 N 个 Task 子项就标 N 个复杂度——不是整个 TASK 文件单一标。
+
+### 评级表
+
+| 等级 | 判据 |
+| --- | --- |
+| `low` | 单文件 / 纯文档 / 测试补齐；无核心 API、无 schema、无 UI 交互变更 |
+| `medium` | 多文件但单一关注点；含 UI 或 service 之一；测试用例 < 10 |
+| `high` | 跨 core + UI 双层；动 `types.py` TypedDict / `ServiceResult` 结构 / 数据库 schema / 扫描或索引公共路径；需双壳人验 |
+| `xhigh` | 跨多 Phase / 父任务主线；含 schema 迁移 + 公共 API 破坏性变更 + 双壳 UI + 现场数据语义变化；**必须拆子 TASK 才能立项**（见「Task Verification & Git Workflow」第 6 条） |
+
+### 标注位置
+
+- **TASK**：`### Task N：<名字>` 标题行**末尾**加 inline 徽章 `` `complexity: <级别>` ``；下一行 `**Files:**` 之前加一行 `**复杂度理由：** <一句话>`。
+- **REVIEW**：`### Issue N (...)` 或 `### Rn (...)` 标题行**末尾**加 inline 徽章 `` `complexity: <级别>` ``；下一行（通常是 `**文件：**`）之前加一行 `**复杂度理由：** <一句话>`。理由对应**修复动作**的实施量级，不是审查发现难度。
+
+### 标注时机与维护
+
+- TASK 立项时初判每个 Task 子项；实施中若发现跨级上升须更新该子项复杂度并注明原因（一句话追加到「复杂度理由」末尾，形如 `（实施中升 medium→high：跨入 view model）`）。
+- REVIEW 创建时复用其 TASK 的对应 Task 复杂度；若审查引出超出原 TASK 范围的改动，单独标并说明。
+- **不追溯**已 commit / 已归档的 TASK 与 REVIEW；只对新立的强制要求。
+- **禁止**以代码行数 / commit 体积 / "感觉复杂" 为判据。评级必须给出可复核的理由。
+
+### 示例
+
+```markdown
+### Task 1：`set_shared_module` service（纯数据，无 UI）  `complexity: medium`
+
+**复杂度理由：** 单 service 纯函数，无 UI / 无 schema / 无双壳；错误码 5 种、测试用例 ~7，越界与冲突分支为中粒度而非 low。
+**Files:** Create `src/fwasset/core/services/shared_module_service.py`；Create `src/fwasset/tests/test_shared_module_service.py`
+```
+
+```markdown
+### Issue 1（P1·阻断）：单型号根迁移会写入 `通用/型号配置.toml`  `complexity: medium`
+
+**复杂度理由：** 修复加 `_target_model_root` 帮助函数 + 单条回归测试，单 service 单测；不动 schema / UI。
+**文件：** `core/services/shared_migration_service.py:102-108`
+```
 
 ## Code Review Automation
 

@@ -92,8 +92,9 @@ uv run python -m pytest -m "not ui" -q
 
 ## 审查议题
 
-### Issue 1（P1·已修；📌 范围调整后随迁移移走）：UI 批量确认只按 module_key 过滤，跨目标型号同名模块被同时覆盖
+### Issue 1（P1·已修；📌 范围调整后随迁移移走）：UI 批量确认只按 module_key 过滤，跨目标型号同名模块被同时覆盖  `complexity: medium`
 
+**复杂度理由：** 修复动作 = 抽 `filter_chosen_for_conflict` 纯函数 + 3 个回归测试；双壳共用纯函数，不动 schema / service 签名。裁剪后整议题随迁移移走，本审查只保留记录、不实施修复，故实际修复量级仍为 medium（在后置 TASK 复活时承担）。
 **文件：** `ui/workbench_panel.py:891`、`ui_qt/workbench_window.py:977`
 
 `屏蔽层以 (target_model_root, module_key)` 定位一条引用；service payload 的 `conflicts` 每条也都含 `target_model_root`。但 CTk / Qt 的批量确认循环只按 `module_key` 过滤 `chosen` 候选，若迁移跨多个目标型号 × 同名模块出现冲突，一次弹窗「是」会被翻译成「同时覆盖两个目标型号」。

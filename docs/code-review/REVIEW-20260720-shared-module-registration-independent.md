@@ -59,8 +59,9 @@ uv run python -m pytest -m "not ui" -q
 
 ## 审查议题
 
-### Issue 1（P1·阻断）：单型号根迁移会写入 `通用/型号配置.toml`
+### Issue 1（P1·阻断）：单型号根迁移会写入 `通用/型号配置.toml`  `complexity: medium`
 
+**复杂度理由：** 修 `_target_model_root` 帮助函数 + 1 条单型号根回归测试；单 service 单测。
 **文件：** `core/services/shared_migration_service.py:102-108`
 
 扫描器将工作区相对路径的首段一律视为型号目录。单型号根下首段是 `通用` 或 `定制`，因而目标根被算为 `<workspace>/通用`，`apply_ref_migration` 随后向错误目录写入 `型号配置.toml`。工作台已支持“扫描根本身是一个型号目录”的布局，且 TASK 明确要求目标根不得落入 `通用/`。
@@ -71,8 +72,9 @@ uv run python -m pytest -m "not ui" -q
 **修复：** 新增 `_target_model_root(ws, rel_parts)`（首段为 `通用`/`定制` → 工作区根本身），扫描改用之。回归测试 `test_single_model_root_migration_target_is_workspace`（断言目标根=工作区根、`型号配置.toml` 不落 `通用/`）。
 **状态：** ✅ 已修
 
-### Issue 2（P1·阻断）：迁移 UI 未支持选择候选或逐条冲突确认
+### Issue 2（P1·阻断）：迁移 UI 未支持选择候选或逐条冲突确认  `complexity: medium`
 
+**复杂度理由：** UI 双壳改 Listbox/QListWidget 可勾选 + 冲突逐条弹窗；逻辑层已支持、仅 UI 未暴露；两壳共担一次改。
 **文件：** `ui/workbench_panel.py:835-883`、`ui_qt/workbench_window.py:930-969`
 
 两套预览对话框只显示文本，不保存可勾选的候选集合；点击“应用迁移”直接提交全部 `clues`。冲突发生在非冲突项已写入后，且 UI 只提供“是否全部覆盖”。这不符合 TASK 规定的预览分区、用户勾选确认及冲突逐条确认，用户无法保留部分冲突或取消部分非冲突写入。
@@ -83,8 +85,9 @@ uv run python -m pytest -m "not ui" -q
 **修复：** CTk `Listbox(selectmode=MULTIPLE)`（仅可写入项可勾选、默认全选，无法解析项灰显）；Qt `QListWidgetItem` 可勾选（ok 预勾、无法解析禁用）。`_apply` 只提交勾选候选；冲突**逐条** `askyesno`/`QMessageBox.question`（每模块单独覆盖/保留）。两套文件 `py_compile` 通过；交互行为待人工验证（UI，`@pytest.mark.ui` 不自动跑）。
 **状态：** ✅ 已修（待人验交互）
 
-### Issue 3（P1·阻断）：`.ref` 解码异常与非法路径不会成为“无法解析”预览项
+### Issue 3（P1·阻断）：`.ref` 解码异常与非法路径不会成为“无法解析”预览项  `complexity: medium`
 
+**复杂度理由：** catch 扩 `(OSError, UnicodeDecodeError)` + `_clean_source_rel` 拒绝绝对/`.`/`..` + 2 条回归测试；单 service 纯函数。
 **文件：** `core/services/shared_migration_service.py:144-190`
 
 读取 `.ref` 只捕获 `OSError`。非 UTF-8 的历史中文文件会抛出 `UnicodeDecodeError` 并终止扫描，而不是列入“无法解析”。此外，绝对路径、`.`、`..` 路径段未被拒绝，可能被写成无效 `source_relative_path`。
@@ -95,8 +98,9 @@ uv run python -m pytest -m "not ui" -q
 **修复：** `read_text` catch 扩到 `(OSError, UnicodeDecodeError)` → 产出 `unparseable` 候选不崩；新增 `_clean_source_rel` 拒绝绝对路径 / `.` / `..` 段（`_parse_ref_content` 调用）。回归测试 `test_scan_non_utf8_ref_is_unparseable`、`test_scan_dotdot_ref_is_unparseable`。
 **状态：** ✅ 已修
 
-### Issue 4（P2·流程）：父任务 B2 过早标记完成
+### Issue 4（P2·流程）：父任务 B2 过早标记完成  `complexity: low`
 
+**复杂度理由：** 仅改父任务 checklist 一行 `[x] → [ ]` + 加注；纯文档，不动代码。
 **文件：** `specs/active/TASK-20260714-config-takeover.md:378`
 
 父任务已将 B2 标为 `[x]`，但当前任务仍有未关闭阻断项，且尚未人工验证。项目规则要求 UI 和核心流程改动在人工验证通过后才能标记完成和提交。
@@ -107,8 +111,9 @@ uv run python -m pytest -m "not ui" -q
 **修复：** 父任务 B2 checklist 改回 `[ ]`，注「代码 + 二轮审查修复完成；**待人工验证 6 场景**后勾选并提交」。
 **状态：** ✅ 已改（人验后再勾选）
 
-### R5（审查遗漏·低）：迁移与手动登记的模块键推导路径不一致
+### R5（审查遗漏·低）：迁移与手动登记的模块键推导路径不一致  `complexity: low`
 
+**复杂度理由：** 记录 + 加一条 catalog 模块收敛断言测试；不动对外行为，只补回归。
 **文件：** `core/services/shared_migration_service.py`（`catalog_label_for_dir`）vs `core/services/shared_module_service.py:140`（`canonical_module_dir(firmware_label)`）
 
 独立审查**未发现**：迁移用 `catalog_label_for_dir(目录名)`（关键词子串）推 `target_module_key`，手动用 `canonical_module_dir(firmware_label)`。对 catalog 可识别模块两者收敛（如 `3D机芯板上` → `3D机芯板程序`，与 `firmware_label` 一致，测试 `test_manual_and_migration_key_converge` 已验）；仅当**资产 `firmware_label` ≠ 目录名映射标签**（catalog 未识别模块）时可能分叉，导致同物理模块经两路径写成两条 `shared_modules` 键，B4b「同模块单引用」失守。

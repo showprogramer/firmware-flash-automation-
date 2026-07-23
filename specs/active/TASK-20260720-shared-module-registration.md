@@ -115,8 +115,9 @@ clear_shared_module(target_model_root, module_key, log_fn=print) -> dict
 
 > 精确挂载点（右键菜单构建方法、选中资产获取、view model 方法名）见「代码定位」表（探查后补）；以下为 task 骨架，实施时对齐真实 file:line。
 
-### Task 1：`set_shared_module` service（纯数据，无 UI）
+### Task 1：`set_shared_module` service（纯数据，无 UI）  `complexity: medium`
 
+**复杂度理由：** 单 service 纯函数，无 UI / 无 schema / 无双壳；错误码 5 种、测试用例 ~7，越界与冲突分支为中粒度而非 low。
 **Files:** Create `src/fwasset/core/services/shared_module_service.py`；Create `src/fwasset/tests/test_shared_module_service.py`
 
 **RED** — 临时工作区（源型号根 + 目标型号根）覆盖：
@@ -130,8 +131,9 @@ clear_shared_module(target_model_root, module_key, log_fn=print) -> dict
 
 **GREEN:** 实现 service，调 B1 `save_shared_module`。
 
-### Task 2：`clear_shared_module` service
+### Task 2：`clear_shared_module` service  `complexity: low`
 
+**复杂度理由：** 复用 B1 `remove_shared_module` + 3 个用例；幂等 + 不删文件断言，单文件单关注点。
 **Files:** Modify 同上；Modify 测试
 
 **RED:**
@@ -141,8 +143,9 @@ clear_shared_module(target_model_root, module_key, log_fn=print) -> dict
 
 **GREEN:** 调 `remove_shared_module`。
 
-### Task 3：view model 登记 API（无 UI 逻辑）
+### Task 3：view model 登记 API（无 UI 逻辑）  `complexity: medium`
 
+**复杂度理由：** 单 view model 文件 + 测试；新增 2 个方法复用 Task 1/2 service；含 B4 隔离回归 ~5 用例，跨入 view model 层但不动 UI / schema。
 **Files:** Modify `src/fwasset/ui/view_models/scheme_workbench_model.py`；Modify `src/fwasset/tests/test_scheme_workbench_model.py`
 
 **新增（名称可微调，语义固定）：**
@@ -158,8 +161,9 @@ clear_shared_module(target_model_root, module_key, log_fn=print) -> dict
 
 > **已裁掉**：原 Task 3「`.ref` 迁移 scan + apply」与 `preview_ref_migration` / `apply_ref_migration` view model API 整建制移至 `TASK-20260723-firmware-ref-migration.md`。
 
-### Task 4：CTk UI 右键 + 对话框
+### Task 4：CTk UI 右键 + 对话框  `complexity: high`
 
+**复杂度理由：** 动 CTk UI 右键菜单构建 + 来源选择对话框 + 冲突弹窗；UI 入口变更需人验；改 `workbench_helpers` 共用文案（与 Task 5 共担 high）。
 **Files:** Modify `src/fwasset/ui/...`（右键菜单构建处 + 冲突对话框；见代码定位表）；Modify `src/fwasset/ui/workbench_helpers.py`（共用文案/弹窗 helper）
 
 - **从目标侧发起（B）**：右键**目标型号模块行** → 「为它登记共享来源…」→ 对话框列工作区内可作来源的真实资产（默认预过滤同模块名，可放开）→ 选中 → `register_shared_module`；同模块已有引用 → 覆盖/取消弹窗。
@@ -169,13 +173,16 @@ clear_shared_module(target_model_root, module_key, log_fn=print) -> dict
 
 > **已裁掉**：原「从 .ref 导入共享…」入口 + 预览列表（可解析/无法解析/冲突分区）+ 迁移相关 helper 一并移至后置迁移 TASK。
 
-### Task 5：PySide6 UI 右键 + 对话框
+### Task 5：PySide6 UI 右键 + 对话框  `complexity: high`
 
+**复杂度理由：** Qt 对称 Task 4；双壳人验；QMenu/QDialog 跨文件，文案须与 CTk 一致。两壳合算一次跨壳改，标 high 而非拆 low。
 **Files:** Modify `src/fwasset/ui_qt/...`（QMenu action + QDialog）；共用 helper 对齐 CTk 文案
 
 - 与 Task 4 同交互、同文案；QMenu action 槽 → 同一 view model API。
 
-### Task 6：非 UI 门禁
+### Task 6：非 UI 门禁  `complexity: low`
+
+**复杂度理由：** 纯门禁跑 pytest + 断言覆盖率 ≥ 80%；不改代码；只读验证。
 
 ```bash
 uv run python -m pytest -m "not ui" -q
@@ -184,7 +191,9 @@ Expected: 全部非 UI 通过；coverage ≥ 80%；UI 测试 deselect。
 
 **禁止 Agent 执行**：`scripts/test.ps1`、`uv run fwasset`、`FWASSET_UI=qt uv run fwasset`、任何未过滤 `@pytest.mark.ui` 的全量测试。
 
-### Task 7：审查记录、CHANGELOG 与父任务同步
+### Task 7：审查记录、CHANGELOG 与父任务同步  `complexity: low`
+
+**复杂度理由：** 纯文档同步：REVIEW / CHANGELOG / 父任务勾选；不改代码逻辑。
 
 - Create `docs/code-review/REVIEW-20260720-shared-module-registration.md`（类型：新服务 + 双轨 UI；问题：共享手动登记入口；处理：set/clear service + 两套右键；验证记录；人验状态；commit 后补哈希）。
 - Modify `docs/CHANGELOG.md`（Unreleased 增条目，注明 `.ref` 迁移已移至后置 TASK）。
