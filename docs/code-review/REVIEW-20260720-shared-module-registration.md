@@ -88,7 +88,7 @@ uv run python -m pytest -m "not ui" -q
 
 | 哈希 | 描述 |
 | --- | --- |
-| _待填_ | feat(core,ui): 共享手动登记入口（Phase B2）—— commit 后回填哈希 |
+| 1a03706 | feat(core,ui): 共享手动登记入口（Phase B2） |
 
 ## 审查议题
 

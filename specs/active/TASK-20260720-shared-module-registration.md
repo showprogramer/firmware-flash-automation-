@@ -7,7 +7,7 @@
 | 项 | 状态 |
 | --- | --- |
 | 类型 | 父任务 Phase B2（手动登记入口；B3 展示前置） |
-| 当前状态 | ✅ **Qt 人验通过（2026-07-23）；代码已 commit**。CTk 验证故意推迟到 B3 切默认入口同次随带——B2 期 CTk 仍是默认入口但双壳共用 `workbench_helpers` 纯函数保证文案/禁语一致，无需独立再验。范围裁剪：原计划含 `.ref` 一次性迁移已砍掉，迁移独立后置（见 `TASK-20260723-firmware-ref-migration.md`） |
+| 当前状态 | ✅ **Qt 人验通过（2026-07-23）；代码已 commit（`1a03706`）**。CTk 验证故意推迟到 B3 切默认入口同次随带——B2 期 CTk 仍是默认入口但双壳共用 `workbench_helpers` 纯函数保证文案/禁语一致，无需独立再验。范围裁剪：原计划含 `.ref` 一次性迁移已砍掉，迁移独立后置（见 `TASK-20260723-firmware-ref-migration.md`） |
 | 父任务 | `specs/active/TASK-20260714-config-takeover.md`（B2 专节 + 落盘文件专节为契约源） |
 | 分支 | 继续 `feature/pyside6-migration` |
 | 前置（代码） | **B1**（`TASK-20260718`）已提交（`4c8b6db` + 审查修复 `fafd65a`）；B0（`1c287b8`）、原子写（`72d1cca`）已合入 |
