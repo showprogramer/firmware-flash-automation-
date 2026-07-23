@@ -12,6 +12,10 @@ from fwasset.core.services.platform_default_service import (
     canonical_module_dir,
     set_module_default_for_model as _set_module_default_for_model,
 )
+from fwasset.core.services.shared_module_service import (
+    clear_shared_module as _clear_shared_module_core,
+    set_shared_module as _set_shared_module_core,
+)
 from fwasset.core.shared_module_resolver import (
     SharedModuleResolution,
     resolve_shared_module as resolve_shared_module_core,
@@ -306,6 +310,62 @@ class SchemeWorkbenchModel:
             workspace_root=self.root_dir,
             root_for_model_id=self.model_root_for_id,
         )
+
+    # --- 共享登记入口（Phase B2）---
+    def register_shared_module(
+        self,
+        target_model_name: str,
+        source_asset: FirmwareAsset,
+        module_key: str = "",
+        overwrite: bool = False,
+        log_fn=print,
+    ) -> dict:
+        """手动登记一条共享引用到目标型号根的 `型号配置.toml`。
+
+        工作区根取 ``self.root_dir``；目标型号根经 ``_model_root_path_for_name``
+        反查（不落 ``通用/``）。仅接受工作区内已扫描到的真实来源资产——
+        分层纪律见 TASK-20260720。
+        """
+        if self.root_dir is None:
+            return {
+                "ok": False,
+                "code": "invalid_args",
+                "message": "登记共享来源失败：工作区未绑定",
+                "payload": {},
+            }
+        target_root = self._model_root_path_for_name(target_model_name)
+        if target_root is None:
+            return {
+                "ok": False,
+                "code": "invalid_args",
+                "message": f"登记共享来源失败：目标型号不存在 ({target_model_name})",
+                "payload": {},
+            }
+        return _set_shared_module_core(
+            target_model_root=target_root,
+            source_asset=source_asset,
+            workspace_root=self.root_dir,
+            module_key=module_key,
+            overwrite=overwrite,
+            log_fn=log_fn,
+        )
+
+    def unregister_shared_module(
+        self,
+        target_model_name: str,
+        module_key: str,
+        log_fn=print,
+    ) -> dict:
+        """取消登记：删除目标模块的共享引用条目（只删 toml 不删文件，B4b）。"""
+        target_root = self._model_root_path_for_name(target_model_name)
+        if target_root is None:
+            return {
+                "ok": False,
+                "code": "invalid_args",
+                "message": f"取消共享失败：目标型号不存在 ({target_model_name})",
+                "payload": {},
+            }
+        return _clear_shared_module_core(target_root, module_key, log_fn=log_fn)
 
     # 与 query_assets / _filter_assets 共用的跨字段分词搜索字段
     _KEYWORD_FIELDS = (

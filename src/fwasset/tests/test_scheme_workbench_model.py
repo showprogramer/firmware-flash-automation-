@@ -334,6 +334,137 @@ def test_scheme_modules_ignore_shared_refs(tmp_path: Path) -> None:
     assert "手控UI" in labels or any("手控" in x for x in labels)
 
 
+# ---------------- Phase B2: 共享登记入口 view-model API ----------------
+
+
+def _setup_multi_model_workspace_for_registration(tmp_path: Path) -> tuple[Path, SchemeWorkbenchModel, dict]:
+    """双机芯目标 + L36 来源（含两个已扫描的快捷键变体）。"""
+    from fwasset.core.model_config import save_model_id
+
+    parent = tmp_path / "按摩器程序"
+    l36 = parent / "L36程序"
+    dual = parent / "L36双机芯-上3D-下2D程序"
+    src_variant = l36 / "通用" / "快捷键" / "贝乐"
+    other_variant = l36 / "通用" / "快捷键" / "量产_默认"
+    src_variant.mkdir(parents=True, exist_ok=True)
+    other_variant.mkdir(parents=True, exist_ok=True)
+    (src_variant / "k.hex").write_bytes(b"K")
+    (other_variant / "k2.hex").write_bytes(b"K2")
+    dual.mkdir(parents=True, exist_ok=True)
+    # 双机芯根下一份可扫描固件，使该型号进入工作台位置型号列表
+    _write(dual / "通用" / "主板程序" / "量产_默认" / "main.bin")
+    save_model_id(l36, "l36")
+    save_model_id(dual, "dual")
+    model = _bind_model(parent, tmp_path)
+    # 取出已扫描的来源资产
+    asset = next(
+        a for a in model._all_assets
+        if str(a.get("path", "")) == str(src_variant.resolve())
+    )
+    other_asset = next(
+        a for a in model._all_assets
+        if str(a.get("path", "")) == str(other_variant.resolve())
+    )
+    return parent, model, {
+        "asset": asset,
+        "other_asset": other_asset,
+        "l36": l36,
+        "dual": dual,
+        "src_variant": src_variant,
+    }
+
+
+def test_register_shared_module_writes_ref(tmp_path: Path) -> None:
+    _parent, model, ctx = _setup_multi_model_workspace_for_registration(tmp_path)
+    result = model.register_shared_module("L36双机芯-上3D-下2D", ctx["asset"])
+    assert result["ok"] is True
+    refs = model.get_shared_modules("L36双机芯-上3D-下2D")
+    assert len(refs) == 1
+    assert refs[0].module_key == "快捷键程序"
+    assert refs[0].source_model_id == "l36"
+
+
+def test_register_conflict_no_overwrite(tmp_path: Path) -> None:
+    _parent, model, ctx = _setup_multi_model_workspace_for_registration(tmp_path)
+    model.register_shared_module("L36双机芯-上3D-下2D", ctx["asset"])
+    result = model.register_shared_module(
+        "L36双机芯-上3D-下2D", ctx["other_asset"], overwrite=False
+    )
+    assert result["ok"] is False
+    assert result["code"] == "conflict"
+    # 原引用不变
+    refs = model.get_shared_modules("L36双机芯-上3D-下2D")
+    assert len(refs) == 1
+    assert refs[0].source_relative_path.endswith("贝乐")
+
+
+def test_register_conflict_overwrite(tmp_path: Path) -> None:
+    _parent, model, ctx = _setup_multi_model_workspace_for_registration(tmp_path)
+    model.register_shared_module("L36双机芯-上3D-下2D", ctx["asset"])
+    result = model.register_shared_module(
+        "L36双机芯-上3D-下2D", ctx["other_asset"], overwrite=True
+    )
+    assert result["ok"] is True
+    refs = model.get_shared_modules("L36双机芯-上3D-下2D")
+    assert len(refs) == 1
+    assert refs[0].source_relative_path.endswith("量产_默认")
+
+
+def test_unregister_shared_module_removes_ref_keeps_files(tmp_path: Path) -> None:
+    _parent, model, ctx = _setup_multi_model_workspace_for_registration(tmp_path)
+    model.register_shared_module("L36双机芯-上3D-下2D", ctx["asset"])
+    # 双机芯本地有同模块文件
+    local_file = ctx["dual"] / "通用" / "快捷键" / "本地变体" / "local.hex"
+    local_file.parent.mkdir(parents=True, exist_ok=True)
+    local_file.write_bytes(b"LOCAL")
+    result = model.unregister_shared_module("L36双机芯-上3D-下2D", "快捷键程序")
+    assert result["ok"] is True
+    assert model.get_shared_modules("L36双机芯-上3D-下2D") == []
+    # 本地文件仍在
+    assert local_file.exists()
+
+
+def test_register_does_not_break_scheme_isolation(tmp_path: Path) -> None:
+    """B4 隔离回归：登记后 get_scheme_modules / get_scheme_module_tree 不含共享行。"""
+    from fwasset.core.model_config import save_model_id
+
+    parent = tmp_path / "按摩器程序"
+    l36 = parent / "L36程序"
+    dual = parent / "L36双机芯-上3D-下2D程序"
+    _write(l36 / "通用" / "快捷键" / "贝乐" / "k.hex")
+    _write(dual / "通用" / "主板程序" / "main.bin")
+    _write(dual / "定制" / "方案A" / "方案配置.toml", 'name = "方案A"\nplatform = "标准单机芯3D"\n')
+    _write(dual / "定制" / "方案A" / "主板程序" / "a.bin")
+    save_model_id(l36, "l36")
+    save_model_id(dual, "dual")
+    model = _bind_model(parent, tmp_path)
+    src_asset = next(
+        a for a in model._all_assets
+        if str(a.get("firmware_label", "")) == "快捷键程序"
+    )
+    model.register_shared_module("L36双机芯-上3D-下2D", src_asset)
+    # 方案树 / 模块列表仍不含快捷键程序共享行
+    tree = model.get_scheme_module_tree("L36双机芯-上3D-下2D", "方案A")
+    all_modules = model.get_all_modules("L36双机芯-上3D-下2D")
+    # 共享已登记但不应在方案树/全部模块中出现
+    shared_refs = model.get_shared_modules("L36双机芯-上3D-下2D")
+    assert len(shared_refs) == 1
+    scheme_labels = {row.label for row in tree}
+    all_labels = {c.asset.get("firmware_label", "") for c in all_modules}
+    assert "快捷键程序" not in scheme_labels
+    assert "快捷键程序" not in all_labels
+
+
+def test_register_target_root_not_in_common(tmp_path: Path) -> None:
+    """目标型号根不落 通用/（即使资产在 通用/ 下，写盘到型号根）。"""
+    _parent, model, ctx = _setup_multi_model_workspace_for_registration(tmp_path)
+    model.register_shared_module("L36双机芯-上3D-下2D", ctx["asset"])
+    config_path = ctx["dual"] / "型号配置.toml"
+    assert config_path.exists()
+    # 通用 下不应出现 型号配置.toml
+    assert not (ctx["dual"] / "通用" / "型号配置.toml").exists()
+
+
 def test_multi_model_assets_do_not_leak_across_models(multi_model_tree: Path, tmp_path: Path) -> None:
     """双机芯主板不出现在 L36 视图里，反之亦然（文件名噪声不参与归属）。"""
     model = _bind_model(multi_model_tree, tmp_path)

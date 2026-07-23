@@ -510,3 +510,41 @@ def test_delayed_search_refresh_skips_when_widget_destroyed() -> None:
     fn()  # closure runs, but winfo_exists is False → skip the actual refresh
 
     assert refresh_calls == [], "destroyed widget must not trigger a refresh"
+
+
+# --- Phase B2: 共享登记入口文案（纯函数；CTk 与 Qt 双壳共用）---
+
+
+def test_shared_register_action_label() -> None:
+    from fwasset.ui.workbench_helpers import shared_register_action_label
+    assert shared_register_action_label("快捷键程序") == "为「快捷键程序」登记共享来源…"
+    assert shared_register_action_label("") == "为「该模块」登记共享来源…"
+
+
+def test_shared_unregister_action_label() -> None:
+    from fwasset.ui.workbench_helpers import shared_unregister_action_label
+    assert shared_unregister_action_label("蓝牙程序") == "取消「蓝牙程序」的共享来源"
+
+
+def test_shared_unregister_confirm_message_no_huiyuan() -> None:
+    from fwasset.ui.workbench_helpers import shared_unregister_confirm_message
+    msg = shared_unregister_confirm_message("快捷键程序")
+    assert "回源" not in msg
+    assert "不会删除" in msg
+    assert "快捷键程序" in msg
+
+
+def test_shared_conflict_prompt_no_huiyuan() -> None:
+    from fwasset.ui.workbench_helpers import shared_conflict_prompt_message
+    msg = shared_conflict_prompt_message("蓝牙程序")
+    assert "回源" not in msg
+    assert "覆盖" in msg
+
+
+def test_shared_source_picker_caption_changing_filter_changes_message() -> None:
+    from fwasset.ui.workbench_helpers import shared_source_picker_caption
+    strict_msg = shared_source_picker_caption("快捷键程序", True)
+    loose_msg = shared_source_picker_caption("快捷键程序", False)
+    assert "预过滤" in strict_msg
+    assert "看全部" in loose_msg
+    assert strict_msg != loose_msg

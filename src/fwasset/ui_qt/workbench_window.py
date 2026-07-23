@@ -13,9 +13,12 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
     QHBoxLayout,
+    QLabel,
+    QListWidget,
     QListWidgetItem,
     QMenu,
     QMessageBox,
+    QPushButton,
     QVBoxLayout,
     QWidget,
 )
@@ -57,7 +60,14 @@ from fwasset.ui.workbench_helpers import (
     module_label_from_asset,
     set_default_action_label,
     set_default_confirm_message,
+    shared_conflict_prompt_message,
+    shared_register_action_label,
+    shared_register_dialog_title,
+    shared_source_picker_caption,
+    shared_unregister_action_label,
+    shared_unregister_confirm_message,
 )
+from fwasset.core.services.platform_default_service import canonical_module_dir
 from fwasset.ui_qt.data_grid import DataGrid
 from fwasset.ui_qt.operation_panels import get_panel
 from fwasset.ui_qt.design_tokens import (
@@ -73,6 +83,14 @@ from fwasset.ui_qt.log_panel import LogPanel
 
 
 SEARCH_REFRESH_DEBOUNCE_MS = 180
+
+
+def _format_source_item_qt(asset: dict) -> str:
+    """来源选择对话框的一行：模块 · 变体目录  ←  路径。"""
+    label = str(asset.get("firmware_label", "")) or "-"
+    variant = str(asset.get("directory_name", "")) or "-"
+    path = str(asset.get("path", ""))
+    return f"{label} · {variant}   ←   {path}"
 
 
 class WorkbenchInterface(QWidget):
@@ -682,13 +700,14 @@ class WorkbenchInterface(QWidget):
         self.ops_layout.addWidget(panel)
         self.active_operation_panel = panel
 
-    # ------------------------------------------------------------------ 右键菜单（设为「型号」模块默认版本）
+    # ------------------------------------------------------------------ 右键菜单（设为「型号」模块默认版本 + 共享登记 B2）
     def _on_grid_right_click(self, variant: ModuleVariant, global_pos) -> None:
         menu = QMenu(self)
 
         asset = variant.asset
         model_name = self.current_selection.model_name
         module = module_label_from_asset(asset)
+        module_key = canonical_module_dir(module)
         is_common = variant.source_kind == "common" and str(asset.get("category", "")) == "common"
         if is_common:
             # 无 toml 也可设默认（软件自动创建配置）；已是默认则灰掉
@@ -703,6 +722,26 @@ class WorkbenchInterface(QWidget):
                 action = QAction(set_default_action_label(model_name, module), menu)
                 action.triggered.connect(lambda _c=False: self._set_default_variant(variant))
                 menu.addAction(action)
+            menu.addSeparator()
+
+        # --- 共享登记（B2）：右键目标型号的模块行 → 登记/取消共享来源 ---
+        if module_key:
+            shared_res = self.workbench_model.resolve_shared_module(model_name, module_key)
+            if shared_res is not None:
+                unreg_action = QAction(
+                    shared_unregister_action_label(module), menu
+                )
+                unreg_action.triggered.connect(
+                    lambda _c=False: self._unregister_shared(variant)
+                )
+                menu.addAction(unreg_action)
+            reg_action = QAction(
+                shared_register_action_label(module), menu
+            )
+            reg_action.triggered.connect(
+                lambda _c=False: self._register_shared_source(variant)
+            )
+            menu.addAction(reg_action)
             menu.addSeparator()
 
         open_action = QAction("打开目录", menu)
@@ -733,6 +772,142 @@ class WorkbenchInterface(QWidget):
             self._log(result["message"])
             QMessageBox.critical(self, "设置失败", result["message"])
             return
+        self._refresh_main_grid()
+
+    # --- 共享登记入口对话框（B2；Qt 版，文案对齐 CTk）---
+    def _register_shared_source(self, variant: ModuleVariant) -> None:
+        target_model = self.current_selection.model_name
+        if not target_model:
+            self._log("请先选择目标型号")
+            return
+        module = module_label_from_asset(variant.asset)
+        module_key = canonical_module_dir(module)
+        all_candidates: list[dict] = []
+        for a in self.workbench_model._all_assets:
+            try:
+                if self.workbench_model._model_of_asset(a) == target_model:
+                    continue
+            except Exception:  # noqa: BLE001
+                continue
+            all_candidates.append(a)
+        default_candidates = [
+            a for a in all_candidates
+            if canonical_module_dir(str(a.get("firmware_label", ""))) == module_key
+        ]
+        self._show_shared_source_picker(
+            target_model, module_key, module, all_candidates, default_candidates
+        )
+
+    def _show_shared_source_picker(
+        self,
+        target_model: str,
+        module_key: str,
+        module_label: str,
+        all_candidates: list[dict],
+        default_candidates: list[dict],
+    ) -> None:
+        from PySide6.QtWidgets import QDialog
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle(shared_register_dialog_title(module_label))
+        dlg.resize(640, 420)
+        layout = QVBoxLayout(dlg)
+
+        state = {"strict": True, "items": default_candidates}
+
+        caption = QLabel(shared_source_picker_caption(module_label, True))
+        layout.addWidget(caption)
+
+        list_widget = QListWidget()
+        layout.addWidget(list_widget, stretch=1)
+
+        def _fill(items: list[dict]) -> None:
+            list_widget.clear()
+            for a in items:
+                item = QListWidgetItem(_format_source_item_qt(a))
+                list_widget.addItem(item)
+
+        _fill(default_candidates)
+
+        from qfluentwidgets import PushButton as _QFPushButton
+
+        toggle_btn = _QFPushButton("切换：只看同模块名 / 看全部", dlg)
+        layout.addWidget(toggle_btn)
+
+        def _toggle() -> None:
+            state["strict"] = not state["strict"]
+            current = default_candidates if state["strict"] else all_candidates
+            state["items"] = current
+            caption.setText(shared_source_picker_caption(module_label, state["strict"]))
+            _fill(current)
+
+        toggle_btn.clicked.connect(_toggle)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch(1)
+        confirm_btn = QPushButton("确认登记", dlg)
+        cancel_btn = QPushButton("取消", dlg)
+        btn_row.addWidget(confirm_btn)
+        btn_row.addWidget(cancel_btn)
+        layout.addLayout(btn_row)
+
+        def _confirm() -> None:
+            row = list_widget.currentRow()
+            if row < 0:
+                QMessageBox.information(dlg, "请选择来源", "请先在列表中选择一条作为共享来源的资产。")
+                return
+            source_asset = state["items"][row]
+            dlg.accept()
+            self._do_register_shared(target_model, module_key, module_label, source_asset)
+
+        confirm_btn.clicked.connect(_confirm)
+        cancel_btn.clicked.connect(dlg.reject)
+        dlg.exec()
+
+    def _do_register_shared(
+        self,
+        target_model: str,
+        module_key: str,
+        module_label: str,
+        source_asset: dict,
+    ) -> None:
+        result = self.workbench_model.register_shared_module(
+            target_model, source_asset, module_key=module_key, overwrite=False
+        )
+        if not result["ok"]:
+            if result["code"] == "conflict":
+                answer = QMessageBox.question(
+                    self,
+                    "已存在共享来源",
+                    shared_conflict_prompt_message(module_label),
+                )
+                if answer != QMessageBox.StandardButton.Yes:
+                    return
+                result = self.workbench_model.register_shared_module(
+                    target_model, source_asset, module_key=module_key, overwrite=True
+                )
+            if not result["ok"]:
+                QMessageBox.critical(self, "登记失败", result["message"])
+                return
+        self._log(result["message"])
+        self._refresh_main_grid()
+
+    def _unregister_shared(self, variant: ModuleVariant) -> None:
+        target_model = self.current_selection.model_name
+        module = module_label_from_asset(variant.asset)
+        module_key = canonical_module_dir(module)
+        answer = QMessageBox.question(
+            self,
+            "取消共享来源",
+            shared_unregister_confirm_message(module),
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        result = self.workbench_model.unregister_shared_module(target_model, module_key)
+        if not result["ok"]:
+            QMessageBox.critical(self, "取消失败", result["message"])
+            return
+        self._log(result["message"])
         self._refresh_main_grid()
 
     # ------------------------------------------------------------------ 工具

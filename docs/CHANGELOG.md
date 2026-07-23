@@ -2,6 +2,33 @@
 
 ## Unreleased
 
+### feat(core,ui): 共享手动登记入口（Phase B2 / TASK-20260720）
+
+- `core/services/shared_module_service.py`：`set_shared_module`（资产 + 工作区根 + 目标根 → 四字段 ref + 源型号 id 校验 + 同键冲突检测）、`clear_shared_module`（幂等删条目不删文件）。错误码：`ok` / `invalid_args` / `source_no_id` / `out_of_workspace` / `conflict` / `write_failed`。
+- 工作台 `register_shared_module` / `unregister_shared_module`；目标根走 `_model_root_path_for_name`（不落 `通用/`）；分层纪律——core service 只认 `FirmwareAsset` + 路径。
+- CTk（`ui/workbench_panel.py`）+ Qt（`ui_qt/workbench_window.py`）双壳右键菜单加「为它登记共享来源…」、「取消共享」；对话框含同模块名预过滤的来源选择列表。文案共用 `ui/workbench_helpers.py`，禁用「回源」字眼。
+- 不做 B3 展示（角标 / 可烧 / 缺失灰掉 / 列表只显共享留 B3）；不碰 `get_scheme_modules` / 回源（B4 隔离）；无 `mode` 字段；共享只存 `型号配置.toml`。
+
+### chore(refactor): 范围裁剪——`.ref` 迁移整建制移后置（TASK-20260723）
+
+- 原 B2 计划含 `.ref` / `-同X` 一次性迁移入口，代码与测试已写完并过门禁；用户讨论后确认砍掉。
+- 删除：`core/services/shared_migration_service.py`（`scan_ref_clues` / `apply_ref_migration` / `RefClue`）、对应 `test_shared_migration_service.py`、view model 的 `preview_ref_migration` / `apply_ref_migration` API、CTk + Qt 侧栏「从 .ref 导入共享」按钮与预览对话框。
+- 删除：`firmware_catalog.py::catalog_label_for_dir`（仅迁移用于 `.ref` 父目录名 → catalog label 映射；手动登记走 `canonical_module_dir(firmware_label)` 不依赖此函数）+ 对应 3 个 catalog 测试。
+- 删除：`workbench_helpers.py::filter_chosen_for_conflict`（仅迁移跨型号同名冲突批量过滤用）+ `shared_migration_button_label` / `shared_migration_dialog_title` + 对应测试。
+- 保留：`shared_source_picker_caption`（手动登记来源选择对话框使用）。
+- 理由：`-同X` / `.ref` 现场仍是占位、未整理完；优先级倒置（先做迁移再看不到共享效果）是"设置方式奇怪"的根；个位数关系手登记比写迁移器更快。
+- 迁移能力整建制移至 `specs/active/TASK-20260723-firmware-ref-migration.md`，待 B3 落地、烧录员真正用上共享后再评估是否重启；NO-GO 则关闭归档。
+
+审查修复（裁剪前已完成，记录在档；裁剪后随迁移整迁出 B2）：
+
+- `workbench_helpers.filter_chosen_for_conflict`：迁移冲突批量确认改为同时按 `module_key` 与 `target_model_root` 过滤候选，避免一次弹窗「是」误覆盖到其它目标型号的同名模块引用（CTk + Qt 双壳共用纯函数）。随 `.ref` 迁移整建制移后置，B2 不再含此 helper。
+
+验证:
+- `uv run python -m pytest -m "not ui" -q` → **359 passed, 52 deselected；coverage 86.78%**（裁剪前 377 passed / 87.35%；删除 18 项迁移相关测试）
+- 服务套件（set/clear / workbench B4 隔离）随主套件全过
+- **Qt 人工验证 4 场景通过（2026-07-23）**：手动设共享 / 冲突不静默覆盖 / 取消不删文件 / 双轨一致（Qt 独验；CTk 共用 `workbench_helpers` 纯函数保证文案一致，留待 B3 切默认入口时随带验证）
+- 审查记录见 `docs/code-review/REVIEW-20260720-shared-module-registration.md`（含范围调整段）、`REVIEW-20260720-shared-module-registration-independent.md`（议题随迁移移走）
+
 ### fix(core): B1 二轮审查修复（remove 空写 / 解析器映射误判）
 
 - `remove_shared_module`：对无 `型号配置.toml` 的型号根短路返回，不再凭空创建仅含头注释的空配置（避免后续 `ensure_model_ids` 误当 no_id 重新 slug）。

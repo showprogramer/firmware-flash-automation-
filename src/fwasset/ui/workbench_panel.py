@@ -55,9 +55,24 @@ from fwasset.ui.workbench_helpers import (  # noqa: F401
     module_label_from_asset,
     set_default_action_label,
     set_default_confirm_message,
+    shared_conflict_prompt_message,
+    shared_register_action_label,
+    shared_register_dialog_title,
+    shared_source_picker_caption,
+    shared_unregister_action_label,
+    shared_unregister_confirm_message,
 )
+from fwasset.core.services.platform_default_service import canonical_module_dir
 
 SEARCH_REFRESH_DEBOUNCE_MS = 180
+
+
+def _format_source_item(asset: dict) -> str:
+    """来源选择对话框的一行：模块 · 变体目录  ←  路径（型号可由路径首段看出）。"""
+    label = str(asset.get("firmware_label", "")) or "-"
+    variant = str(asset.get("directory_name", "")) or "-"
+    path = str(asset.get("path", ""))
+    return f"{label} · {variant}   ←   {path}"
 
 
 class WorkbenchPanel(BaseFlashPanel):
@@ -570,13 +585,14 @@ class WorkbenchPanel(BaseFlashPanel):
         self.active_operation_panel.pack(fill="both", expand=True)
         self.active_operation_panel.build()
 
-    # --- 右键菜单（设为「型号」模块默认版本） ---
+    # --- 右键菜单（设为「型号」模块默认版本 + 共享登记 B2）---
     def _on_grid_right_click(self, variant: ModuleVariant, x_root: int, y_root: int):
         menu = tk.Menu(self, tearoff=0)
 
         asset = variant.asset
         model_name = self.current_selection.model_name
         module = module_label_from_asset(asset)
+        module_key = canonical_module_dir(module)
         is_common = variant.source_kind == "common" and str(asset.get("category", "")) == "common"
         if is_common:
             # 无 toml 也可设默认（软件自动创建配置）；已是默认则灰掉
@@ -590,6 +606,21 @@ class WorkbenchPanel(BaseFlashPanel):
                     label=set_default_action_label(model_name, module),
                     command=lambda: self._set_default_variant(variant),
                 )
+            menu.add_separator()
+
+        # --- 共享登记（B2）：右键目标型号的模块行 → 登记/取消共享来源 ---
+        # 目标模块当前是否处于 shared 有效态（有引用条目即视为有效，无论命中/缺失）
+        if module_key:
+            shared_res = self.workbench_model.resolve_shared_module(model_name, module_key)
+            if shared_res is not None:
+                menu.add_command(
+                    label=shared_unregister_action_label(module),
+                    command=lambda: self._unregister_shared(variant),
+                )
+            menu.add_command(
+                label=shared_register_action_label(module),
+                command=lambda: self._register_shared_source(variant),
+            )
             menu.add_separator()
 
         menu.add_command(label="打开目录", command=self._open_current_asset_dir)
@@ -620,6 +651,161 @@ class WorkbenchPanel(BaseFlashPanel):
             messagebox.showerror(title="设置失败", message=result["message"], parent=self.winfo_toplevel())
             return
         # 平台配置已就地重载，刷新表格让 ★默认 徽章与回源立即生效
+        self._refresh_main_grid()
+
+    # --- 共享登记入口对话框（B2；CTk 版）---
+    def _register_shared_source(self, variant: ModuleVariant):
+        target_model = self.current_selection.model_name
+        if not target_model:
+            self._log("请先选择目标型号")
+            return
+        module = module_label_from_asset(variant.asset)
+        module_key = canonical_module_dir(module)
+        # 工作区内全部已扫描资产 → 候选来源（排除目标型号自身的资产）
+        all_candidates: list[dict] = []
+        for a in self.workbench_model._all_assets:
+            try:
+                if self.workbench_model._model_of_asset(a) == target_model:
+                    continue
+            except Exception:  # noqa: BLE001
+                continue
+            all_candidates.append(a)
+        # 默认按同模块名预过滤
+        default_candidates = [
+            a for a in all_candidates
+            if canonical_module_dir(str(a.get("firmware_label", ""))) == module_key
+        ]
+        self._show_shared_source_picker(
+            target_model, module_key, module, all_candidates, default_candidates
+        )
+
+    def _show_shared_source_picker(
+        self,
+        target_model: str,
+        module_key: str,
+        module_label: str,
+        all_candidates: list[dict],
+        default_candidates: list[dict],
+    ) -> None:
+        top = tk.Toplevel(self.winfo_toplevel())
+        top.title(shared_register_dialog_title(module_label))
+        top.transient(self.winfo_toplevel())
+        top.grab_set()
+        top.geometry("640x420")
+
+        strict = [True]
+        caption_var = tk.StringVar(value=shared_source_picker_caption(module_label, True))
+        tk.Label(top, textvariable=caption_var, anchor="w").pack(
+            fill="x", padx=SPACE_MD, pady=(SPACE_MD, SPACE_SM)
+        )
+
+        list_frame = tk.Frame(top)
+        list_frame.pack(fill="both", expand=True, padx=SPACE_MD, pady=SPACE_SM)
+        scrollbar = tk.Scrollbar(list_frame, orient="vertical")
+        scrollbar.pack(side="right", fill="y")
+        listbox = tk.Listbox(
+            list_frame,
+            yscrollcommand=scrollbar.set,
+            font=(FONT_FAMILY, FONT_SIZE_MD),
+            selectmode="single",
+        )
+        listbox.pack(side="left", fill="both", expand=True)
+        scrollbar.config(command=listbox.yview)
+
+        def _fill(items: list[dict]) -> None:
+            listbox.delete(0, tk.END)
+            for a in items:
+                listbox.insert(tk.END, _format_source_item(a))
+
+        _fill(default_candidates)
+        current_items = [default_candidates]
+
+        def _toggle_filter() -> None:
+            strict[0] = not strict[0]
+            current = default_candidates if strict[0] else all_candidates
+            current_items[0] = current
+            caption_var.set(shared_source_picker_caption(module_label, strict[0]))
+            _fill(current)
+
+        toggle_btn = tk.Button(
+            top,
+            text="切换：只看同模块名 / 看全部",
+            command=_toggle_filter,
+        )
+        toggle_btn.pack(padx=SPACE_MD, pady=SPACE_SM)
+
+        btn_frame = tk.Frame(top)
+        btn_frame.pack(fill="x", padx=SPACE_MD, pady=(0, SPACE_MD))
+
+        def _confirm() -> None:
+            sel = listbox.curselection()
+            if not sel:
+                messagebox.showinfo(
+                    "请选择来源",
+                    "请先在列表中选择一条作为共享来源的资产。",
+                    parent=top,
+                )
+                return
+            source_asset = current_items[0][sel[0]]
+            top.destroy()
+            self._do_register_shared(target_model, module_key, module_label, source_asset)
+
+        tk.Button(btn_frame, text="确认登记", command=_confirm).pack(side="right", padx=(SPACE_SM, 0))
+        tk.Button(btn_frame, text="取消", command=top.destroy).pack(side="right")
+
+    def _do_register_shared(
+        self,
+        target_model: str,
+        module_key: str,
+        module_label: str,
+        source_asset: dict,
+    ) -> None:
+        result = self.workbench_model.register_shared_module(
+            target_model, source_asset, module_key=module_key, overwrite=False
+        )
+        if not result["ok"]:
+            if result["code"] == "conflict":
+                ok = messagebox.askyesno(
+                    title="已存在共享来源",
+                    message=shared_conflict_prompt_message(module_label),
+                    parent=self.winfo_toplevel(),
+                )
+                if not ok:
+                    return
+                result = self.workbench_model.register_shared_module(
+                    target_model, source_asset, module_key=module_key, overwrite=True
+                )
+            if not result["ok"]:
+                messagebox.showerror(
+                    title="登记失败",
+                    message=result["message"],
+                    parent=self.winfo_toplevel(),
+                )
+                return
+        self._log(result["message"])
+        # 刷新网格；B2 仅登记，B3 才会在网格上画共享角标
+        self._refresh_main_grid()
+
+    def _unregister_shared(self, variant: ModuleVariant) -> None:
+        target_model = self.current_selection.model_name
+        module = module_label_from_asset(variant.asset)
+        module_key = canonical_module_dir(module)
+        ok = messagebox.askyesno(
+            title="取消共享来源",
+            message=shared_unregister_confirm_message(module),
+            parent=self.winfo_toplevel(),
+        )
+        if not ok:
+            return
+        result = self.workbench_model.unregister_shared_module(target_model, module_key)
+        if not result["ok"]:
+            messagebox.showerror(
+                title="取消失败",
+                message=result["message"],
+                parent=self.winfo_toplevel(),
+            )
+            return
+        self._log(result["message"])
         self._refresh_main_grid()
 
     def _format_selection_summary(self, variant: ModuleVariant, flash_mode: str) -> str:

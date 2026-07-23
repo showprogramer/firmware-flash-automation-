@@ -74,3 +74,45 @@ def set_default_confirm_message(
         f"将「{shown}」设为{target}？\n\n"
         "定制方案缺少该模块时，将使用此程序补齐。"
     )
+
+
+# --- 共享登记入口文案（Phase B2；CTk 与 Qt 双壳共用） ---
+# 禁词语：UI 文本不得出现「回源」（仅内部术语）。
+
+
+def shared_register_action_label(module: str) -> str:
+    """右键项：为目标模块登记共享来源。"""
+    mod = (module or "").strip() or "该模块"
+    return f"为「{mod}」登记共享来源…"
+
+
+def shared_unregister_action_label(module: str) -> str:
+    """右键项：取消目标模块的共享来源登记。"""
+    mod = (module or "").strip() or "该模块"
+    return f"取消「{mod}」的共享来源"
+
+
+def shared_register_dialog_title(module: str) -> str:
+    mod = (module or "").strip() or "该模块"
+    return f"为「{mod}」登记共享来源"
+
+
+def shared_unregister_confirm_message(module: str) -> str:
+    mod = (module or "").strip() or "该模块"
+    return (
+        f"确认取消「{mod}」的共享来源登记？\n\n"
+        "仅删除共享引用，不会删除任何本地固件文件；取消后该模块恢复为本地有效资产。"
+    )
+
+
+def shared_conflict_prompt_message(module: str) -> str:
+    mod = (module or "").strip() or "该模块"
+    return f"「{mod}」已登记共享来源，是否覆盖为新的来源？"
+
+
+def shared_source_picker_caption(module: str, strict_filter: bool) -> str:
+    """来源选择对话框顶部说明。"""
+    mod = (module or "").strip() or "该模块"
+    if strict_filter:
+        return f"工作区内可作「{mod}」共享来源的资产（默认按同模块名预过滤）"
+    return f"工作区内全部可作共享来源的资产（已放开查看全部）"
