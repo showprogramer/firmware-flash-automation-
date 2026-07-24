@@ -9,8 +9,8 @@ from fwasset.core.types import FirmwareAsset
 class PanelHost(Protocol):
     """Qt 操作面板对宿主的依赖面（框架无关，无 tkinter 类型）。
 
-    WorkbenchInterface 实现此协议。相比 CTk 版协议，去掉了
-    `usb_drive: tk.StringVar` 与 `_build_usb_selector_row`（操作区精简后
+    WorkbenchInterface 实现此协议。操作区不嵌入 U 盘选择器，去掉了
+    `usb_drive` 与 `_build_usb_selector_row`（操作区精简后
     面板不再内嵌 U 盘选择器，盘符统一走 get_global_usb_drive）。
     """
 

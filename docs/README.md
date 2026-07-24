@@ -1,6 +1,6 @@
 # fwasset — 按摩椅固件资产管理平台
 
-用于按摩椅固件程序资产的搜索、定位、工具启动、刷机自动化与运行日志管理的桌面应用。基于 Python (CustomTkinter) 构建，支持 20 种固件类型的智能识别与多种烧录模式。
+用于按摩椅固件程序资产的搜索、定位、工具启动、刷机自动化与运行日志管理的桌面应用。基于 Python + PySide6 构建，支持 20 种固件类型的智能识别与多种烧录模式。
 
 ## 主要功能
 
@@ -70,28 +70,14 @@ src/fwasset/                 # 主包
 │       ├── flash_service.py     # 一键 USB 刷写流程
 │       ├── music_flash_service.py  # 音乐文件整目录刷写
 │       └── usb_repair_service.py   # USB 健康诊断与驱动修复
-├── ui/                      # GUI 层（CustomTkinter）
-│   ├── shell.py             # 主窗口
-│   ├── base_panel.py        # 基类面板（任务队列、轮询、USB 选择、日志）
-│   ├── workbench_panel.py   # 工作台面板（侧边栏 + 数据网格 + 操作区 + 日志）
-│   ├── tool_center_panel.py # 工具中心窗口
-│   ├── design_tokens.py     # 设计系统（颜色/字体，亮暗主题）
-│   ├── shared_widgets.py    # 可复用组件
-│   ├── panels/              # 主面板子组件
-│   │   ├── data_grid_panel.py   # 数据网格（ttk.Treeview 可展开树）
-│   │   └── log_panel.py         # 日志面板
-│   ├── operation_panels/    # 操作面板（注册模式，按 flash_mode 动态加载）
-│   │   ├── registry.py          # @register 装饰器 + get_panel() 查找
-│   │   ├── host_types.py        # PanelHost Protocol（依赖倒置）
-│   │   ├── base.py              # BaseOperationPanel 基类
-│   │   ├── auto_usb_panel.py    # USB 刷写面板
-│   │   ├── tool_launch_panel.py # 外部工具启动面板
-│   │   ├── manual_doc_panel.py  # 文档说明面板
-│   │   ├── disabled_panel.py    # 禁用类型占位
-│   │   └── shared_actions.py    # 通用按钮操作
-│   └── view_models/         # 视图模型
-│       ├── scheme_workbench_model.py  # 工作台数据模型（型号/模块/方案/变体）
-│       └── scan_state_model.py        # 扫描生命周期与取消状态
+├── ui_common/               # 与界面框架无关的视图模型与文案助手
+│   ├── workbench_helpers.py # 工作台纯函数与操作文案
+│   └── view_models/         # 工作台数据模型与扫描状态
+├── ui_qt/                   # PySide6 + QFluentWidgets 界面层
+│   ├── workbench_window.py  # 主窗口与工作台
+│   ├── data_grid.py         # 数据网格
+│   ├── operation_panels/    # 按 flash_mode 注册的操作面板
+│   └── design_tokens.py     # Qt 设计令牌
 └── tests/                   # 测试文件
 ```
 
@@ -290,7 +276,7 @@ uv run python -m pytest src/fwasset/tests/test_asset_index.py -q --no-cov
 ## 技术栈
 
 - **Python** >= 3.11
-- **CustomTkinter** — 现代 Tkinter GUI 框架
+- **PySide6 + QFluentWidgets** — Qt 桌面界面
 - **psutil** — U 盘/磁盘分区检测
 - **SQLite** — 资产索引持久化
 - **tomllib** / **tomli** — TOML 配置文件解析

@@ -16,7 +16,7 @@ import pytest
 class TestPanelHostProtocol:
     def test_panel_host_is_runtime_checkable(self) -> None:
         """PanelHost must be runtime_checkable so isinstance(host, PanelHost) works."""
-        from fwasset.ui.operation_panels.host_types import PanelHost
+        from fwasset.ui_qt.operation_panels.host_types import PanelHost
 
         assert hasattr(PanelHost, "_is_runtime_protocol")
         assert PanelHost._is_runtime_protocol is True
@@ -28,7 +28,7 @@ class TestPanelHostProtocol:
         If the method is missing from the protocol, mypy/IDEs can't catch a host
         that omits it. The contract must be visible at the Protocol level.
         """
-        from fwasset.ui.operation_panels.host_types import PanelHost
+        from fwasset.ui_qt.operation_panels.host_types import PanelHost
 
         assert hasattr(PanelHost, "get_global_usb_drive")
         method = getattr(PanelHost, "get_global_usb_drive")
@@ -36,7 +36,7 @@ class TestPanelHostProtocol:
 
     def test_panel_host_get_global_usb_drive_signature(self) -> None:
         """get_global_usb_drive must be a no-arg method returning str."""
-        from fwasset.ui.operation_panels.host_types import PanelHost
+        from fwasset.ui_qt.operation_panels.host_types import PanelHost
 
         method = getattr(PanelHost, "get_global_usb_drive")
         sig = inspect.signature(method)
@@ -48,7 +48,7 @@ class TestPanelHostProtocol:
     def test_minimal_host_satisfies_protocol(self) -> None:
         """A host that exposes every PanelHost method must pass isinstance() check."""
 
-        from fwasset.ui.operation_panels.host_types import PanelHost
+        from fwasset.ui_qt.operation_panels.host_types import PanelHost
 
         class _FakeVar:
             def __init__(self, value: str = "") -> None:

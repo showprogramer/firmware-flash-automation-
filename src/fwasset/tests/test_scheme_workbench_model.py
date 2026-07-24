@@ -13,7 +13,7 @@ import pytest
 
 from fwasset.core.asset_index import save_assets
 from fwasset.core.file_scan import scan_firmware_assets
-from fwasset.ui.view_models.scheme_workbench_model import SchemeWorkbenchModel
+from fwasset.ui_common.view_models.scheme_workbench_model import SchemeWorkbenchModel
 
 
 def _write(path: Path, content: str = "x") -> None:
@@ -865,7 +865,7 @@ def cached_model(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> tuple[Schem
     No real scan, no real SQLite — pure logic + cache discipline tests.
     """
     import fwasset.core.asset_index as asset_index_module
-    import fwasset.ui.view_models.scheme_workbench_model as model_module
+    import fwasset.ui_common.view_models.scheme_workbench_model as model_module
 
     assets = [
         # 通用 mainboard: 2 variants under 通用/主板程序/
@@ -1256,7 +1256,7 @@ def test_unbound_model_falls_back_to_query_assets(monkeypatch: pytest.MonkeyPatc
     'cache missed' regression where the view would silently return empty.
     """
     import fwasset.core.asset_index as asset_index_module
-    import fwasset.ui.view_models.scheme_workbench_model as model_module
+    import fwasset.ui_common.view_models.scheme_workbench_model as model_module
 
     assets = [
         _make_asset(
@@ -1281,7 +1281,7 @@ def test_cache_invalidates_on_rebind(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     rescan would not show up in the UI.
     """
     import fwasset.core.asset_index as asset_index_module
-    import fwasset.ui.view_models.scheme_workbench_model as model_module
+    import fwasset.ui_common.view_models.scheme_workbench_model as model_module
 
     first_assets = [_make_asset(path="/scan/L36程序/通用/主板程序/量产_默认/f.bin")]
     second_assets = first_assets + [

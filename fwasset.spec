@@ -15,25 +15,15 @@ import sys
 from pathlib import Path
 
 # ── 隐藏导入 ──────────────────────────────────────────────
-# customtkinter 使用了 __import__ / importlib 延迟加载某些模块
 HIDDEN_IMPORTS = [
-    "customtkinter",
-    "customtkinter.windows.widgets",
-    "customtkinter.windows.widgets.theme",
-    "PIL",
-    "PIL.Image",
-    "PIL.ImageTk",
-    "serial",
-    "serial.tools",
-    "serial.tools.list_ports",
-    "serial.tools.list_ports_common",
-    "serial.tools.list_ports_windows",
     "queue",
     "ctypes",
     "ctypes.wintypes",
     "logging",
     "logging.handlers",
     "tomllib",
+    "qfluentwidgets",
+    "qfluentwidgets.components",
 ]
 
 # ── 数据文件 ──────────────────────────────────────────────
@@ -50,8 +40,6 @@ EXCLUDES = [
     "numpy",
     "scipy",
     "pandas",
-    "PIL.ImageQt",
-    "PIL.ImageShow",
     "pytest",
     "hypothesis",
     "setuptools",
@@ -60,7 +48,7 @@ EXCLUDES = [
 ]
 
 a = Analysis(
-    ["run.py"],
+    ["src/fwasset/app.py"],
     pathex=["src"],
     binaries=[],
     datas=DATAS,

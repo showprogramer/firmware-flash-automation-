@@ -47,14 +47,14 @@ from fwasset.core.services.scan_service import build_cached_scan_result, build_s
 from fwasset.core.settings import DEFAULT_ROOT
 from fwasset.core.types import ServiceResult
 from fwasset.core.usb_ops import get_usb_drives
-from fwasset.ui.view_models.scan_state_model import ScanStateModel
-from fwasset.ui.view_models.scheme_workbench_model import (
+from fwasset.ui_common.view_models.scan_state_model import ScanStateModel
+from fwasset.ui_common.view_models.scheme_workbench_model import (
     ModuleCardData,
     ModuleVariant,
     SchemeWorkbenchModel,
     WorkbenchSelection,
 )
-from fwasset.ui.workbench_helpers import (
+from fwasset.ui_common.workbench_helpers import (
     flash_mode_label,
     model_chip_values,
     module_label_from_asset,
@@ -99,7 +99,7 @@ class WorkbenchInterface(QWidget):
     # Signal 元类型只能是运行时类型，TypedDict（ServiceResult）不可用；
     # 类型契约由槽函数 _handle_scan_result 的参数标注承担。
     scan_result_ready = Signal(dict)
-    # 后台任务结果回投（对应 CTk BaseFlashPanel 的 queue + after 轮询）
+    # 后台任务结果回投
     # 传 (task_id, name, result)；on_done 按 id 在 UI 线程查找执行（不 marshal callable）
     _task_done = Signal(int, str, object)      # task_id, name, result
     _task_failed = Signal(int, str, str)       # task_id, name, error
@@ -253,7 +253,7 @@ class WorkbenchInterface(QWidget):
         self._busy = True
         task_id = self._task_seq
         self._task_seq += 1
-        # 回调只存 UI 侧 map，Signal 不传 callable（与 CTk「UI 线程 on_done」一致）
+        # 回调只存 UI 侧 map，Signal 不传 callable
         if callable(on_done):
             self._pending_task_callbacks[task_id] = on_done
 
@@ -774,7 +774,7 @@ class WorkbenchInterface(QWidget):
             return
         self._refresh_main_grid()
 
-    # --- 共享登记入口对话框（B2；Qt 版，文案对齐 CTk）---
+    # --- 共享登记入口对话框（B2）---
     def _register_shared_source(self, variant: ModuleVariant) -> None:
         target_model = self.current_selection.model_name
         if not target_model:
@@ -950,5 +950,5 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    # 开发直跑入口（等价 FWASSET_UI=qt uv run fwasset）；正式入口在 app.main。
+    # 开发直跑入口；正式入口在 app.main。
     raise SystemExit(main())

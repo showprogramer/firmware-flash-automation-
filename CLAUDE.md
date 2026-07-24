@@ -18,7 +18,7 @@ uv run python -m pytest src/fwasset/tests/test_file_scan.py -q --no-cov   # Sing
 uv run pyinstaller fwasset.spec                              # Build the exe
 ```
 
-No lint/type-check tooling is configured. Coverage omits `app.py` and `ui/*` (see `pyproject.toml`). UI tests carry `@pytest.mark.ui`.
+No lint/type-check tooling is configured. Coverage omits `app.py` and `ui_qt/*`; framework-neutral `ui_common/*` is covered (see `pyproject.toml`). UI tests carry `@pytest.mark.ui`.
 
 ## What this app is for
 
@@ -38,7 +38,7 @@ A massage chair typically contains multiple modules (主板, 手控UI, 蓝牙, e
 - `core/scheme_config.py` — `discover_schemes(model_root)` walks `定制/*/方案配置.toml` → `SchemeConfig(name, platform, path)`. `scheme_for_path()` maps an asset path back to its scheme.
 - `core/platform_config.py` — `load_platform_config(model_root)` reads `平台配置.toml` (`[[platform]]` + `[platform.defaults]` mapping `module_dir → variant_name`). Drives fallback selection.
 - `core/file_scan.py` — `_infer_asset_context()` derives `(category, platform, scheme_name, scheme_path)` from an asset's path relative to root: a `通用` path segment ⇒ `category="common"`, a `定制` segment ⇒ `category="custom"` + scheme lookup.
-- `ui/view_models/scheme_workbench_model.py` — `SchemeWorkbenchModel` is the brain of the UI. `build_sidebar_tree()` returns `{common: {label: count}, custom: [scheme...]}`; `get_scheme_module_tree()` produces the grouped rows dynamically with fallback applied.
+- `ui_common/view_models/scheme_workbench_model.py` — `SchemeWorkbenchModel` is the brain of the UI. `build_sidebar_tree()` returns `{common: {label: count}, custom: [scheme...]}`; `get_scheme_module_tree()` produces the grouped rows dynamically with fallback applied.
 
 ### UI-facing language rules (hard constraints)
 
@@ -53,8 +53,9 @@ The default variant used for scheme fallback is defined **only** by `平台配�
 
 The UI was rewritten around the workbench; several files those docs mention are **gone or replaced**:
 
-- Entry: `app.main` → `shell.UnifiedFlashPlatform` (CTk root) → mounts a single `ui/workbench_panel.py::WorkbenchPanel` (a `BaseFlashPanel`). The old `firmware_list_panel`, `asset_tree`, `sidebar_panel`, `handcontrol_panel`, and the `asset_filter_model` / `asset_selection_model` / `tree_expansion_model` view-models have been removed — don't reference them.
-- New surfaces: `ui/panels/data_grid_panel.py`, `ui/view_models/scheme_workbench_model.py`. Operation panels (`auto_usb`, `tool_launch`, `manual_doc`, `disabled`) and their registry/`PanelHost` protocol are unchanged — AGENTS.md's section on them still applies.
+- Entry: `app.main` → `ui_qt.workbench_window.main` (PySide6 + QFluentWidgets). Qt is the only supported UI; do not add CTk or tkinter imports.
+- New surfaces: `ui_qt/workbench_window.py`, `ui_qt/data_grid.py`, `ui_qt/operation_panels/`, and framework-neutral `ui_common/view_models/` plus `ui_common/workbench_helpers.py`.
+- Operation panels (`auto_usb`, `tool_launch`, `manual_doc`, `disabled`) use the Qt registry/`PanelHost` protocol under `ui_qt/operation_panels/`.
 - **Database: `SCHEMA_VERSION = 3`** (`core/asset_index.py`). v2→v3 adds `category`, `platform`, `scheme_name`, `scheme_path` columns + indexes on `category`/`scheme_name`. `query_assets()` gained `category=` and `scheme_name=` filters. Mismatched local index versions raise and require a re-scan.
 - `core/types.py::FirmwareAsset` now carries `category: Literal["common","custom",""]`, `platform`, `scheme_name`.
 

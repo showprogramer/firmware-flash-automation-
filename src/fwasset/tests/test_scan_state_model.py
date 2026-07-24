@@ -1,4 +1,4 @@
-from fwasset.ui.view_models.scan_state_model import ScanStateModel
+from fwasset.ui_common.view_models.scan_state_model import ScanStateModel
 
 
 def test_scan_state_model_tracks_scan_lifecycle():

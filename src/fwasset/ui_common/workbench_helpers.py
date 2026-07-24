@@ -1,4 +1,4 @@
-"""工作台纯函数助手（CTk 与 Qt 双壳共用，禁止引入任何 UI 框架依赖）。"""
+"""工作台纯函数助手（不依赖具体 UI 框架）。"""
 from __future__ import annotations
 
 MODEL_CHIP_LIMIT = 4
@@ -76,7 +76,7 @@ def set_default_confirm_message(
     )
 
 
-# --- 共享登记入口文案（Phase B2；CTk 与 Qt 双壳共用） ---
+# --- 共享登记入口文案（Phase B2） ---
 # 禁词语：UI 文本不得出现「回源」（仅内部术语）。
 
 

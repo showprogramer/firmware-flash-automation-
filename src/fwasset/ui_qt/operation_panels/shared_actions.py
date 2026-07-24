@@ -16,7 +16,7 @@ def build_handoff_actions(
 ) -> None:
     """通用交接操作按钮组（打开目录、复制路径等）。
 
-    与 CTk 版不同点：操作区高度有限，按钮横排而非竖排。
+    Qt 操作区高度有限，按钮横排排列。
     """
     row = QHBoxLayout()
     actions = [

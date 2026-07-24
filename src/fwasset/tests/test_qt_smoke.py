@@ -15,7 +15,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
-from fwasset.ui.view_models.scheme_workbench_model import (  # noqa: E402
+from fwasset.ui_common.view_models.scheme_workbench_model import (  # noqa: E402
     ModuleCardData,
     ModuleRow,
     ModuleVariant,
@@ -252,7 +252,7 @@ def test_click_filtered_scheme_reselects_its_new_row_after_sidebar_rebuild(qapp)
     from PySide6.QtCore import Qt
     from PySide6.QtTest import QTest
 
-    from fwasset.ui.view_models.scheme_workbench_model import WorkbenchSelection
+    from fwasset.ui_common.view_models.scheme_workbench_model import WorkbenchSelection
     from fwasset.ui_qt.workbench_window import WorkbenchInterface
 
     w = WorkbenchInterface()

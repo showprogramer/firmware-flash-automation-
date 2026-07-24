@@ -7,7 +7,7 @@ from PySide6.QtWidgets import QMenu, QTreeWidgetItem, QVBoxLayout, QWidget
 from qfluentwidgets import TreeWidget
 
 from fwasset.core.asset_helpers import asset_primary_file_name, open_path_in_explorer
-from fwasset.ui.view_models.scheme_workbench_model import (
+from fwasset.ui_common.view_models.scheme_workbench_model import (
     ModuleCardData,
     ModuleRow,
     ModuleVariant,

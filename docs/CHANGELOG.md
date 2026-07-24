@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### chore(ui): 收敛为 Qt 唯一支持界面（TASK-20260724）
+
+- 默认入口 `uv run fwasset` 直接启动 PySide6 + QFluentWidgets 工作台，不再依赖 `FWASSET_UI` 环境变量。
+- `customtkinter` 从运行依赖、锁文件、PyInstaller 配置、旧 UI 壳与 CTk 专属测试中移除；`ui_common/` 保留 Qt 需要的框架无关 ViewModel 和助手。
+- 冻结构建入口改为 `src/fwasset/app.py`，后续 B3 及相关人工验收统一以 Qt 为准，不再安排 CTk 第二套场景。
+- Qt 人工验证已于 2026-07-23 通过；当前变更按模板提交。
+
 ### feat(core,ui): 共享手动登记入口（Phase B2 / TASK-20260720）
 
 - `core/services/shared_module_service.py`：`set_shared_module`（资产 + 工作区根 + 目标根 → 四字段 ref + 源型号 id 校验 + 同键冲突检测）、`clear_shared_module`（幂等删条目不删文件）。错误码：`ok` / `invalid_args` / `source_no_id` / `out_of_workspace` / `conflict` / `write_failed`。
@@ -26,7 +33,7 @@
 验证:
 - `uv run python -m pytest -m "not ui" -q` → **359 passed, 52 deselected；coverage 86.78%**（裁剪前 377 passed / 87.35%；删除 18 项迁移相关测试）
 - 服务套件（set/clear / workbench B4 隔离）随主套件全过
-- **Qt 人工验证 3 场景通过（2026-07-23）**：手动设共享 / 冲突不静默覆盖 / 取消不删文件（CTk 留待 B3 切默认入口时随带验证）
+- **Qt 人工验证 3 场景通过（2026-07-23）**：手动设共享 / 冲突不静默覆盖 / 取消不删文件（CTk 已由 Qt-only 清理任务退役，不再安排第二套验证）
 - 审查记录见 `docs/code-review/REVIEW-20260720-shared-module-registration.md`（含范围调整段）、`REVIEW-20260720-shared-module-registration-independent.md`（议题随迁移移走）
 
 ### fix(core): B1 二轮审查修复（remove 空写 / 解析器映射误判）

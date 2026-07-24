@@ -1,6 +1,6 @@
 # TASK-20260708: UI 框架迁移 CustomTkinter → PySide6
 
-## 状态（2026-07-14 更新）
+## 状态（2026-07-24 更新）
 
 | 项                   | 状态                                                              |
 | ------------------- | --------------------------------------------------------------- |
@@ -8,13 +8,16 @@
 | Phase 0–3           | ✅ 完成                                                            |
 | 审查阻断项 Issue 1–20 主体 | ✅ 完成并人验（见 `docs/code-review/REVIEW-20260709-branch-pyside6.md`） |
 | Phase 4.0–4.2       | ✅ 完成（功能验收与契约；**尚未**切默认入口 / 打包）                              |
-| **Phase 4.3–4.7**   | ⏸ **暂停**（进度停在 4.3 之前；收尾切 Qt / 打包延后）                            |
-| **当前主线**            | → **`TASK-20260714-config-takeover.md`**（软件接管配置）                 |
+| **Phase 4.3**       | ✅ 默认入口已切 Qt（`TASK-20260724-qt-only-ui-cleanup`） |
+| **Phase 4.4**       | 🟡 Qt-only 打包配置已更新并成功构建，冻结 exe 人工点验待完成 |
+| **Phase 4.5**       | ✅ CTk 源码、依赖与专属测试已移除 |
+| **Phase 4.6–4.7**   | 🟡 文档与 Qt-only 人工验收收口中（由 `TASK-20260724` 负责） |
+| **当前主线**            | → **`TASK-20260724-qt-only-ui-cleanup.md`**（Qt-only 清理与 B3 前置）                 |
 | CRUD / 增量写盘         | 📋 配置接管 TASK 之后再立                                              |
 
-**默认入口现状**：`app.py` 仍默认 CTk；`FWASSET_UI=qt` 走 `ui_qt`。Phase 4.3 起目标仍为默认 Qt，但**不再作为当前冲刺**。
+**默认入口现状**：`app.py` 默认进入 `ui_qt`，Qt 是唯一受支持界面；`FWASSET_UI` 不再控制界面选择。
 
-**暂停原因**：壳与双轨能力已够支撑业务迭代；产线更急的是「无 toml 可设默认 / 共享引用 / 独立型号」，不宜与迁移收尾绑在同一 TASK。恢复本文件时从 **§4.3 默认入口切换** 继续。
+**收口说明**：默认入口、依赖清理、CTk 退役和 Qt-only 打包已在 `TASK-20260724-qt-only-ui-cleanup.md` 实施；本文件保留迁移历史与 Phase 4 验收总表，待 Qt 人工验收完成后再归档。
 
 ---
 
@@ -27,10 +30,10 @@ CTk + ttk.Treeview 的交互天花板（右键菜单靠手拼、无行内编辑�
 ## 不变的部分（迁移的资产）
 
 - `core/**` 全部：扫描、索引、服务层、平台配置。（迁移期「尽量少动」；审查修复可改 core，不算新业务功能。）
-- `ui/view_models/scheme_workbench_model.py`：不依赖 tkinter，双轨共用（`SchemeWorkbenchModel` 是 UI 的大脑）。
-- `ui/view_models/scan_state_model.py`：纯 threading，双轨共用。
+- `ui_common/view_models/scheme_workbench_model.py`：不依赖具体 UI 框架（`SchemeWorkbenchModel` 是 UI 的大脑）。
+- `ui_common/view_models/scan_state_model.py`：纯 threading，Qt 工作台使用。
 - 领域约束：用户可见归属 **「定制专属」/「通用」**（禁「回源」）、`STANDARD_MODULE_ORDER`、平台按型号隔离。
-- 非 UI 测试覆盖率口径：`pyproject.toml` omit `ui/*` 与 `ui_qt/*`。
+- 非 UI 测试覆盖率口径：`pyproject.toml` 仅 omit `app.py` 与 `ui_qt/*`，`ui_common` 纳入覆盖率。
 
 ## 需要重写的文件清单
 
@@ -43,7 +46,7 @@ CTk + ttk.Treeview 的交互天花板（右键菜单靠手拼、无行内编辑�
 | `ui/panels/log_panel.py`       | `ui_qt/log_panel.py`                           | 1 ✅     |
 | `ui/operation_panels/*`        | `ui_qt/operation_panels/*`（独立 registry）        | 3 ✅     |
 | `ui/design_tokens.py`          | Qt 侧布局令牌 `ui_qt/design_tokens.py`（主题暂靠 Fluent） | 1–2 ✅   |
-| `app.py` 入口                    | **默认切 Qt**；可选 `FWASSET_UI=ctk` 回退              | **4 ⏳** |
+| `app.py` 入口                    | **默认切 Qt**；不保留 CTk 回退              | **4 ✅** |
 | `fwasset.spec`                 | PySide6 / Fluent hooks，去掉 customtkinter        | **4 ⏳** |
 
 ## 主题决策（迁移第 0 步定案）
@@ -60,13 +63,13 @@ CTk + ttk.Treeview 的交互天花板（右键菜单靠手拼、无行内编辑�
 
 **Phase 0 — Spike** ✅（2026-07-08）
 
-- 依赖：`pyside6` + `pyside6-fluent-widgets`（`uv sync --extra qt`）。
+- 依赖：`pyside6` + `pyside6-fluent-widgets`（随主依赖安装，`uv sync --extra dev` 即可）。
 - `scripts/spike_pyside6.py`；启动/体积/中文高 DPI 摸底通过。
 - 踩坑：用 `uv run python -m PyInstaller`；exe 旁必须有 `firmware_catalog.toml`；暗色截图不全需人开窗验。
 
 **Phase 1 — 壳与骨架** ✅（与 Phase 2 同批）
 
-- `ui_qt/` 并行；`FWASSET_UI=qt` 开关；coverage omit `ui_qt/*`。
+- `ui_qt/` 为唯一界面；`FWASSET_UI` 不再控制界面；coverage 仅排除 `app.py` 与 Qt 壳目录。
 
 **Phase 2 — 数据面** ✅
 
@@ -90,12 +93,12 @@ CTk + ttk.Treeview 的交互天花板（右键菜单靠手拼、无行内编辑�
 ### 4.0 前置
 
 - [x] 分支 `feature/pyside6-migration` 工作区干净，最新审查项已合入。
-- [x] 本机：`uv sync --extra dev --extra qt`。
+- [x] 本机：`uv sync --extra dev`。
 - [x] 明确交付策略：**内部工具** → 可继续 QFluent（GPLv3）；若计划对外分发 exe → Phase 4 内决策是否换主题（见风险）。
 
 ### 4.1 功能验收（默认以 Qt 为准勾选）
 
-在 **Phase 4.3 切默认之前**，用 `FWASSET_UI=qt uv run fwasset`（或等价）过一遍；切默认后用无环境变量再过一遍。
+Qt-only 阶段使用无环境变量的 `uv run fwasset` 验证默认入口；不再安排 CTk 第二套启动验证。
 
 **扫描与索引**
 
@@ -140,31 +143,29 @@ CTk + ttk.Treeview 的交互天花板（右键菜单靠手拼、无行内编辑�
 
 ### 4.3 默认入口切换 ⏸ 暂停起点（恢复迁移时从这里做）
 
-- [ ] `app.py`：**默认**启动 Qt（`ui_qt.workbench_window.main`）。
-- [ ] 回退开关：`FWASSET_UI=ctk`（或 `tk`）仍可开 CTk，便于一周期应急。
-- [ ] 更新注释 / `docs/README.md` / `CLAUDE.md` 启动说明（默认 Qt、如何回退）。
-- [ ] 可选：`config` 或说明文件写清环境变量，避免产线不知。
+- [x] `app.py`：**默认**启动 Qt（`ui_qt.workbench_window.main`）。
+- [x] 不保留 CTk 回退开关；Qt 为唯一受支持界面。
+- [x] 更新注释 / `docs/README.md` 启动说明（默认 Qt）。
+- [x] `config` 或说明文件不再要求设置界面环境变量。
 
 ### 4.4 打包与交付
 
-- [ ] `fwasset.spec`：PySide6 + qfluentwidgets 收集；**去掉** customtkinter 隐性依赖（若仍保留 CTk 回退则双轨 hooks 都要，或 Phase 4 明确「exe 只带 Qt」）。
-- [ ] 推荐 Phase 4 交付策略（二选一，勾选时写死）：
-  - **A（推荐）**：exe **仅 Qt**；CTk 仅源码 `FWASSET_UI=ctk` 开发回退。
-  - **B**：exe 仍双轨（体积更大，一般不必要）。
-- [ ] 构建：`uv run python -m PyInstaller fwasset.spec`（勿用坏掉的 shim）。
+- [x] `fwasset.spec`：PySide6 + qfluentwidgets 收集；去掉 CTk 隐性依赖。
+- [x] 交付策略：exe **仅 Qt**，不保留 CTk 回退。
+- [x] 构建：`uv run pyinstaller fwasset.spec --noconfirm` 已成功。
 - [ ] 交付目录旁放置：`firmware_catalog.toml`、（可选）`config.example.toml`；启动缺 catalog 时有明确日志/提示（若尚未做可本阶段补）。
 - [ ] 冷启动可接受；主路径功能在冻结 exe 上点验一遍。
 
 ### 4.5 CTk 退役节奏
 
-- [ ] **本版本**：`ui/` 保留，冻结功能性开发，只修阻断 bug。
-- [ ] 文档写明：下一版本或「一个版本周期后」删除 `ui/` 与 customtkinter 依赖。
-- [ ] 删除前再开小 TASK/PR：去依赖、去 omit 以外的死代码、更新 spec。
+- [x] **本版本**：删除 `ui/` CTk 壳、面板、专属测试与 `customtkinter` 依赖。
+- [x] 文档写明 Qt-only 结论；后续 B3 不再安排 CTk 人工验收。
+- [x] 清理工作由 `TASK-20260724-qt-only-ui-cleanup.md` 追踪并保留独立提交边界。
 
 ### 4.6 文档与收尾
 
-- [ ] 本 TASK Phase 4 与验收清单全部勾选。
-- [ ] `docs/CHANGELOG.md` Unreleased：默认 Qt、打包、回退方式。
+- [ ] 本 TASK Phase 4 与验收清单全部勾选（冻结 exe 与 Qt 人工点验仍待用户确认）。
+- [x] `docs/CHANGELOG.md` Unreleased：默认 Qt、打包与 CTk 退役结论。
 - [ ] `docs/code-review/REVIEW-20260709-branch-pyside6.md`：Phase 4 完成后可归档到 `archive/` 或标完成。
 - [ ] 合并 `feature/pyside6-migration` → `main`（PR 或本地约定流程）。
 - [ ] **不要**在本 PR 夹带 CRUD。
@@ -190,7 +191,7 @@ CTk + ttk.Treeview 的交互天花板（右键菜单靠手拼、无行内编辑�
 - [ ] 方案视图整机层级：单变体折叠、多变体展开、定制专属/通用、无「回源」
 - [ ] 右键设默认（单/多平台）、★默认徽章（含空默认唯一变体）、toml 写回、免重扫生效
 - [ ] 四类操作面板 + 一键烧录 + 全局 U 盘选择器 + 日志
-- [ ] 默认入口 Qt；`FWASSET_UI=ctk` 可回退（若保留）
+- [x] 默认入口 Qt；不保留 `FWASSET_UI=ctk` 回退
 - [ ] PyInstaller exe 可运行；`.\scripts\test.ps1` 通过
 
 ---
@@ -211,6 +212,6 @@ CTk + ttk.Treeview 的交互天花板（右键菜单靠手拼、无行内编辑�
 | **当前** | [`TASK-20260714-config-takeover.md`](./TASK-20260714-config-takeover.md) | 软件接管配置 → 共享引用（见 `specs/prompts/task-exchange.md` 1–4） |
 | 其后 | `TASK-YYYYMMDD-firmware-crud` | 程序 CRUD + 增量索引 / 对账（exchange 5–6） |
 | 迁移恢复 | 本文 §4.3–4.7 | 默认 Qt + 打包 + 合 main |
-| 更后 | `TASK-YYYYMMDD-remove-ctk` | 物理删除 `ui/` 与 customtkinter |
+| 迁移收口 | [`TASK-20260724-qt-only-ui-cleanup.md`](./TASK-20260724-qt-only-ui-cleanup.md) | Qt-only 入口、依赖、旧壳清理与 B3 前置 |
 
-命名建议：`TASK-YYYYMMDD-firmware-crud.md` / `TASK-YYYYMMDD-remove-ctk.md`。
+命名建议：`TASK-YYYYMMDD-firmware-crud.md`。CTk 退役已由 `TASK-20260724-qt-only-ui-cleanup.md` 完成。

@@ -15,7 +15,7 @@ from fwasset.ui_qt.operation_panels.registry import register
 
 @register("auto_usb")
 class AutoUsbPanel(BaseOperationPanel):
-    """auto_usb 类型操作面板：U 盘刷机流程。语义对齐 CTk 版（精简操作区）。"""
+    """auto_usb 类型操作面板：U 盘刷机流程。"""
 
     def build(self):
         usb_flow = asset_usb_flow(self.asset)

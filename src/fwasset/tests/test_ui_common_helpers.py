@@ -1,0 +1,19 @@
+from __future__ import annotations
+
+from fwasset.ui_common.workbench_helpers import (
+    flash_mode_label,
+    model_chip_values,
+    set_default_action_label,
+    shared_conflict_prompt_message,
+    shared_register_action_label,
+    shared_unregister_action_label,
+)
+
+
+def test_framework_neutral_helpers_keep_operator_facing_labels() -> None:
+    assert flash_mode_label("tool_launch") == "工具烧录"
+    assert model_chip_values(["L36", "L50S"], selected="L50S") == (["L36", "L50S"], [])
+    assert set_default_action_label("L36", "蓝牙程序") == "设为「L36」蓝牙程序默认版本"
+    assert shared_register_action_label("快捷键程序") == "为「快捷键程序」登记共享来源…"
+    assert shared_unregister_action_label("快捷键程序") == "取消「快捷键程序」的共享来源"
+    assert "已登记共享来源" in shared_conflict_prompt_message("快捷键程序")
