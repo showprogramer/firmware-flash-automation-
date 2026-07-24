@@ -5,6 +5,7 @@
 
 | 文件 | 日期 | 主题 | 处置 |
 |------|------|------|------|
+| [REVIEW-20260724-qt-only-ui-cleanup.md](./REVIEW-20260724-qt-only-ui-cleanup.md) | 2026-07-24 | Qt-only 界面收敛 | Qt 三场景人验通过；CTk 已移除；自动化回归通过 |
 | [REVIEW-20260720-shared-module-registration.md](./REVIEW-20260720-shared-module-registration.md) | 2026-07-24 | B2 共享手动登记入口 | Qt 3 场景人验通过；CTk 随 B3；已闭环 |
 | [REVIEW-20260720-shared-module-registration-independent.md](./REVIEW-20260720-shared-module-registration-independent.md) | 2026-07-24 | B2 独立审查 | B2 议题闭环；迁移议题移交后置 TASK |
 | [REVIEW-20260514-scan-index-race.md](./REVIEW-20260514-scan-index-race.md) | 2026-05-14 | 扫描/索引竞态 | 已闭环；扫描互锁见分支总审 Issue 3 |
