@@ -1,0 +1,18 @@
+# Keep repository text files portable across Windows and WSL/Linux.
+* text=auto eol=lf
+
+# Never apply line-ending conversion to binary/runtime artifacts.
+*.7z binary
+*.db binary
+*.dll binary
+*.exe binary
+*.gif binary
+*.ico binary
+*.jpeg binary
+*.jpg binary
+*.pyd binary
+*.pyc binary
+*.sqlite binary
+*.sqlite3 binary
+*.zip binary
+*.png binary
