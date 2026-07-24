@@ -26,7 +26,7 @@
 验证:
 - `uv run python -m pytest -m "not ui" -q` → **359 passed, 52 deselected；coverage 86.78%**（裁剪前 377 passed / 87.35%；删除 18 项迁移相关测试）
 - 服务套件（set/clear / workbench B4 隔离）随主套件全过
-- **Qt 人工验证 4 场景通过（2026-07-23）**：手动设共享 / 冲突不静默覆盖 / 取消不删文件 / 双轨一致（Qt 独验；CTk 共用 `workbench_helpers` 纯函数保证文案一致，留待 B3 切默认入口时随带验证）
+- **Qt 人工验证 3 场景通过（2026-07-23）**：手动设共享 / 冲突不静默覆盖 / 取消不删文件（CTk 留待 B3 切默认入口时随带验证）
 - 审查记录见 `docs/code-review/REVIEW-20260720-shared-module-registration.md`（含范围调整段）、`REVIEW-20260720-shared-module-registration-independent.md`（议题随迁移移走）
 
 ### fix(core): B1 二轮审查修复（remove 空写 / 解析器映射误判）

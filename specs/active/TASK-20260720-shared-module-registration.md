@@ -7,7 +7,7 @@
 | 项 | 状态 |
 | --- | --- |
 | 类型 | 父任务 Phase B2（手动登记入口；B3 展示前置） |
-| 当前状态 | ✅ **Qt 人验通过（2026-07-23）；代码已 commit（`1a03706`）**。CTk 验证故意推迟到 B3 切默认入口同次随带——B2 期 CTk 仍是默认入口但双壳共用 `workbench_helpers` 纯函数保证文案/禁语一致，无需独立再验。范围裁剪：原计划含 `.ref` 一次性迁移已砍掉，迁移独立后置（见 `TASK-20260723-firmware-ref-migration.md`） |
+| 当前状态 | ✅ **Qt 人验通过（2026-07-23，3 场景）；代码已 commit（`1a03706`）**。CTk 验证故意推迟到 B3 切默认入口同次随带——B2 期 CTk 仍是默认入口但双壳共用 `workbench_helpers` 纯函数保证文案/禁语一致，无需独立再验。范围裁剪：原计划含 `.ref` 一次性迁移已砍掉，迁移独立后置（见 `TASK-20260723-firmware-ref-migration.md`） |
 | 父任务 | `specs/active/TASK-20260714-config-takeover.md`（B2 专节 + 落盘文件专节为契约源） |
 | 分支 | 继续 `feature/pyside6-migration` |
 | 前置（代码） | **B1**（`TASK-20260718`）已提交（`4c8b6db` + 审查修复 `fafd65a`）；B0（`1c287b8`）、原子写（`72d1cca`）已合入 |
@@ -206,7 +206,7 @@ Expected: 全部非 UI 通过；coverage ≥ 80%；UI 测试 deselect。
 
 ## 回退清单（裁剪前已写完、已过门禁，提交前必须删）
 
-> 范围裁剪发生在代码完成后，所以这是**反向操作清单**，不是新增清单。逐项删除后，重跑非 UI 门禁确认绿色，再人验 4 场景。
+> 范围裁剪发生在代码完成后，所以这是**反向操作清单**，不是新增清单。逐项删除后，重跑非 UI 门禁确认绿色，再人验 Qt 3 场景。
 
 | 操作 | 路径 | 内容 |
 | --- | --- | --- |
@@ -253,14 +253,14 @@ Expected: 全部非 UI 通过；coverage ≥ 80%；UI 测试 deselect。
 
 ## 人工验证（Qt 通过 2026-07-23；CTk 推迟到 B3）
 
-### Qt 4 场景 — ✅ 通过
+### Qt 3 场景 — ✅ 通过
 
 1. **手动设为共享** ✅
 2. **冲突不静默覆盖** ✅
 3. **取消共享不删文件** ✅
-4. **双轨一致** ✅（Qt 独验；CTk 共用 `workbench_helpers` 纯函数保证文案一致，**CTk 随 B3 切默认入口同次验证**，B2 不独立再验）
+> **说明**：CTk 与 Qt 共用 `workbench_helpers` 纯函数保证文案一致；CTk 随 B3 切默认入口同次验证，B2 不独立再验。
 
-> **裁剪**：原场景 4/5（`.ref` 迁移 / 未导入源）整迁出。
+> **裁剪**：原场景 4/5（`.ref` 迁移 / 未导入源）整迁出；双轨一致不再作为独立 B2 场景。
 
 ### 现场
 
@@ -312,18 +312,18 @@ feat(core,ui): 共享手动登记入口（Phase B2）
 
 ## Definition of Done
 
-- [ ] `set_shared_module`：手动登记仅工作区内真实资产；`source_model_id` = 源根盘上 id；`source_relative_path` 相对工作区根；`source_no_id` / `out_of_workspace` / `conflict` / `write_failed` 错误码；键规范化。
-- [ ] `clear_shared_module`：删条目幂等；**不删固件文件**；无配置根不建空文件。
-- [ ] **不静默覆盖**：冲突在 service/UI 拦截（`load_shared_modules` 查重）。
-- [ ] view model register/unregister 可用；目标根不落 `通用/`。
-- [ ] **B4 隔离**：登记后 `get_scheme_modules` / `get_scheme_module_tree` 不含共享行；回源代码未改。
-- [ ] 两套 UI（CTk + Qt）右键项 + 冲突对话框，文案一致、禁「回源」。
-- [ ] **不做 B3 展示**（角标/可烧/缺失灰掉/列表只显共享留 B3）；**无 mode**；共享只存 toml 不进索引。
+- [x] `set_shared_module`：手动登记仅工作区内真实资产；`source_model_id` = 源根盘上 id；`source_relative_path` 相对工作区根；`source_no_id` / `out_of_workspace` / `conflict` / `write_failed` 错误码；键规范化。
+- [x] `clear_shared_module`：删条目幂等；**不删固件文件**；无配置根不建空文件。
+- [x] **不静默覆盖**：冲突在 service/UI 拦截（`load_shared_modules` 查重）。
+- [x] view model register/unregister 可用；目标根不落 `通用/`。
+- [x] **B4 隔离**：登记后 `get_scheme_modules` / `get_scheme_module_tree` 不含共享行；回源代码未改。
+- [x] 两套 UI（CTk + Qt）右键项 + 冲突对话框，文案一致、禁「回源」；Qt 已完成人验，CTk 随 B3 切默认入口验证。
+- [x] **不做 B3 展示**（角标/可烧/缺失灰掉/列表只显共享留 B3）；**无 mode**；共享只存 toml 不进索引。
 - [ ] **物理合并延后至 firmware-crud TASK**：本阶段只写引用元数据；本地副本属过渡期磁盘事实，不在 UI 暴露给烧录员——**B3 DoD 必须加「共享有效态模块在普通列表/烧录候选只显共享来源，不并列本地副本」**（移交 B3 写死）。
-- [ ] 不碰 `平台配置.toml` / `save_platform_config` / `set_module_default_for_model`；不移动/复制/删除任何 bin/hex。
+- [x] 不碰 `平台配置.toml` / `save_platform_config` / `set_module_default_for_model`；不移动/复制/删除任何 bin/hex。
 - [x] `.ref` 迁移代码与服务按「回退清单」删除；`pytest -m "not ui"` 通过且 coverage ≥ 80%（359 passed / 86.78%）；未自动启动 UI；未破坏性写入 `D:\按摩器程序`。
 - [x] CHANGELOG、审查文档、父任务 B2 状态同步。
-- [x] 人验 Qt 4 场景通过已按模板提交；B3 立项时切默认入口并随带 CTk 验证后才解除 B3 阻塞。
+- [x] 人验 Qt 3 场景通过已按模板提交；B3 立项时切默认入口并随带 CTk 验证后才解除 B3 阻塞。
 
 ## Risks and Trade-offs
 

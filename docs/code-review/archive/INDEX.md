@@ -5,6 +5,8 @@
 
 | 文件 | 日期 | 主题 | 处置 |
 |------|------|------|------|
+| [REVIEW-20260720-shared-module-registration.md](./REVIEW-20260720-shared-module-registration.md) | 2026-07-24 | B2 共享手动登记入口 | Qt 3 场景人验通过；CTk 随 B3；已闭环 |
+| [REVIEW-20260720-shared-module-registration-independent.md](./REVIEW-20260720-shared-module-registration-independent.md) | 2026-07-24 | B2 独立审查 | B2 议题闭环；迁移议题移交后置 TASK |
 | [REVIEW-20260514-scan-index-race.md](./REVIEW-20260514-scan-index-race.md) | 2026-05-14 | 扫描/索引竞态 | 已闭环；扫描互锁见分支总审 Issue 3 |
 | [REVIEW-20260516-scan-state-model.md](./REVIEW-20260516-scan-state-model.md) | 2026-05-16 | ScanStateModel 抽取 | 已修复并合入 |
 | [REVIEW-20260518-agents-and-doc-naming.md](./REVIEW-20260518-agents-and-doc-naming.md) | 2026-05-18 | AGENTS / 文档命名 | 规范已落地 AGENTS.md |

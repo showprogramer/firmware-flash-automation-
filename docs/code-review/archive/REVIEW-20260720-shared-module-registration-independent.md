@@ -4,7 +4,7 @@
 | --- | --- |
 | 类型 | 独立代码审查：新服务 + 双轨 UI |
 | 模块 | `shared_module_service`、`shared_migration_service`、`firmware_catalog`、`scheme_workbench_model`、`workbench_panel`、`workbench_window` |
-| 状态 | 📌 **范围调整（2026-07-23）后整审查议题随迁移后置**；Qt 人验通过（2026-07-23），代码已提交，CTk 待 B3；见下方「范围调整生效说明」 |
+| 状态 | ✅ **已闭环归档**；范围调整后迁移议题移交后置 TASK；Qt 人验 3 场景通过（2026-07-23），CTk 待 B3；见下方「范围调整生效说明」 |
 | 相关 TASK | `specs/active/TASK-20260720-shared-module-registration.md`（裁剪后）、`specs/active/TASK-20260723-firmware-ref-migration.md`（迁移后置） |
 | 审查日期 | 独立审查 2026-07-20；核对+修复 2026-07-20；范围调整 + 人验 2026-07-23 |
 | 被审记录 | `REVIEW-20260720-shared-module-registration.md`（实现自检，保留不改） |
@@ -18,10 +18,10 @@
 | Issue 1（单型号根迁移误写 `通用/型号配置.toml`） | 📌 随迁移整迁出 B2；后置 TASK 启动时作为审查起点再开 |
 | Issue 2（迁移 UI 未支持候选选择 / 逐条冲突确认） | 📌 同上 |
 | Issue 3（`.ref` 解码 / 非法路径不归「无法解析」） | 📌 同上 |
-| Issue 4（父任务 B2 过早标记完成） | ✅ 已改父任务 checklist 为 `[ ]` + 注明裁剪 + 待 4 场景验证；此项不随迁移走 |
+| Issue 4（父任务 B2 过早标记完成） | ✅ 已改父任务 checklist 为 `[ ]` + 注明裁剪 + 待 Qt 3 场景验证；人验通过后已勾选，此项不随迁移走 |
 | R5（迁移 vs 手动键推导路径不一致，`catalog_label_for_dir` 与 `canonical_module_dir` 边界） | 📌 键推导分叉部分仅存于 `catalog_label_for_dir` 处理 `.ref` 父目录名时；如果删 `catalog_label_for_dir` 的 `.ref` 分支后手动路径不再用此函数 → R5 失去载体，一并移后置；否则仍需保留 helper 并补收敛建议 |
 
-> **本独立审查的审查议题主体现已不在 B2 范围内**。主 REVIEW（`REVIEW-20260720-shared-module-registration.md`）保留原审查记录作为 B2 裁剪前的事实存证；裁剪后待人验通过的剩余议题仅：手动登记 set/clear service、CTk/Qt 右键 + 冲突不静默覆盖、B4 隔离。
+> **本独立审查的审查议题主体现已不在 B2 范围内**。主 REVIEW（`REVIEW-20260720-shared-module-registration.md`）保留原审查记录作为 B2 裁剪前的事实存证；裁剪后剩余的手动登记 set/clear service、CTk/Qt 右键、冲突不静默覆盖、B4 隔离已由 Qt 3 场景完成验证，CTk 随 B3 处理。
 >
 > 后置 TASK `TASK-20260723-firmware-ref-migration.md` 若评估结论是 GO（重启自动化迁移），可从 git 历史捞回裁剪前代码，并把本独立审查的 Issue 1/2/3 连同原主 REVIEW 的 Issue 1 一并作为对其再次审查的输入起点。
 
@@ -82,8 +82,8 @@ uv run python -m pytest -m "not ui" -q
 **修复要求：** 服务/view model 接受选中的候选和每项冲突决策；两套 UI 显示可解析、无法解析、冲突分区，并逐项提供覆盖或跳过；补充非 UI 与双 UI 回归测试。
 
 **核对：** ✅ 属实（UX 完整性缺口；service 层已支持逐条，UI 未暴露）。
-**修复：** CTk `Listbox(selectmode=MULTIPLE)`（仅可写入项可勾选、默认全选，无法解析项灰显）；Qt `QListWidgetItem` 可勾选（ok 预勾、无法解析禁用）。`_apply` 只提交勾选候选；冲突**逐条** `askyesno`/`QMessageBox.question`（每模块单独覆盖/保留）。两套文件 `py_compile` 通过；交互行为待人工验证（UI，`@pytest.mark.ui` 不自动跑）。
-**状态：** ✅ 已修（待人验交互）
+**修复：** CTk `Listbox(selectmode=MULTIPLE)`（仅可写入项可勾选、默认全选，无法解析项灰显）；Qt `QListWidgetItem` 可勾选（ok 预勾、无法解析禁用）。`_apply` 只提交勾选候选；冲突**逐条** `askyesno`/`QMessageBox.question`（每模块单独覆盖/保留）。两套文件 `py_compile` 通过；迁移部分已移交后置 TASK。
+**状态：** ✅ 已修（B2 Qt 3 场景通过；迁移部分后置）
 
 ### Issue 3（P1·阻断）：`.ref` 解码异常与非法路径不会成为“无法解析”预览项  `complexity: medium`
 
@@ -131,7 +131,7 @@ uv run python -m pytest -m "not ui" -q
 | B4 隔离，不修改回源逻辑 | 通过：方案模块逻辑未改，回归测试通过 |
 | 共享仅写 `型号配置.toml`，不进索引或平台配置 | 通过 |
 | 迁移目标根不落 `通用/` | ✅ 已修（Issue 1；`_target_model_root`） |
-| 迁移候选选择与逐条冲突确认 | ✅ 已修（Issue 2；待人验交互） |
+| 迁移候选选择与逐条冲突确认 | ✅ 已修（Issue 2；迁移部分后置，B2 不纳入） |
 | 无法解析线索不抛且不写无效路径 | ✅ 已修（Issue 3；解码/`..`/绝对路径） |
 | 人验前不标记 B2 完成 | ✅ 已改（Issue 4；父任务改回 `[ ]`） |
 | 迁移/手动键推导一致（B4b 单引用） | ⚠️ catalog 模块收敛（R5 测试）；非标模块边界留后续 |
@@ -140,8 +140,8 @@ uv run python -m pytest -m "not ui" -q
 
 1. ✅ 关闭 Issue 1-4 并补齐回归测试（+ R5 收敛测试）。
 2. ✅ 重跑 `uv run python -m pytest -m "not ui" -q` → **381 passed, coverage 87.45%**；两套 UI 文件 `py_compile` 通过。
-3. ⏳ 在测试副本完成 TASK 列出的 6 个 CTk / Qt 人工验证场景（**含新增迁移逐条选/逐条冲突交互**）——**待用户执行**。
-4. ⏳ 通过后更新本审查记录、CHANGELOG、父任务状态，并按模板提交。
+3. ✅ 在测试副本完成 Qt 3 个人工验证场景：手动登记、冲突不静默覆盖、取消不删文件；CTk 随 B3 切默认入口验证。
+4. ✅ 已更新本审查记录、CHANGELOG、父任务状态，并按模板提交。
 
 ## 相关 Commit
 

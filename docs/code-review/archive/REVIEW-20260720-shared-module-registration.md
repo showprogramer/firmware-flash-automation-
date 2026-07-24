@@ -4,7 +4,7 @@
 | --- | --- |
 | 类型 | 新服务 + 双轨 UI |
 | 模块 | `core/services/shared_module_service`、`core/services/shared_migration_service`、`core/firmware_catalog`、`ui/view_models/scheme_workbench_model`、`ui/workbench_panel`、`ui/workbench_helpers`、`ui_qt/workbench_window` |
-| 状态 | ✅ Qt 人验通过（2026-07-23）；代码已提交；CTk 留待 B3 切默认入口时随带验证 |
+| 状态 | ✅ 已闭环归档：Qt 人验 3 场景通过（2026-07-23）；代码已提交；CTk 留待 B3 切默认入口时随带验证 |
 | 相关 TASK | `specs/active/TASK-20260720-shared-module-registration.md`（裁剪后）、`specs/active/TASK-20260723-firmware-ref-migration.md`（迁移后置） |
 | 审查日期 | 2026-07-20（Issue 1 修复并入本 TASK；2026-07-23 范围裁剪 + 人验 + commit） |
 
@@ -23,7 +23,7 @@
 | 人工验证场景 4「`.ref` 迁移预览确认」、场景 5「未导入源登记」 | 📌 移至后置 TASK 人验清单 |
 | Issue 1（跨型号同名冲突过滤纯函数 `filter_chosen_for_conflict`） | 📌 随迁移移走；若手动登记路径不依赖，连同三个 `test_filter_chosen_for_conflict_*` 一并删除 |
 
-> **未迁移的剩余议题**：手动登记（set/clear service + CTk/Qt 右键 + 冲突不静默覆盖）+ B4 隔离回归仍由 B2 承接，本审查记录「未关闭议题」一节只剩这些；人验 4 场景通过后归档。
+> **未迁移的剩余议题**：手动登记（set/clear service + CTk/Qt 右键 + 冲突不静默覆盖）+ B4 隔离回归仍由 B2 承接；Qt 3 场景通过后归档，CTk 随 B3 切默认入口验证。
 
 ## 问题描述
 
@@ -82,7 +82,7 @@ uv run python -m pytest -m "not ui" -q
 
 ## 人工验证
 
-✅ **Qt 4 场景通过（2026-07-23）**：手动设共享 / 冲突不静默覆盖 / 取消不删文件 / 双轨一致（Qt 独验；CTk 共用 `workbench_helpers` 纯函数保证文案一致，留待 B3 切默认入口时随带验证）。
+✅ **Qt 3 场景通过（2026-07-23）**：手动设共享 / 冲突不静默覆盖 / 取消不删文件（CTk 留待 B3 切默认入口时随带验证）。
 
 ## 相关 Commit
 
