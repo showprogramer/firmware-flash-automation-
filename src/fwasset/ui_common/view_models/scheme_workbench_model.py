@@ -924,6 +924,7 @@ class SchemeWorkbenchModel:
         # 2. 从 platform_config 中寻找缺失的通用模块（回源）
         # 平台按型号隔离；方案声明了 platform 则必须匹配配置块（A5）。
         # 回源作用域 = 本型号根内通用 + 本型号默认/A4 推断；禁止跨型号静默补。
+        # B4b：已登记 shared_modules 的键（hit/missing 皆然）不得把保留本地副本当回源。
         model_platforms = self._platforms_for(model_name)
         if platform_name:
             relevant_platforms = [
@@ -939,6 +940,15 @@ class SchemeWorkbenchModel:
         if model_root:
             common_assets = self._filter_assets(category="common")
             model_common = [a for a in common_assets if self._belongs_to_model(a, model_name)]
+            shared_keys = {
+                canonical_module_dir(ref.module_key)
+                for ref in self.get_shared_modules(model_name)
+                if canonical_module_dir(ref.module_key)
+            }
+
+            def _module_is_shared(module_key: str) -> bool:
+                key = canonical_module_dir(module_key)
+                return bool(key) and key in shared_keys
 
             def _append_fallback(fallback_asset: FirmwareAsset) -> None:
                 if not self._asset_matches_keyword(fallback_asset, keyword):
@@ -975,6 +985,8 @@ class SchemeWorkbenchModel:
 
             for p in relevant_platforms:
                 for module_key, default_dir in p.defaults.items():
+                    if _module_is_shared(module_key):
+                        continue
                     if any(_module_matches(a, module_key) for a in covered_assets):
                         continue
                     fallback_asset = _pick_fallback(module_key, str(default_dir or ""))
@@ -989,6 +1001,8 @@ class SchemeWorkbenchModel:
                 if not mkey or mkey in seen_module_keys:
                     continue
                 seen_module_keys.add(mkey)
+                if _module_is_shared(mkey):
+                    continue
                 if any(_module_matches(a, mkey) for a in covered_assets):
                     continue
                 if self._module_has_defaults_key(relevant_platforms, mkey):

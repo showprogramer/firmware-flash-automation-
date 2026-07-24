@@ -2,13 +2,21 @@
 
 ## Unreleased
 
+### fix(ui): B4 方案回源压制已共享模块的本地副本
+
+- `get_scheme_modules`：defaults / A4 回源在模块已登记 `shared_modules`（hit 或 missing）时跳过本地通用回源，方案上明确缺失（定制专属不受影响）。
+- 补齐 B4 / B4b / B6 回归：共享+本地不进方案树、missing 不回落、取消共享后方案可再回源本地。
+- 不改四字段 schema / `平台配置.toml` / Phase C `mode`。
+
+验证：`.\scripts\test.ps1` → 358 passed，coverage 93.47%。B4 Qt 人工验证（场景 4/6/7/8）于 2026-07-24 通过。
+
 ### feat(ui): B3 共享模块展示与烧录候选
 
 - Qt 现有模块行显示“共享自 …”；双击打开解析后的来源目录。
 - 有效共享来源作为烧录候选；来源缺失显示“共享来源缺失”，不回落目标型号本地副本。
 - B4 方案回源保持隔离；B3 Qt 人工验证于 2026-07-24 通过。
 
-验证：`.\scripts\test.ps1` → 353 passed，coverage 93.36%。.TrimEnd()
+验证：`.\scripts\test.ps1` → 353 passed，coverage 93.36%。
 
 ### chore(ui): 收敛为 Qt 唯一支持界面（TASK-20260724）
 
