@@ -1,12 +1,58 @@
 # Repository Guidelines (项目规范)
 
+## 上下文加载纪律（强制 · 跨 Agent 适用）
+
+本节约束 **所有 agent**（Claude Code / Codex CLI / Cursor / Aider 等）在浏览代码时的默认行为。配套忽略文件：`.claudeignore` / `.codexignore` / `.cursorignore`（内容同源，保持同步）。
+
+### 禁止默认读取
+
+下列文件 / 目录命中后**直接跳过**，不要展开报告内容、不要 `cat` 全文、不要纳入 diff 讨论：
+
+- **本地敏感配置**：`config.toml`、`.env` / `.env.*`、`*.pem` / `*.key` / `*.cert`、`.claude/settings.local.json`、`.mcp_config*.json`
+- **运行时与缓存**：`.runtime/`、`.venv/` / `.venv-wsl/`、`__pycache__/`、`*.pyc` / `*.pyo`、`.coverage`、`htmlcov/`、`.pytest_cache/`、`.hypothesis/`、`.mypy_cache/`、`.ruff_cache/`
+- **构建产物**：`dist/`、`build/`、`fwasset.db*`、`*.spec`（保留 `fwasset.spec`）、`*.egg-info/`
+- **公司内部文档**：`massagechairproject.md`、`specs/project-overview.md`、`specs/archive/`、`specs/prompts/`、`specs/ui-reactor/`
+- **临时办公文件**：`*.xlsx` / `*.xls`、`手控UI问题汇总.xlsx`、`现有摩众手控UI明细表.xlsx`、`*.tmp` / `*.bak`、`Thumbs.db` / `.DS_Store` / `nul`
+- **Agent / IDE 本地配置**：`.vscode/`、`.idea/`、`.claude/`、`.opencode/`、`.codex/`、`.agents/`、`.cursor/`、`.aider*`、`.continue/`、`logs/`、`*.swp` / `*.swo`
+
+需要查询本地配置时，**只能读 `config.example.toml`**；真值在用户本地 `config.toml` 里，由人按需粘贴相关片段。
+
+### 当前任务优先读取范围
+
+默认优先读取：
+
+- `src/fwasset/core/` 中与当前功能直接相关的模块；
+- `src/fwasset/ui_qt/` 与 `src/fwasset/ui_common/`；
+- `src/fwasset/tests/` 中与当前任务相关的测试；
+- `specs/active/` 当前任务文件；
+- `docs/CHANGELOG.md` 的 `Unreleased` 区域。
+
+除非任务明确要求，不要全文读取：
+
+- `docs/code-review/archive/`；
+- 已完成的历史 TASK；
+- 与当前功能无关的 service、USB、音乐烧录模块；
+- `docs/CHANGELOG.md` 的历史大段内容。
+
+### 命令习惯
+
+- `find` / `ls -R` 默认加 prune：`-path ./.venv -prune -o -path ./.runtime -prune -o ...`
+- `grep` / `rg` 默认走 gitignore：`rg` 自动尊重 `.gitignore`；`grep --exclude-dir=.venv --exclude-dir=.runtime`
+- 不要用 `cat <sensitive-file>`，要先征求人工确认
+- 涉及 USB 设备 / 路径 / 序列号时，用占位符描述（如 `<USB_DRIVE>`），不引用真实值
+
+### 修改 ignore 文件的流程
+
+改动 `.claudeignore` / `.codexignore` / `.cursorignore` 时必须**三处同步**，并在 commit message 注明。三份文件内容应完全一致，只允许顶部注释不同。
+
 ## Project Structure & Module Organization
 
 Python desktop application for managing firmware assets. Source code under `src/fwasset/`:
 
 - Core domain logic → `core/` (scanner, index, types, settings, services)
 - Service modules → `core/services/` (scan_service, flash_service, usb_repair_service, music_flash_service)
-- UI panels & view models → `ui/` (shell, panels, operation_panels, view_models)
+- Qt UI workbench and panels → `ui_qt/`
+- Framework-neutral ViewModels and helpers → `ui_common/`
 - Console entry point → `fwasset.app:main`
 - Tests → `src/fwasset/tests/` (use `test_*.py` naming)
 - Specs & plans → `specs/` (active, decisions, archive, prompts)
@@ -26,7 +72,7 @@ uv run python -m pytest -m "not ui" -q                       # Skip display-depe
 .\scripts\test.ps1                                           # Canonical Windows verification
 ```
 
-There are **no standalone lint or type-check commands** configured (no ruff, mypy, flake8). Coverage gate: >= 80% for `src/fwasset` (UI files `app.py` and `ui/*` excluded via `coverage.omit`). Run `.\scripts\test.ps1` as canonical gate.
+There are **no standalone lint or type-check commands** configured (no ruff, mypy, flake8). Coverage gate: >= 80% for `src/fwasset`. Coverage omits `src/fwasset/app.py` and `src/fwasset/ui_qt/*`; `src/fwasset/ui_common/*` remains covered. Run `.\scripts\test.ps1` as canonical gate.
 
 ## Domain Types & Contracts (`core/types.py`)
 
@@ -87,11 +133,11 @@ Defines 20 firmware type entries. Each entry maps `dir_keywords` (Chinese string
 - Constants: `UPPER_SNAKE_CASE` at module top (e.g. `SCHEMA_VERSION`, `FONT_FAMILY`, `SCAN_EXCLUDE_DIR_KEYWORDS`)
 
 ### UI Patterns
-- **Panel registry**: `@register` decorator + `get_panel(flash_mode)` in `ui/operation_panels/registry.py`. 4 panels: `AutoUsbPanel`, `DisabledPanel`, `ManualDocPanel`, `ToolLaunchPanel`. New flash modes only need a new panel file.
+- **Panel registry**: `@register` decorator + `get_panel(flash_mode)` in `ui_qt/operation_panels/registry.py`. Four Qt panels: `AutoUsbPanel`, `DisabledPanel`, `ManualDocPanel`, `ToolLaunchPanel`. New flash modes only need a new file under `ui_qt/operation_panels/`.
 - **PanelHost protocol** (`host_types.py`): defines `usb_drive`, `_build_usb_selector_row()`, `_run_task()`, `_selected_asset()`, and tool-related methods.
 - **Task queue**: `BaseFlashPanel._run_task()` spawns daemon threads; results via `queue.Queue`, polled with `self.after(120, ...)`.
 - **View models**: standalone classes (e.g. `AssetSelectionModel`, `ScanStateModel`). Panels compose models; they do not inherit from them.
-- **Design tokens**: All colors and fonts from `ui/design_tokens.py`. Tokens use light/dark tuples: `("light-value", "dark-value")`. Layout constants: `SIDEBAR_WIDTH=400`, `MAIN_MIN_WIDTH=600`. Font: `Segoe UI` / `Consolas`. Never hard-code hex values or font sizes.
+- **Design tokens**: Qt layout/theme values come from `ui_qt/design_tokens.py` and QFluentWidgets theme APIs. Shared ViewModels/helpers live under `ui_common/`. Never add CustomTkinter/tkinter imports or a second UI implementation.
 - **Cancellation**: Use `threading.Event`. Create local `cancel_event` before spawning worker thread; capture in closure.
 - **整机模块固定层级**: 按烧录习惯固定展示顺序（主板程序 → 手控UI → 蓝牙程序 → 语音程序 → 快捷键程序 → 3D机芯板程序 → 2D机芯板程序 → 腿部程序），大部分机型包含这些模块但非完整，缺失的模块不显示。单变体折叠为一行，多变体展开显示所有变体。
 
@@ -108,7 +154,7 @@ Defines 20 firmware type entries. Each entry maps `dir_keywords` (Chinese string
 
 ## Testing Conventions
 
-- Framework: pytest. Coverage gate: >= 80% for `src/fwasset` (UI files excluded).
+- Framework: pytest. Coverage gate: >= 80% for `src/fwasset`; `app.py` and `ui_qt/*` are omitted, while `ui_common/*` remains covered.
 - `@pytest.mark.ui` for display-dependent tests; filter with `-m "not ui"`.
 - Module-level factory functions (e.g. `make_asset()`) over `conftest` fixtures.
 - Mocking: prefer `monkeypatch.setattr` with lambdas over `unittest.mock`.
