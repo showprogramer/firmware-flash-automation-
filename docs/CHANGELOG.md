@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### feat(ui): B3 共享模块展示与烧录候选
+
+- Qt 现有模块行显示“共享自 …”；双击打开解析后的来源目录。
+- 有效共享来源作为烧录候选；来源缺失显示“共享来源缺失”，不回落目标型号本地副本。
+- B4 方案回源保持隔离；B3 Qt 人工验证于 2026-07-24 通过。
+
+验证：`.\scripts\test.ps1` → 353 passed，coverage 93.36%。.TrimEnd()
+
 ### chore(ui): 收敛为 Qt 唯一支持界面（TASK-20260724）
 
 - 默认入口 `uv run fwasset` 直接启动 PySide6 + QFluentWidgets 工作台，不再依赖 `FWASSET_UI` 环境变量。

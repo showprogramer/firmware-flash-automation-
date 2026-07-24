@@ -68,6 +68,10 @@ class ModuleCardData:
     is_fallback: bool              # 是否是回源模块
     source_kind: str = ""          # "common" | "custom" — coarse bucket for the row-level 定制专属/通用 标签
     default_badge: str = ""        # 平台默认徽章文案（如 "★默认"），非默认为空串
+    shared_state: str = "local"     # local / shared_hit / shared_missing
+    shared_source_label: str = ""   # 来源型号显示名
+    shared_reason: str = ""         # 缺失原因
+    effective_asset: FirmwareAsset | None = None  # 命中时实际打开/烧录的来源资产
 
 
 # 整机标准模块的固定展示顺序（按烧录习惯，大部分机型包含这些模块）
@@ -92,6 +96,10 @@ class ModuleVariant:
     source_kind: str               # "custom"（定制专属）/ "common"（通用）
     source_label: str              # 用户可读来源文案，绝不含"回源"
     default_badge: str = ""        # 平台默认徽章文案（如 "★默认"），非默认为空串
+    shared_state: str = "local"     # local / shared_hit / shared_missing
+    shared_source_label: str = ""   # 来源型号显示名
+    shared_reason: str = ""         # 缺失原因
+    effective_asset: FirmwareAsset | None = None  # 命中时实际打开/烧录的来源资产
 
 
 @dataclass
@@ -803,6 +811,47 @@ class SchemeWorkbenchModel:
             "custom": sorted(list(custom_schemes))
         }
 
+    def _shared_source_assets(self, resolution: SharedModuleResolution) -> list[FirmwareAsset]:
+        """按解析器给出的来源变体目录，映射回索引中的真实资产。"""
+        wanted = [p.resolve() for p in resolution.variants]
+        if not wanted:
+            return []
+        assets = self._all_assets if self._cache_loaded() else query_assets(path=self.db_path)
+        matched: list[FirmwareAsset] = []
+        for asset in assets:
+            try:
+                asset_path = Path(str(asset.get("path", ""))).resolve()
+            except (OSError, RuntimeError):
+                continue
+            if any(asset_path == path or path in asset_path.parents for path in wanted):
+                matched.append(asset)
+        matched.sort(key=lambda a: str(a.get("path", "")))
+        return matched
+
+    def _decorate_shared_cards(self, model_name: str, cards: list[ModuleCardData]) -> list[ModuleCardData]:
+        """给现有模块卡附加共享状态；不创建独立共享列表。"""
+        for card in cards:
+            if card.source_kind != "common":
+                continue
+            module_key = canonical_module_dir(str(card.asset.get("firmware_label", "")))
+            resolution = self.resolve_shared_module(model_name, module_key)
+            if resolution is None:
+                continue
+            card.shared_reason = resolution.reason
+            if resolution.status != "hit":
+                card.shared_state = "shared_missing"
+                continue
+            source_assets = self._shared_source_assets(resolution)
+            if not source_assets:
+                card.shared_state = "shared_missing"
+                card.shared_reason = "path_not_found"
+                continue
+            card.shared_state = "shared_hit"
+            card.effective_asset = source_assets[0]
+            source_root = self.model_root_for_id(resolution.ref.source_model_id)
+            card.shared_source_label = _strip_model_suffix(source_root.name) if source_root is not None else resolution.ref.source_model_id
+        return cards
+
     def get_common_modules(self, model_name: str, firmware_label: str, keyword: str = "") -> list[ModuleCardData]:
         """点击通用模块时，返回该类型下的所有变体"""
         assets = self._filter_assets(keyword=keyword, category="common")
@@ -833,7 +882,7 @@ class SchemeWorkbenchModel:
                 default_badge=self.default_badge(a),
             ))
 
-        return results
+        return self._decorate_shared_cards(model_name, results)
 
     def get_scheme_modules(self, model_name: str, scheme_name: str, keyword: str = "") -> list[ModuleCardData]:
         """点击定制方案时，返回完整模块清单（含回源）。
@@ -1097,4 +1146,4 @@ class SchemeWorkbenchModel:
                 source_kind="common" if cat == "common" else "custom",
                 default_badge=self.default_badge(a) if cat == "common" else "",
             ))
-        return results
+        return self._decorate_shared_cards(model_name, results)

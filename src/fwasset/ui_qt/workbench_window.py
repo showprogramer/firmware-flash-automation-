@@ -294,17 +294,19 @@ class WorkbenchInterface(QWidget):
     # ------------------------------------------------------------------ PanelHost 选中资产与交接动作
     def _selected_asset(self) -> dict | None:
         data = self.grid_panel.get_selected_data()
-        return data.asset if data else None
+        if not data or data.shared_state == "shared_missing":
+            return None
+        return data.effective_asset or data.asset
 
     def _open_current_asset_dir(self) -> None:
         data = self.grid_panel.get_selected_data()
         if data:
-            open_path_in_explorer(str(data.asset.get("path", "")), self._log)
+            open_path_in_explorer(str((data.effective_asset or data.asset).get("path", "")), self._log)
 
     def _copy_asset_dir_path(self) -> None:
         data = self.grid_panel.get_selected_data()
         if data:
-            self._copy_to_clipboard(str(data.asset.get("path", "")))
+            self._copy_to_clipboard(str((data.effective_asset or data.asset).get("path", "")))
 
     def _copy_primary_file_path(self) -> None:
         data = self.grid_panel.get_selected_data()
@@ -679,7 +681,13 @@ class WorkbenchInterface(QWidget):
             self.ops_placeholder.show()
             return
 
-        asset = variant.asset
+        if variant.shared_state == "shared_missing":
+            self.selection_summary.setText("共享来源缺失 · 不可烧录")
+            self.ops_placeholder.setText("共享来源缺失，未回落本地副本")
+            self.ops_placeholder.show()
+            return
+
+        asset = variant.effective_asset or variant.asset
         mode = str(asset.get("flash_mode", "disabled")) or "disabled"
         module = str(asset.get("firmware_label", "")) or str(asset.get("firmware_type", ""))
         version = variant.version or str(asset.get("version", "")) or "-"

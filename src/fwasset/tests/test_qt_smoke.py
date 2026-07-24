@@ -453,3 +453,13 @@ def test_run_task_busy_guard_and_completion(qapp) -> None:
     assert done == ["ok"], "on_done 回调应收到任务结果"
     assert any("已有任务执行中" in m for m in logs)
     assert any("测试任务完成" in m for m in logs)
+
+def test_shared_badges_render_on_existing_variant_row() -> None:
+    hit = _variant("快捷键", kind="common")
+    hit.shared_state = "shared_hit"
+    hit.shared_source_label = "L36"
+    missing = _variant("快捷键", kind="common")
+    missing.shared_state = "shared_missing"
+
+    assert "共享自 L36" in DataGrid._variant_text(hit, "快捷键程序")
+    assert "共享来源缺失" in DataGrid._variant_text(missing, "快捷键程序")

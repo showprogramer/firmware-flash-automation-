@@ -68,6 +68,10 @@ class DataGrid(QWidget):
         text = variant.name or "默认"
         if variant.default_badge:
             text = f"{text}  {variant.default_badge}"
+        if variant.shared_state == "shared_hit":
+            text = f"{text}  共享自 {variant.shared_source_label}"
+        elif variant.shared_state == "shared_missing":
+            text = f"{text}  共享来源缺失"
         return text
 
     @staticmethod
@@ -136,6 +140,10 @@ class DataGrid(QWidget):
                 source_kind=kind,
                 source_label=source_label,
                 default_badge=data.default_badge,
+                shared_state=data.shared_state,
+                shared_source_label=data.shared_source_label,
+                shared_reason=data.shared_reason,
+                effective_asset=data.effective_asset,
             )
             grouped.setdefault(label, []).append(variant)
 
@@ -184,7 +192,11 @@ class DataGrid(QWidget):
         variant = item.data(0, _VARIANT_ROLE)
         if variant is None:
             return
-        open_path_in_explorer(str(variant.asset.get("path", "")), self._on_log)
+        if variant.shared_state == "shared_missing":
+            self._on_log("共享来源缺失，无法打开")
+            return
+        asset = variant.effective_asset or variant.asset
+        open_path_in_explorer(str(asset.get("path", "")), self._on_log)
 
     def _on_context_menu(self, pos) -> None:
         item = self.tree.itemAt(pos)
