@@ -19,6 +19,7 @@ from fwasset.core.model_config import (
     remove_shared_module,
     save_shared_module,
 )
+from fwasset.core.platform_config import load_platform_config_with_status
 from fwasset.core.services.platform_default_service import canonical_module_dir
 from fwasset.core.types import FirmwareAsset
 
@@ -68,12 +69,39 @@ def _module_key_for_asset(asset: FirmwareAsset) -> str:
     return ""
 
 
+def _module_dir_rel(
+    asset_path: Path,
+    workspace_root: Path,
+) -> str | None:
+    """follow_default 登记：从资产路径派生模块目录的工作区相对路径。
+
+    - parent.name in ("通用", "定制") → 资产路径本身即模块目录（唯一变体）
+    - 否则 → 父目录为模块目录（变体子目录）
+    """
+    parent = asset_path.parent
+    if parent.name in ("通用", "定制"):
+        module_path = asset_path
+    else:
+        module_path = parent
+    return _resolve_relative(module_path, workspace_root)
+
+
+def _source_platform_exists(src_root: Path, source_platform: str) -> bool:
+    """检查 source_platform 是否存在于源型号的 平台配置.toml 中。"""
+    platforms, status, _ = load_platform_config_with_status(src_root)
+    if status != "ok":
+        return False
+    return any(p.platform_name == source_platform for p in platforms)
+
+
 def set_shared_module(
     target_model_root: str | Path,
     source_asset: FirmwareAsset,
     workspace_root: str | Path,
     module_key: str = "",
     overwrite: bool = False,
+    mode: str = "static",
+    source_platform: str = "",
     log_fn: Callable[[str], None] = print,
 ) -> dict:
     """手动登记一条共享引用到目标型号根的 `型号配置.toml`。
@@ -136,6 +164,34 @@ def set_shared_module(
             "payload": {"source_root": str(src_root)},
         }
 
+    # follow_default：派生模块目录路径；其余模式沿用 rel（Phase B）
+    clean_mode = mode if mode in ("static", "follow_default", "pinned") else "static"
+    if clean_mode == "follow_default":
+        final_rel = _module_dir_rel(asset_path, ws)
+        if final_rel is None:
+            message = "登记共享来源失败：无法从来源资产路径派生模块目录"
+            log_fn(message)
+            return {
+                "ok": False,
+                "code": "out_of_workspace",
+                "message": message,
+                "payload": {},
+            }
+        # 显式 source_platform 需存在于源平台配置中
+        clean_platform = str(source_platform or "").strip()
+        if clean_platform and not _source_platform_exists(src_root, clean_platform):
+            message = f"登记共享来源失败：来源型号平台配置中不存在平台「{clean_platform}」"
+            log_fn(message)
+            return {
+                "ok": False,
+                "code": "invalid_args",
+                "message": message,
+                "payload": {"source_platform": clean_platform},
+            }
+    else:
+        final_rel = rel
+        clean_platform = ""  # static / pinned 不写 source_platform
+
     # 模块键规范化
     key = canonical_module_dir(module_key) if module_key else _module_key_for_asset(source_asset)
     if not key:
@@ -173,9 +229,11 @@ def set_shared_module(
     ref = SharedModuleRef(
         module_key=key,
         source_model_id=mid,
-        source_group=mid,  # B2 无分组 UI；默认用源 model_id 占位（Phase C 再细化）
+        source_group=mid,
         source_module=source_module,
-        source_relative_path=rel,
+        source_relative_path=final_rel,
+        mode=clean_mode,  # type: ignore[arg-type]
+        source_platform=clean_platform,
     )
 
     try:
@@ -200,7 +258,7 @@ def set_shared_module(
             "config_path": str(config_path),
             "module_key": key,
             "source_model_id": mid,
-            "source_relative_path": rel,
+            "source_relative_path": final_rel,
             "overwritten": existing_ref is not None,
         },
     }
