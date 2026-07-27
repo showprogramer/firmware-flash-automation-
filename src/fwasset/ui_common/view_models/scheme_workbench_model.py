@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -21,6 +22,9 @@ from fwasset.core.shared_module_resolver import (
     resolve_shared_module as resolve_shared_module_core,
 )
 from fwasset.core.types import FirmwareAsset
+
+
+_log = logging.getLogger(__name__)
 
 
 def _strip_model_suffix(name: str) -> str:
@@ -843,10 +847,12 @@ class SchemeWorkbenchModel:
                 continue
             card.shared_reason = resolution.reason
             if resolution.status != "hit":
+                _log.info("共享模块解析失败：%s/%s → %s", model_name, module_key, resolution.reason)
                 card.shared_state = "shared_missing"
                 continue
             source_assets = self._shared_source_assets(resolution)
             if not source_assets:
+                _log.info("共享模块路径不存在：%s/%s → %s", model_name, module_key, resolution.resolved_path)
                 card.shared_state = "shared_missing"
                 card.shared_reason = "path_not_found"
                 continue

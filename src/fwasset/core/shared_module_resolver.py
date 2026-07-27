@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Literal
 
 from fwasset.core.model_config import SharedModuleRef, load_model_config
-from fwasset.core.platform_config import PlatformDefaults, load_platform_config_with_status
+from fwasset.core.platform_config import PlatformDefaults, canonical_module_dir, default_variant_for, load_platform_config_with_status
 from fwasset.core.scheme_config import _is_excluded_dir
 
 
@@ -133,29 +133,10 @@ def resolve_shared_module(
 # Phase C1 辅助：follow_default 解析
 # ---------------------------------------------------------------------------
 
-def _select_platform_block(
-    platforms: list[PlatformDefaults],
-    source_platform: str,
-    source_module: str,
-) -> PlatformDefaults | None:
-    """选取目标平台块。
-
-    - source_platform 非空：按名查找；找不到返回 None（no_source_platform）。
-    - source_platform 为空：自动检测——取第一个包含 source_module 的块；
-      均不包含则取第一块（后续由 defaults 查找失败返回 no_source_default）。
-    """
-    if not platforms:
-        return None
-    if source_platform:
-        for p in platforms:
-            if p.platform_name == source_platform:
-                return p
-        return None  # 显式指定但不存在
-    # 自动检测：优先找包含该模块的块
-    for p in platforms:
-        if source_module in p.defaults:
-            return p
-    return platforms[0]  # 回落首块（后续会汇报 no_source_default）
+def _module_in_defaults(block: PlatformDefaults, module: str) -> bool:
+    """规范化匹配：platform 块的 defaults 中是否含该模块键。"""
+    want = canonical_module_dir(module)
+    return any(canonical_module_dir(key) == want for key in block.defaults)
 
 
 def _resolve_follow_default(
@@ -179,23 +160,33 @@ def _resolve_follow_default(
             ref=ref, status="missing", reason="no_source_platform"
         )
 
-    block = _select_platform_block(platforms, ref.source_platform, ref.source_module)
-    if block is None:
-        return SharedModuleResolution(
-            ref=ref, status="missing", reason="no_source_platform"
-        )
-
-    # D3 伪代码：key 不存在 vs 空串区分
-    if ref.source_module not in block.defaults:
-        return SharedModuleResolution(
-            ref=ref, status="missing", reason="no_source_default"
-        )
-
-    variant_name = block.defaults[ref.source_module]
-    if variant_name == "":
-        resolved_path = module_dir  # 唯一变体（leaf module）
+    if ref.source_platform:
+        # 显式 platform：必须找到对应块
+        block = next((p for p in platforms if p.platform_name == ref.source_platform), None)
+        if block is None:
+            return SharedModuleResolution(
+                ref=ref, status="missing", reason="no_source_platform"
+            )
+        if not _module_in_defaults(block, ref.source_module):
+            return SharedModuleResolution(
+                ref=ref, status="missing", reason="no_source_default"
+            )
+        variant_name = default_variant_for(platforms, block.platform_name, ref.source_module)
     else:
-        resolved_path = module_dir / variant_name
+        # 自动检测：依次试所有 platform，取第一个含该模块默认的
+        variant_name = ""
+        for p in platforms:
+            if _module_in_defaults(p, ref.source_module):
+                variant_name = default_variant_for(platforms, p.platform_name, ref.source_module)
+                break
+        if variant_name == "" and not any(
+            _module_in_defaults(p, ref.source_module) for p in platforms
+        ):
+            return SharedModuleResolution(
+                ref=ref, status="missing", reason="no_source_default"
+            )
+
+    resolved_path = module_dir / variant_name if variant_name else module_dir
 
     if not resolved_path.exists():
         return SharedModuleResolution(

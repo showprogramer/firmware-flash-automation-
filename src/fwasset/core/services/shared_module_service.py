@@ -94,6 +94,14 @@ def _source_platform_exists(src_root: Path, source_platform: str) -> bool:
     return any(p.platform_name == source_platform for p in platforms)
 
 
+def _source_has_platform_config(src_root: Path) -> bool:
+    """检查源型号是否有可用的 平台配置.toml（至少一个 platform 块）。"""
+    platforms, status, _ = load_platform_config_with_status(src_root)
+    if status != "ok":
+        return False
+    return len(platforms) > 0
+
+
 def set_shared_module(
     target_model_root: str | Path,
     source_asset: FirmwareAsset,
@@ -187,6 +195,16 @@ def set_shared_module(
                 "code": "invalid_args",
                 "message": message,
                 "payload": {"source_platform": clean_platform},
+            }
+        # 自动检测模式：源型号必须有 平台配置.toml
+        if not clean_platform and not _source_has_platform_config(src_root):
+            message = "登记共享来源失败：自动更新模式要求来源型号有平台配置，请先在来源型号设置平台默认"
+            log_fn(message)
+            return {
+                "ok": False,
+                "code": "no_platform_config",
+                "message": message,
+                "payload": {"source_root": str(src_root)},
             }
     else:
         final_rel = rel

@@ -43,12 +43,19 @@ def _setup(tmp_path: Path) -> tuple[Path, Path, Path]:
     return ws, src, tgt
 
 
+def _setup_with_platform(tmp_path: Path) -> tuple[Path, Path, Path]:
+    """同上，并写入平台配置。"""
+    ws, src, tgt = _setup(tmp_path)
+    save_platform_config(src, [PlatformDefaults("标准单机芯", {})])
+    return ws, src, tgt
+
+
 # ---------------------------------------------------------------------------
 # 1. follow_default — 多变体资产存模块目录（parent.name 非 通用/定制）
 # ---------------------------------------------------------------------------
 
 def test_follow_default_stores_module_dir(tmp_path: Path):
-    ws, src, tgt = _setup(tmp_path)
+    ws, src, tgt = _setup_with_platform(tmp_path)
     variant = src / "通用" / "手控UI" / "v2.0"
     asset = _make_asset(variant)
 
@@ -65,7 +72,7 @@ def test_follow_default_stores_module_dir(tmp_path: Path):
 # ---------------------------------------------------------------------------
 
 def test_follow_default_leaf_asset_stores_asset_path(tmp_path: Path):
-    ws, src, tgt = _setup(tmp_path)
+    ws, src, tgt = _setup_with_platform(tmp_path)
     module_dir = src / "通用" / "语音程序"
     asset = _make_asset(module_dir, firmware_label="语音程序")
 
@@ -110,17 +117,30 @@ def test_follow_default_invalid_source_platform(tmp_path: Path):
 
 
 # ---------------------------------------------------------------------------
-# 5. follow_default + source_platform 为空 → 跳过校验，登记成功
+# 5. follow_default + 有平台配置 + source_platform 为空 → 登记成功（自动检测）
 # ---------------------------------------------------------------------------
 
-def test_follow_default_empty_source_platform_skips_validation(tmp_path: Path):
-    ws, src, tgt = _setup(tmp_path)
+def test_follow_default_auto_detect_with_platform_config(tmp_path: Path):
+    ws, src, tgt = _setup_with_platform(tmp_path)
     variant = src / "通用" / "手控UI" / "v2.0"
     asset = _make_asset(variant)
-    # 不写平台配置，空 source_platform 不触发校验
 
     result = set_shared_module(tgt, asset, ws, mode="follow_default", source_platform="")
     assert result["ok"] is True
+
+
+# ---------------------------------------------------------------------------
+# 5b. follow_default + 无平台配置 + source_platform 为空 → no_platform_config
+# ---------------------------------------------------------------------------
+
+def test_follow_default_no_platform_config_rejected(tmp_path: Path):
+    ws, src, tgt = _setup(tmp_path)  # 无平台配置
+    variant = src / "通用" / "手控UI" / "v2.0"
+    asset = _make_asset(variant)
+
+    result = set_shared_module(tgt, asset, ws, mode="follow_default", source_platform="")
+    assert result["ok"] is False
+    assert result["code"] == "no_platform_config"
 
 
 # ---------------------------------------------------------------------------
