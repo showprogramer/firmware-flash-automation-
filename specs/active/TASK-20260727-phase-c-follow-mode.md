@@ -84,9 +84,13 @@ resolve_shared_module(ref, mode="follow_default"):
   4. 校验 abs_module_dir ∈ source_dir（双保险）
   5. 加载源型号 平台配置.toml
   6. 确定 platform 块（source_platform 显式 or 自动检测）
-  7. variant_name = platform_block.defaults.get(source_module, "")
-     - 空串 → 唯一变体：resolved_path = abs_module_dir
-     - 非空 → resolved_path = abs_module_dir / variant_name
+  7. if source_module not in platform_block.defaults:
+         → missing, reason = "no_source_default"
+     elif platform_block.defaults[source_module] == "":
+         → 唯一变体：resolved_path = abs_module_dir
+     else:
+         variant_name = platform_block.defaults[source_module]
+         resolved_path = abs_module_dir / variant_name
   8. resolved_path.exists() 校验
   9. 返回 hit（resolved_path, variants=[resolved_path]）或 missing
 ```
