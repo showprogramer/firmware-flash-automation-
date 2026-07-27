@@ -225,8 +225,8 @@
 - [x] Bug Issue 1–7、19–20  
 - [x] Suggestion Issue 8–15（代码 + 15 intentional）  
 - [x] Nit 16–18  
-- [ ] **人验 8–15 相关项（暂停）**  
-- [ ] Phase 4  
+- [x] **人验 8–15 相关项**（2026-07-27 通过）  
+- [x] Phase 4（2026-07-27 完成）  
 - [x] 历史审查 archive/  
 
 ---

@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+### fix(core): follow_default 规范化匹配容忍 catalog label 与目录名程序后缀不一致
+
+- `_find_default_key` 在匹配 platform 默认键时去掉「程序」后缀做短名比较，
+  修复 `source_module="快捷键程序"` 与 `defaults` 键 `"快捷键"` 对不上导致
+  `follow_default` 误报 `no_source_default` 的 bug。
+- 新增测试 `test_follow_default_catalog_label_vs_dir_name`。
+
+验证：pytest -m "not ui" → 367 passed。
+
+### fix(ui,core): follow_default 登记/解析两处修复
+
+- 对话框默认模式改回「固定版本」（static）；原「自动更新」排第一导致
+  未选模式时存入 follow_default，源型号无平台默认配置时报「共享来源缺失」。
+- `set_shared_module`：自动检测模式下源型号无 `平台配置.toml` 时提前拒绝
+  （error code `no_platform_config`），避免登记无效引用。
+- `scheme_workbench_model`：解析失败 reason 走 logging，UI 只显示「共享来源缺失」。
+- `data_grid`：移除 elif 块内孤立 else 语句（SyntaxError，非 UI 测试未能检测）。
+- 补测试：`test_follow_default_auto_detect_with_platform_config`、
+  `test_follow_default_no_platform_config_rejected`。
+
+验证：pytest -m "not ui" → 367 passed；exe 冷启动人工点验于 2026-07-27 通过。
+
 ### feat(core,ui): Phase C C3 — 登记对话框 mode 选择与展示文案
 
 - 登记对话框新增「自动更新」/「固定版本」 mode 选择器；

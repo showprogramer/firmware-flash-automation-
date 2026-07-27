@@ -380,7 +380,7 @@ source_relative_path = "L36程序/通用/快捷键/贝乐"
 - [x] **B3** UI 共享自/可烧/缺失（Qt 角标 / 可烧 / 缺失禁用 / 列表只显共享来源；2026-07-24 人验通过）
 - [x] **B4 / B4b / B6** 回源不跳共享；本地副本覆盖规则；缺失不回落本地；人验 4、6、7、8 → 子 TASK：`TASK-20260724-b4-shared-scheme-boundary.md`（2026-07-24 Qt 人验通过）
 - [x] **C** `mode` = follow_default / pinned + platform 映射 → 子 TASK：`TASK-20260727-phase-c-follow-mode.md`（2026-07-27 人验通过）
-- [ ] 本 TASK 收尾：CHANGELOG、审查笔记（若动 types/服务契约）
+- [x] 本 TASK 收尾：CHANGELOG、审查笔记（若动 types/服务契约）
 
 ---
 

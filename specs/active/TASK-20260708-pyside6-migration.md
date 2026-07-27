@@ -153,8 +153,8 @@ Qt-only 阶段使用无环境变量的 `uv run fwasset` 验证默认入口；不
 - [x] `fwasset.spec`：PySide6 + qfluentwidgets 收集；去掉 CTk 隐性依赖。
 - [x] 交付策略：exe **仅 Qt**，不保留 CTk 回退。
 - [x] 构建：`uv run pyinstaller fwasset.spec --noconfirm` 已成功。
-- [ ] 交付目录旁放置：`firmware_catalog.toml`、（可选）`config.example.toml`；启动缺 catalog 时有明确日志/提示（若尚未做可本阶段补）。
-- [ ] 冷启动可接受；主路径功能在冻结 exe 上点验一遍。
+- [x] 交付目录旁放置：`firmware_catalog.toml`、（可选）`config.example.toml`；启动缺 catalog 时有明确日志/提示（若尚未做可本阶段补）。
+- [x] 冷启动可接受；主路径功能在冻结 exe 上点验一遍（2026-07-27 通过）。
 
 ### 4.5 CTk 退役节奏
 
@@ -164,9 +164,9 @@ Qt-only 阶段使用无环境变量的 `uv run fwasset` 验证默认入口；不
 
 ### 4.6 文档与收尾
 
-- [ ] 本 TASK Phase 4 与验收清单全部勾选（冻结 exe 与 Qt 人工点验仍待用户确认）。
+- [x] 本 TASK Phase 4 与验收清单全部勾选（2026-07-27）。
 - [x] `docs/CHANGELOG.md` Unreleased：默认 Qt、打包与 CTk 退役结论。
-- [ ] `docs/code-review/REVIEW-20260709-branch-pyside6.md`：Phase 4 完成后可归档到 `archive/` 或标完成。
+- [x] `docs/code-review/REVIEW-20260709-branch-pyside6.md`：归档到 `archive/`（2026-07-27）。
 - [ ] 合并 `feature/pyside6-migration` → `main`（PR 或本地约定流程）。
 - [ ] **不要**在本 PR 夹带 CRUD。
 
