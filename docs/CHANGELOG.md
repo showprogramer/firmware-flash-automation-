@@ -2,7 +2,17 @@
 
 ## Unreleased
 
-### feat(core): Phase C C0-C2 — SharedModuleRef 扩展与 follow_default 解析链
+### feat(core,ui): Phase C C3 — 登记对话框 mode 选择与展示文案
+
+- 登记对话框新增「自动更新」/「固定版本」 mode 选择器；
+  选「自动更新」时显示「来源平台」下拉，从源型号 `平台配置.toml` 动态加载，首项「（自动检测）」对应空平台；
+  切换来源资产时平台列表自动刷新。
+- 模块列表文案：follow_default → `同{model}`；static → `来自{model}`；
+  data_grid 去掉硬编码「共享自」前缀。
+- `pinned` 整建制移除（Literal 二値化、resolver 删 pinned 分支、service 净化）；
+  存量 toml 中 `mode="pinned"` 容错回退 `static`。
+
+验证：pytest -m "not ui" → 365 passed；Qt 人工验证于 2026-07-27 通过。
 
 - **C0** `SharedModuleRef` 加 `mode`（static/follow_default/pinned）与 `source_platform` 可选字段；
   `load_shared_modules` 向后兼容 Phase B toml（缺 mode → static）；

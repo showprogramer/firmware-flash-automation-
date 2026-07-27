@@ -379,7 +379,7 @@ source_relative_path = "L36程序/通用/快捷键/贝乐"
 - [x] **B2** 手动登记仅工作区内资产；不静默覆盖；Qt 右键入口（`TASK-20260720`；`.ref` 迁移已裁剪删除，后置占位 `TASK-20260723` 于 2026-07-24 **NO-GO 关闭**并归档至 `specs/archive/`。代码已提交（`1a03706`）。**Qt 人验 3 场景通过（2026-07-23）**；CTk 已由 `TASK-20260724-qt-only-ui-cleanup` 退役）
 - [x] **B3** UI 共享自/可烧/缺失（Qt 角标 / 可烧 / 缺失禁用 / 列表只显共享来源；2026-07-24 人验通过）
 - [x] **B4 / B4b / B6** 回源不跳共享；本地副本覆盖规则；缺失不回落本地；人验 4、6、7、8 → 子 TASK：`TASK-20260724-b4-shared-scheme-boundary.md`（2026-07-24 Qt 人验通过）
-- [ ] **C** `mode` = follow_default / pinned + platform 映射 → 子 TASK：`TASK-20260727-phase-c-follow-mode.md`（设计已完成，待逐子 TASK 开工）
+- [x] **C** `mode` = follow_default / pinned + platform 映射 → 子 TASK：`TASK-20260727-phase-c-follow-mode.md`（2026-07-27 人验通过）
 - [ ] 本 TASK 收尾：CHANGELOG、审查笔记（若动 types/服务契约）
 
 ---

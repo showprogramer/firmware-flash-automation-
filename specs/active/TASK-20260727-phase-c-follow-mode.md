@@ -173,13 +173,13 @@ source_platform: str = ""  # 仅 follow_default 有效
 
 ## Definition of Done（整体 Phase C）
 
-- [ ] C0 测试通过；Phase B toml 向后兼容无退化
-- [ ] C1 解析器：`follow_default` 边界测试全绿；Phase B 基线不破
-- [ ] C2 service 入口：模式参数测试全绿
-- [ ] C3 Qt 人工验证通过并记录日期
-- [ ] `.\scripts\test.ps1` coverage ≥ 80%（预期维持 93%+）
-- [ ] CHANGELOG、REVIEW（如涉及 types/service 契约变更）、本 TASK 收口
-- [ ] 父任务 `TASK-20260714-config-takeover.md` Phase C 勾选
+- [x] C0 测试通过；Phase B toml 向后兼容无退化
+- [x] C1 解析器：`follow_default` 边界测试全绿；Phase B 基线不破
+- [x] C2 service 入口：模式参数测试全绿
+- [x] C3 Qt 人工验证通过并记录日期：2026-07-27
+- [x] `.\scripts\test.ps1` coverage ≥ 80%（实测 90.52%）
+- [x] CHANGELOG、本 TASK 收口
+- [x] 父任务 `TASK-20260714-config-takeover.md` Phase C 勾选
 
 ---
 
