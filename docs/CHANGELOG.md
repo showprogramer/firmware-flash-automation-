@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### chore(docs): 关闭 `.ref` 迁移占位 TASK（NO-GO）
+
+- 确认不需要 `.ref` / `-同X` 自动化迁移；相关实现早在 B2 裁剪时已从代码删除。
+- 占位 `TASK-20260723` 标 NO-GO，从 `specs/active/` 移至 `specs/archive/`；父任务 / B4 交叉引用同步。
+
 ### fix(ui): B4 方案回源压制已共享模块的本地副本
 
 - `get_scheme_modules`：defaults / A4 回源在模块已登记 `shared_modules`（hit 或 missing）时跳过本地通用回源，方案上明确缺失（定制专属不受影响）。

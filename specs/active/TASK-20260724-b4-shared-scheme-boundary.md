@@ -30,7 +30,7 @@
 ### 不纳入
 
 - Phase C `follow_default` / `pinned` / `mode`。
-- `.ref` 迁移（仍 `TASK-20260723-firmware-ref-migration.md`）。
+- `.ref` 迁移（已 NO-GO：`specs/archive/TASK-20260723-firmware-ref-migration.md`）。
 - 共享且无本地副本时注入「幽灵模块行」（B3 已定：只装饰现有行）。
 - 改 `型号配置.toml` / `平台配置.toml` 格式、`types.py`、DB schema、firmware CRUD。
 
@@ -126,4 +126,4 @@
 
 - 父任务：`specs/active/TASK-20260714-config-takeover.md`
 - B3：`specs/active/TASK-20260724-b3-shared-display.md`
-- `.ref` 后置：`specs/active/TASK-20260723-firmware-ref-migration.md`
+- `.ref` 后置：**已关闭** → `specs/archive/TASK-20260723-firmware-ref-migration.md`

@@ -134,5 +134,5 @@
 
 - `specs/active/TASK-20260720-shared-module-registration.md`
 - `specs/active/TASK-20260714-config-takeover.md`
-- `specs/active/TASK-20260723-firmware-ref-migration.md`
+- `specs/archive/TASK-20260723-firmware-ref-migration.md`（`.ref` 迁移已 NO-GO 关闭）
 - `docs/code-review/archive/REVIEW-20260720-shared-module-registration.md`
