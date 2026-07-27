@@ -279,3 +279,29 @@ def test_follow_default_id_mismatch(tmp_path: Path):
     res = resolve_shared_module(ref, ws)
     assert res.status == "missing"
     assert res.reason == "id_mismatch"
+
+
+# ---------------------------------------------------------------------------
+# 11. follow_default — 目录名（快捷键）与 catalog label（快捷键程序）匹配
+# ---------------------------------------------------------------------------
+
+def test_follow_default_catalog_label_vs_dir_name(tmp_path: Path):
+    """默认键写「快捷键」但 source_module 是「快捷键程序」→ 规范化匹配命中。"""
+    ws = tmp_path / "ws"
+    src = _make_source_root(ws, "L50S程序", "l50s")
+    module_dir = src / "通用" / "快捷键"
+    _make_variant(module_dir, "量产_默认")
+    # 键名用目录名「快捷键」
+    save_platform_config(src, [
+        PlatformDefaults("标准单机芯", {"快捷键": "量产_默认"}),
+    ])
+
+    ref = _make_ref(
+        source_root_dir="L50S程序",
+        module_rel="通用/快捷键",
+        source_module="快捷键程序",   # catalog label
+        source_platform="标准单机芯",
+    )
+    res = resolve_shared_module(ref, ws)
+    assert res.status == "hit"
+    assert res.resolved_path == (module_dir / "量产_默认").resolve()

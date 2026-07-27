@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Literal
 
 from fwasset.core.model_config import SharedModuleRef, load_model_config
-from fwasset.core.platform_config import PlatformDefaults, canonical_module_dir, default_variant_for, load_platform_config_with_status
+from fwasset.core.platform_config import PlatformDefaults, canonical_module_dir, load_platform_config_with_status
 from fwasset.core.scheme_config import _is_excluded_dir
 
 
@@ -133,10 +133,20 @@ def resolve_shared_module(
 # Phase C1 辅助：follow_default 解析
 # ---------------------------------------------------------------------------
 
-def _module_in_defaults(block: PlatformDefaults, module: str) -> bool:
-    """规范化匹配：platform 块的 defaults 中是否含该模块键。"""
+def _find_default_key(block: PlatformDefaults, module: str) -> str:
+    """规范化匹配：在 platform 块的 defaults 中找模块键。
+
+    容忍 catalog label（「快捷键程序」）与目录名（「快捷键」）不一致。
+    返回匹配到的原始 key，未找到返回空串。
+    """
     want = canonical_module_dir(module)
-    return any(canonical_module_dir(key) == want for key in block.defaults)
+    want_short = want[:-2] if want.endswith("程序") else want
+    for key in block.defaults:
+        k = canonical_module_dir(key)
+        k_short = k[:-2] if k.endswith("程序") else k
+        if want == k or want_short == k_short:
+            return key
+    return ""
 
 
 def _resolve_follow_default(
@@ -167,20 +177,22 @@ def _resolve_follow_default(
             return SharedModuleResolution(
                 ref=ref, status="missing", reason="no_source_platform"
             )
-        if not _module_in_defaults(block, ref.source_module):
+        matched_key = _find_default_key(block, ref.source_module)
+        if not matched_key:
             return SharedModuleResolution(
                 ref=ref, status="missing", reason="no_source_default"
             )
-        variant_name = default_variant_for(platforms, block.platform_name, ref.source_module)
+        variant_name = block.defaults[matched_key]
     else:
         # 自动检测：依次试所有 platform，取第一个含该模块默认的
         variant_name = ""
         for p in platforms:
-            if _module_in_defaults(p, ref.source_module):
-                variant_name = default_variant_for(platforms, p.platform_name, ref.source_module)
+            matched_key = _find_default_key(p, ref.source_module)
+            if matched_key:
+                variant_name = p.defaults[matched_key]
                 break
         if variant_name == "" and not any(
-            _module_in_defaults(p, ref.source_module) for p in platforms
+            _find_default_key(p, ref.source_module) for p in platforms
         ):
             return SharedModuleResolution(
                 ref=ref, status="missing", reason="no_source_default"
