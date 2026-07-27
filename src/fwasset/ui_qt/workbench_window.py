@@ -855,8 +855,8 @@ class WorkbenchInterface(QWidget):
         mode_row = QHBoxLayout()
         mode_row.addWidget(QLabel("登记模式："))
         mode_combo = QComboBox(dlg)
-        mode_combo.addItem("自动更新", userData="follow_default")
         mode_combo.addItem("固定版本", userData="static")
+        mode_combo.addItem("自动更新", userData="follow_default")
         mode_row.addWidget(mode_combo, stretch=1)
         layout.addLayout(mode_row)
 
