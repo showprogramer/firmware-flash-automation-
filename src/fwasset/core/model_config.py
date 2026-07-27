@@ -50,13 +50,19 @@ _SHARED_FIELDS = (
 
 @dataclass
 class SharedModuleRef:
-    """目标型号上的一条共享引用（Phase B，无 mode）。"""
+    """目标型号上的一条共享引用（Phase B/C）。
+
+    mode 默认 ``"static"``（Phase B 行为）；``"follow_default"`` 动态跟随源默认；
+    ``"pinned"`` 钉住特定变体目录。``source_platform`` 仅 follow_default 有效。
+    """
 
     module_key: str
     source_model_id: str
     source_group: str
     source_module: str
     source_relative_path: str
+    mode: Literal["static", "follow_default", "pinned"] = "static"
+    source_platform: str = ""
 
 
 def slugify_model_id(dir_name: str) -> str:
@@ -136,6 +142,14 @@ def load_shared_modules(model_root: Path) -> list[SharedModuleRef]:
         fields = {k: str(entry.get(k, "") or "").strip() for k in _SHARED_FIELDS}
         if any(not fields[k] for k in _SHARED_FIELDS):
             continue
+        # Phase C 可选字段：缺失或无效值容错回退
+        raw_mode = str(entry.get("mode", "") or "").strip()
+        mode: Literal["static", "follow_default", "pinned"] = (
+            raw_mode  # type: ignore[assignment]
+            if raw_mode in ("static", "follow_default", "pinned")
+            else "static"
+        )
+        source_platform = str(entry.get("source_platform", "") or "").strip()
         out.append(
             SharedModuleRef(
                 module_key=module_key,
@@ -144,6 +158,8 @@ def load_shared_modules(model_root: Path) -> list[SharedModuleRef]:
                 source_module=canonical_module_dir(fields["source_module"])
                 or fields["source_module"],
                 source_relative_path=fields["source_relative_path"],
+                mode=mode,
+                source_platform=source_platform,
             )
         )
     out.sort(key=lambda r: r.module_key)
@@ -201,7 +217,7 @@ def save_shared_module(model_root: Path, ref: SharedModuleRef) -> Path:
     source_module = canonical_module_dir(ref.source_module) or str(
         ref.source_module or ""
     ).strip()
-    entry = {
+    entry: dict[str, Any] = {
         "source_model_id": str(ref.source_model_id or "").strip(),
         "source_group": str(ref.source_group or "").strip(),
         "source_module": source_module,
@@ -209,6 +225,11 @@ def save_shared_module(model_root: Path, ref: SharedModuleRef) -> Path:
     }
     if any(not v for v in entry.values()):
         raise ValueError("共享引用四字段均不能为空")
+    # Phase C 可选字段：只在非默认值时写入，保持 Phase B toml 格式兼容
+    if ref.mode != "static":
+        entry["mode"] = ref.mode
+    if ref.source_platform:
+        entry["source_platform"] = ref.source_platform
 
     def _mut(data: dict[str, Any]) -> None:
         shared = data.setdefault("shared_modules", {})
