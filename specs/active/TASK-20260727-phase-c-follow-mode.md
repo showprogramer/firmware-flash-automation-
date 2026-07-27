@@ -131,14 +131,10 @@ source_platform: str = ""  # 仅 follow_default 有效
 **复杂度理由：** 单文件 `model_config.py` 数据层改动；无 UI、无 schema 迁移（加可选字段）；测试约8 条（向后兼容 + round-trip）。
 
 **Files:**
-- Modify `src/fwasset/core/model_config.py`
-- Create `src/fwasset/tests/test_model_config_phase_c.py`
+- Modify `src/fwasset/core/model_config.py` ✅ (`f8e196a`)
+- Create `src/fwasset/tests/test_model_config_phase_c.py` ✅
 
-**验收：**
-- Phase B toml（无 `mode` 键）加载 → `mode="static"`，行为不变
-- `mode="follow_default"` + `source_platform` 写入/读回 round-trip
-- `mode="static"` 写入时 toml 无 `mode` 键（不污染 Phase B 格式）
-- `source_platform` 空时不写入
+**验收：** 已通过，8 passed。
 
 ---
 
@@ -147,16 +143,10 @@ source_platform: str = ""  # 仅 follow_default 有效
 **复杂度理由：** 改 `shared_module_resolver.py` 核心解析路径；新增 `load_platform_config` 调用链；新 missing reason；需要8-10 条边界测试（命中/空defaults/无platform块/source_platform显式/自动检测/id_mismatch 不受影响）。
 
 **Files:**
-- Modify `src/fwasset/core/shared_module_resolver.py`
-- Create `src/fwasset/tests/test_shared_module_resolver_phase_c.py`
+- Modify `src/fwasset/core/shared_module_resolver.py` ✅ (`cc3fc40`)
+- Create `src/fwasset/tests/test_shared_module_resolver_phase_c.py` ✅
 
-**验收：**
-- `follow_default` + `source_platform` 显式 → 命中正确变体目录
-- `follow_default` + `source_platform` 为空 → 自动检测命中
-- 源无 `平台配置.toml` → `missing`，reason = `no_source_platform`
-- 源 `defaults` 无该模块 → `missing`，reason = `no_source_default`
-- `pinned` mode → `variants=[resolved_path]`，不展开子目录
-- Phase B `static` 路径回归不退化（358 passed 基线不破）
+**验收：** 已通过，11 passed。
 
 ---
 
@@ -165,15 +155,10 @@ source_platform: str = ""  # 仅 follow_default 有效
 **复杂度理由：** `set_shared_module` 增加 `mode`/`source_platform` 参数；含 `source_platform` 存在性校验（需读源平台配置）；无 UI、无 schema；测试约8 条。
 
 **Files:**
-- Modify `src/fwasset/core/services/shared_module_service.py`
-- Extend `src/fwasset/tests/test_shared_module_service.py`（或新建 phase_c 版）
+- Modify `src/fwasset/core/services/shared_module_service.py` ✅ (`0229b9e`)
+- Create `src/fwasset/tests/test_shared_module_service_phase_c.py` ✅
 
-**验收：**
-- `mode="follow_default"` + 有效 `source_platform` → 存**模块目录**路径，返回 `ok`
-- `mode="follow_default"` + `source_platform` 不存在于源平台配置 → 返回 `invalid_args`，给出文案
-- `mode="follow_default"` + 唯一变体资产（`asset.path.parent.name in ("通用","定制")`）→ `source_relative_path` = `rel(asset.path)`（非 `.parent`）
-- `mode="follow_default"` + 多变体资产（`asset.path` 是变体子目录）→ `source_relative_path` = `rel(asset.path.parent)`
-- `mode="static"` / `mode="pinned"` 沿用 Phase B：存 `rel(asset.path)`，`source_platform` 忽略
+**验收：** 已通过，8 passed。
 
 ---
 

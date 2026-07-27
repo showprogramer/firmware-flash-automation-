@@ -2,7 +2,20 @@
 
 ## Unreleased
 
-### docs(specs): Phase C follow_default / pinned 设计完成（TASK-20260727）
+### feat(core): Phase C C0-C2 — SharedModuleRef 扩展与 follow_default 解析链
+
+- **C0** `SharedModuleRef` 加 `mode`（static/follow_default/pinned）与 `source_platform` 可选字段；
+  `load_shared_modules` 向后兼容 Phase B toml（缺 mode → static）；
+  `save_shared_module` mode=static 时不写 mode 键，source_platform 为空时不写。
+- **C1** 解析器加 `follow_default` 分支：`_select_platform_block` 支持显式/自动检测；
+  `_resolve_follow_default` 区分 key 缺失(no_source_default) / 空串(唯一变体) / 非空(module_dir/variant)；
+  `pinned` 模式返回 `variants=[abs_path]`，不展开子目录；static 行为不变。
+- **C2** `set_shared_module` 加 `mode`/`source_platform` 参数；follow_default 派生模块目录
+  （`parent.name in 通用/定制` 判断唯一变体）；显式 source_platform 校验存在性。
+- 新增测试：`test_model_config_phase_c.py`（8）、`test_shared_module_resolver_phase_c.py`（11）、
+  `test_shared_module_service_phase_c.py`（8）共 27 用例。
+
+验证：`pytest -m "not ui"` → 367 passed，coverage 90.52%。
 
 - platform 映射方案定为 per-ref 显式 `source_platform` 字段（不建全局映射表）
 - `mode` 三值：`static`（B 兼容默认）/ `follow_default`（跟随源默认）/ `pinned`（钉版本）
