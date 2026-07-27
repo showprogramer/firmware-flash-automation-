@@ -1,4 +1,4 @@
-"""共享引用解析器：一套路径覆盖命中 / 缺失（Phase B1）。"""
+"""共享引用解析器：一套路径覆盖命中 / 缺失（Phase B1/C1）。"""
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Literal
 
 from fwasset.core.model_config import SharedModuleRef, load_model_config
+from fwasset.core.platform_config import PlatformDefaults, load_platform_config_with_status
 from fwasset.core.scheme_config import _is_excluded_dir
 
 
@@ -109,11 +110,28 @@ def resolve_shared_module(
             ref=ref, status="missing", reason="out_of_workspace"
         )
 
+    # --- 按 mode 分支 ---
+    if ref.mode == "follow_default":
+        return _resolve_follow_default(ref, source_dir, abs_path)
+
+    if ref.mode == "pinned":
+        if not abs_path.exists():
+            return SharedModuleResolution(
+                ref=ref, status="missing", reason="path_not_found"
+            )
+        return SharedModuleResolution(
+            ref=ref,
+            status="hit",
+            reason="",
+            resolved_path=abs_path,
+            variants=[abs_path],  # 不展开子目录
+        )
+
+    # static（默认）：Phase B 行为
     if not abs_path.exists():
         return SharedModuleResolution(
             ref=ref, status="missing", reason="path_not_found"
         )
-
     variants = _list_variant_dirs(abs_path)
     return SharedModuleResolution(
         ref=ref,
@@ -121,4 +139,86 @@ def resolve_shared_module(
         reason="",
         resolved_path=abs_path,
         variants=variants,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Phase C1 辅助：follow_default 解析
+# ---------------------------------------------------------------------------
+
+def _select_platform_block(
+    platforms: list[PlatformDefaults],
+    source_platform: str,
+    source_module: str,
+) -> PlatformDefaults | None:
+    """选取目标平台块。
+
+    - source_platform 非空：按名查找；找不到返回 None（no_source_platform）。
+    - source_platform 为空：自动检测——取第一个包含 source_module 的块；
+      均不包含则取第一块（后续由 defaults 查找失败返回 no_source_default）。
+    """
+    if not platforms:
+        return None
+    if source_platform:
+        for p in platforms:
+            if p.platform_name == source_platform:
+                return p
+        return None  # 显式指定但不存在
+    # 自动检测：优先找包含该模块的块
+    for p in platforms:
+        if source_module in p.defaults:
+            return p
+    return platforms[0]  # 回落首块（后续会汇报 no_source_default）
+
+
+def _resolve_follow_default(
+    ref: SharedModuleRef,
+    source_dir: Path,
+    module_dir: Path,
+) -> SharedModuleResolution:
+    """follow_default 模式：读源 平台配置.toml 动态查找默认变体。
+
+    ``module_dir`` 是共同前置校验后的 abs_path；
+    C2 service 注册时已保证它指向模块目录而非变体目录。
+    """
+    if not module_dir.is_dir():
+        return SharedModuleResolution(
+            ref=ref, status="missing", reason="path_not_found"
+        )
+
+    platforms, plt_status, _ = load_platform_config_with_status(source_dir)
+    if plt_status != "ok" or not platforms:
+        return SharedModuleResolution(
+            ref=ref, status="missing", reason="no_source_platform"
+        )
+
+    block = _select_platform_block(platforms, ref.source_platform, ref.source_module)
+    if block is None:
+        return SharedModuleResolution(
+            ref=ref, status="missing", reason="no_source_platform"
+        )
+
+    # D3 伪代码：key 不存在 vs 空串区分
+    if ref.source_module not in block.defaults:
+        return SharedModuleResolution(
+            ref=ref, status="missing", reason="no_source_default"
+        )
+
+    variant_name = block.defaults[ref.source_module]
+    if variant_name == "":
+        resolved_path = module_dir  # 唯一变体（leaf module）
+    else:
+        resolved_path = module_dir / variant_name
+
+    if not resolved_path.exists():
+        return SharedModuleResolution(
+            ref=ref, status="missing", reason="path_not_found"
+        )
+
+    return SharedModuleResolution(
+        ref=ref,
+        status="hit",
+        reason="",
+        resolved_path=resolved_path,
+        variants=[resolved_path],  # follow_default 已确定具体变体，不再展开
     )
