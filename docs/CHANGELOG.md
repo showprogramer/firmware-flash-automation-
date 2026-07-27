@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### docs(specs): Phase C follow_default / pinned 设计完成（TASK-20260727）
+
+- platform 映射方案定为 per-ref 显式 `source_platform` 字段（不建全局映射表）
+- `mode` 三值：`static`（B 兼容默认）/ `follow_default`（跟随源默认）/ `pinned`（钉版本）
+- 子 TASK C0–C3 拆分完成（schema → 解析器 → service → Qt UI）；待逐子 TASK 开工
+- 父任务 `TASK-20260714` Phase C 条目更新指向 `TASK-20260727-phase-c-follow-mode.md`
+
 ### chore(docs): 关闭 `.ref` 迁移占位 TASK（NO-GO）
 
 - 确认不需要 `.ref` / `-同X` 自动化迁移；相关实现早在 B2 裁剪时已从代码删除。
