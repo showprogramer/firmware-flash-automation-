@@ -33,9 +33,9 @@ Phase C 引入 `mode` 字段，让共享引用可以**动态跟随源型号模�
 
 | mode | `source_relative_path` 指向 | 解析行为 |
 |---|---|---|
-| `"static"` | 模块目录（当前 Phase B 行为，含变体子目录列举） | 直接返回路径 + variants |
-| `"follow_default"` | **模块目录**（e.g. `L50S程序/通用/手控UI`） | 读源型号 `平台配置.toml` → 找默认变体 → 返回 `module_dir/variant_name` |
-| `"pinned"` | **特定变体目录**（e.g. `L50S程序/通用/手控UI/v2.3.1`） | 直接返回（意图明确的钉版，语义同 static 但不列举 variants） |
+| `"static"` | **变体目录**（Phase B 现有行为；或模块目录，解析器对两层透明） | 直接返回路径 + variants |
+| `"follow_default"` | **模块目录**（e.g. `L50S程序/通用/手控UI`；注册时由 C2 service 从 asset.path 派生） | 读源型号 `平台配置.toml` → 找默认变体 → 返回 `module_dir/variant_name` |
+| `"pinned"` | **特定变体目录**（e.g. `L50S程序/通用/手控UI/v2.3.1`） | 直接返回（意图明确的钉版，不列举 variants） |
 
 **向后兼容**：Phase B 写入的 toml 无 `mode` 键 → 读取时视为 `"static"`，行为完全不变。
 
@@ -77,7 +77,8 @@ mode                = "follow_default"
 
 ```
 resolve_shared_module(ref, mode="follow_default"):
-  1. abs_module_dir = workspace / source_relative_path   （模块目录）
+  1. abs_module_dir = workspace / source_relative_path
+     （注册时 C2 已保证此处存模块目录，非变体目录）
   2. source_dir     = workspace / first_path_segment     （源型号根）
   3. 校验 model_id（同 Phase B）
   4. 校验 abs_module_dir ∈ source_dir（双保险）
@@ -164,10 +165,11 @@ source_platform: str = ""  # 仅 follow_default 有效
 - Extend `src/fwasset/tests/test_shared_module_service.py`（或新建 phase_c 版）
 
 **验收：**
-- `mode="follow_default"` + 有效 `source_platform` → 写入并返回 `ok`
+- `mode="follow_default"` + 有效 `source_platform` → 存**模块目录**路径，返回 `ok`
 - `mode="follow_default"` + `source_platform` 不存在于源平台配置 → 返回 `invalid_args`，给出文案
-- `mode="static"` 时 `source_platform` 忽略
-- `mode="pinned"` 时 `source_relative_path` 指向变体目录，写入正确
+- `mode="follow_default"` + 唯一变体资产（`asset.path.parent.name in ("通用","定制")`）→ `source_relative_path` = `rel(asset.path)`（非 `.parent`）
+- `mode="follow_default"` + 多变体资产（`asset.path` 是变体子目录）→ `source_relative_path` = `rel(asset.path.parent)`
+- `mode="static"` / `mode="pinned"` 沿用 Phase B：存 `rel(asset.path)`，`source_platform` 忽略
 
 ---
 
