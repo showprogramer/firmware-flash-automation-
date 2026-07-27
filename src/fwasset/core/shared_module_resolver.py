@@ -114,20 +114,7 @@ def resolve_shared_module(
     if ref.mode == "follow_default":
         return _resolve_follow_default(ref, source_dir, abs_path)
 
-    if ref.mode == "pinned":
-        if not abs_path.exists():
-            return SharedModuleResolution(
-                ref=ref, status="missing", reason="path_not_found"
-            )
-        return SharedModuleResolution(
-            ref=ref,
-            status="hit",
-            reason="",
-            resolved_path=abs_path,
-            variants=[abs_path],  # 不展开子目录
-        )
-
-    # static（默认）：Phase B 行为
+    # static（默认）：固定版本，Phase B 行为
     if not abs_path.exists():
         return SharedModuleResolution(
             ref=ref, status="missing", reason="path_not_found"

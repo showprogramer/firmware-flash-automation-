@@ -52,8 +52,8 @@ _SHARED_FIELDS = (
 class SharedModuleRef:
     """目标型号上的一条共享引用（Phase B/C）。
 
-    mode 默认 ``"static"``（Phase B 行为）；``"follow_default"`` 动态跟随源默认；
-    ``"pinned"`` 钉住特定变体目录。``source_platform`` 仅 follow_default 有效。
+    mode 默认 ``"static"``（固定版本，Phase B 行为）；``"follow_default"`` 自动跟随源默认。
+    ``source_platform`` 仅 follow_default 有效。
     """
 
     module_key: str
@@ -61,7 +61,7 @@ class SharedModuleRef:
     source_group: str
     source_module: str
     source_relative_path: str
-    mode: Literal["static", "follow_default", "pinned"] = "static"
+    mode: Literal["static", "follow_default"] = "static"
     source_platform: str = ""
 
 
@@ -144,9 +144,9 @@ def load_shared_modules(model_root: Path) -> list[SharedModuleRef]:
             continue
         # Phase C 可选字段：缺失或无效值容错回退
         raw_mode = str(entry.get("mode", "") or "").strip()
-        mode: Literal["static", "follow_default", "pinned"] = (
+        mode: Literal["static", "follow_default"] = (
             raw_mode  # type: ignore[assignment]
-            if raw_mode in ("static", "follow_default", "pinned")
+            if raw_mode in ("static", "follow_default")
             else "static"
         )
         source_platform = str(entry.get("source_platform", "") or "").strip()

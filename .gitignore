@@ -44,3 +44,6 @@ build/
 .claude/
 .opencode/
 skills-lock.json
+
+# Local test fixtures (private sandbox)
+TestScenario/

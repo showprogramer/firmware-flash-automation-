@@ -5,7 +5,7 @@ from pathlib import Path
 
 from fwasset.core.asset_index import query_assets
 from fwasset.core.model_config import SharedModuleRef, load_model_config, load_shared_modules
-from fwasset.core.platform_config import load_platform_config, default_variant_for, PlatformDefaults
+from fwasset.core.platform_config import load_platform_config, load_platform_config_with_status, default_variant_for, PlatformDefaults
 from fwasset.core.scheme_config import discover_schemes
 from fwasset.core.services.model_id_service import ensure_model_ids
 from fwasset.core.services.platform_default_service import (
@@ -326,6 +326,8 @@ class SchemeWorkbenchModel:
         source_asset: FirmwareAsset,
         module_key: str = "",
         overwrite: bool = False,
+        mode: str = "static",
+        source_platform: str = "",
         log_fn=print,
     ) -> dict:
         """手动登记一条共享引用到目标型号根的 `型号配置.toml`。
@@ -355,6 +357,8 @@ class SchemeWorkbenchModel:
             workspace_root=self.root_dir,
             module_key=module_key,
             overwrite=overwrite,
+            mode=mode,
+            source_platform=source_platform,
             log_fn=log_fn,
         )
 
@@ -849,8 +853,45 @@ class SchemeWorkbenchModel:
             card.shared_state = "shared_hit"
             card.effective_asset = source_assets[0]
             source_root = self.model_root_for_id(resolution.ref.source_model_id)
-            card.shared_source_label = _strip_model_suffix(source_root.name) if source_root is not None else resolution.ref.source_model_id
+            card.shared_source_label = self._shared_label_for_ref(resolution.ref, source_root)
         return cards
+
+    def _shared_label_for_ref(
+        self, ref: SharedModuleRef, source_root: Path | None
+    ) -> str:
+        """根据 mode 生成模块列表展示文案。"""
+        model_name = (
+            _strip_model_suffix(source_root.name) if source_root is not None
+            else ref.source_model_id
+        )
+        if ref.mode == "follow_default":
+            return f"同{model_name}"
+        return f"来自{model_name}"
+
+    def get_source_platforms_for_asset(self, source_asset: FirmwareAsset) -> list[str]:
+        """From a source asset, return the platform names in its model root's 平台配置.toml."""
+        if self.root_dir is None:
+            return []
+        asset_path = Path(str(source_asset.get("path", "") or ""))
+        if not asset_path.is_absolute():
+            return []
+        # 源型号根：工作区单型号根 → root_dir；多型号 → 第一段
+        try:
+            rel = asset_path.resolve().relative_to(self.root_dir.resolve())
+        except ValueError:
+            return []
+        parts = rel.parts
+        if not parts:
+            return []
+        first = parts[0]
+        if first in ("通用", "定制"):
+            src_root = self.root_dir
+        else:
+            src_root = self.root_dir / first
+        platforms, status, _ = load_platform_config_with_status(src_root)
+        if status != "ok":
+            return []
+        return [p.platform_name for p in platforms]
 
     def get_common_modules(self, model_name: str, firmware_label: str, keyword: str = "") -> list[ModuleCardData]:
         """点击通用模块时，返回该类型下的所有变体"""

@@ -141,24 +141,7 @@ def test_static_mode_stores_variant_path(tmp_path: Path):
 
 
 # ---------------------------------------------------------------------------
-# 7. pinned 模式 — 存变体目录（与 static 相同，但写入 mode=pinned）
-# ---------------------------------------------------------------------------
-
-def test_pinned_mode_stores_variant_path(tmp_path: Path):
-    ws, src, tgt = _setup(tmp_path)
-    variant = src / "通用" / "手控UI" / "v2.0"
-    asset = _make_asset(variant)
-
-    result = set_shared_module(tgt, asset, ws, mode="pinned")
-    assert result["ok"] is True
-
-    refs = load_shared_modules(tgt)
-    assert refs[0].source_relative_path == "L50S程序/通用/手控UI/v2.0"
-    assert refs[0].mode == "pinned"
-
-
-# ---------------------------------------------------------------------------
-# 8. static 模式忽略 source_platform（不校验，不写入）
+# 7. 固定版本模式忽略 source_platform（不校验，不写入）
 # ---------------------------------------------------------------------------
 
 def test_static_ignores_source_platform(tmp_path: Path):

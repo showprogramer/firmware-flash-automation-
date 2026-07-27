@@ -814,11 +814,11 @@ class WorkbenchInterface(QWidget):
         all_candidates: list[dict],
         default_candidates: list[dict],
     ) -> None:
-        from PySide6.QtWidgets import QDialog
+        from PySide6.QtWidgets import QComboBox, QDialog
 
         dlg = QDialog(self)
         dlg.setWindowTitle(shared_register_dialog_title(module_label))
-        dlg.resize(640, 420)
+        dlg.resize(640, 480)
         layout = QVBoxLayout(dlg)
 
         state = {"strict": True, "items": default_candidates}
@@ -851,6 +851,53 @@ class WorkbenchInterface(QWidget):
 
         toggle_btn.clicked.connect(_toggle)
 
+        # --- Phase C：mode 选择器 ---
+        mode_row = QHBoxLayout()
+        mode_row.addWidget(QLabel("登记模式："))
+        mode_combo = QComboBox(dlg)
+        mode_combo.addItem("自动更新", userData="follow_default")
+        mode_combo.addItem("固定版本", userData="static")
+        mode_row.addWidget(mode_combo, stretch=1)
+        layout.addLayout(mode_row)
+
+        # --- Phase C：source_platform 下拉（仅 follow_default 显示）---
+        platform_row = QHBoxLayout()
+        platform_lbl = QLabel("来源平台：")
+        platform_combo = QComboBox(dlg)
+        platform_combo.addItem("（自动检测）", userData="")
+        platform_row.addWidget(platform_lbl)
+        platform_row.addWidget(platform_combo, stretch=1)
+        layout.addLayout(platform_row)
+        # 初始隳藏平台行
+        platform_lbl.setVisible(False)
+        platform_combo.setVisible(False)
+
+        def _refresh_platforms() -> None:
+            row = list_widget.currentRow()
+            platform_combo.blockSignals(True)
+            platform_combo.clear()
+            platform_combo.addItem("（自动检测）", userData="")
+            if row >= 0:
+                asset = state["items"][row]
+                names = self.workbench_model.get_source_platforms_for_asset(asset)
+                for n in names:
+                    platform_combo.addItem(n, userData=n)
+            platform_combo.blockSignals(False)
+
+        def _on_mode_changed(_idx: int) -> None:
+            is_follow = mode_combo.currentData() == "follow_default"
+            platform_lbl.setVisible(is_follow)
+            platform_combo.setVisible(is_follow)
+            if is_follow:
+                _refresh_platforms()
+
+        def _on_source_selected() -> None:
+            if mode_combo.currentData() == "follow_default":
+                _refresh_platforms()
+
+        mode_combo.currentIndexChanged.connect(_on_mode_changed)
+        list_widget.currentRowChanged.connect(_on_source_selected)
+
         btn_row = QHBoxLayout()
         btn_row.addStretch(1)
         confirm_btn = QPushButton("确认登记", dlg)
@@ -865,8 +912,13 @@ class WorkbenchInterface(QWidget):
                 QMessageBox.information(dlg, "请选择来源", "请先在列表中选择一条作为共享来源的资产。")
                 return
             source_asset = state["items"][row]
+            chosen_mode = mode_combo.currentData() or "static"
+            chosen_platform = platform_combo.currentData() or "" if chosen_mode == "follow_default" else ""
             dlg.accept()
-            self._do_register_shared(target_model, module_key, module_label, source_asset)
+            self._do_register_shared(
+                target_model, module_key, module_label,
+                source_asset, chosen_mode, chosen_platform,
+            )
 
         confirm_btn.clicked.connect(_confirm)
         cancel_btn.clicked.connect(dlg.reject)
@@ -878,9 +930,12 @@ class WorkbenchInterface(QWidget):
         module_key: str,
         module_label: str,
         source_asset: dict,
+        mode: str = "static",
+        source_platform: str = "",
     ) -> None:
         result = self.workbench_model.register_shared_module(
-            target_model, source_asset, module_key=module_key, overwrite=False
+            target_model, source_asset, module_key=module_key, overwrite=False,
+            mode=mode, source_platform=source_platform,
         )
         if not result["ok"]:
             if result["code"] == "conflict":
@@ -892,7 +947,8 @@ class WorkbenchInterface(QWidget):
                 if answer != QMessageBox.StandardButton.Yes:
                     return
                 result = self.workbench_model.register_shared_module(
-                    target_model, source_asset, module_key=module_key, overwrite=True
+                    target_model, source_asset, module_key=module_key, overwrite=True,
+                    mode=mode, source_platform=source_platform,
                 )
             if not result["ok"]:
                 QMessageBox.critical(self, "登记失败", result["message"])

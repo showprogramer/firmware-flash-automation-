@@ -164,8 +164,8 @@ def set_shared_module(
             "payload": {"source_root": str(src_root)},
         }
 
-    # follow_default：派生模块目录路径；其余模式沿用 rel（Phase B）
-    clean_mode = mode if mode in ("static", "follow_default", "pinned") else "static"
+    # follow_default：派生模块目录路径；其余模式沿用 rel（固定版本）
+    clean_mode = mode if mode in ("static", "follow_default") else "static"
     if clean_mode == "follow_default":
         final_rel = _module_dir_rel(asset_path, ws)
         if final_rel is None:
@@ -190,7 +190,7 @@ def set_shared_module(
             }
     else:
         final_rel = rel
-        clean_platform = ""  # static / pinned 不写 source_platform
+        clean_platform = ""  # 固定版本不写 source_platform
 
     # 模块键规范化
     key = canonical_module_dir(module_key) if module_key else _module_key_for_asset(source_asset)

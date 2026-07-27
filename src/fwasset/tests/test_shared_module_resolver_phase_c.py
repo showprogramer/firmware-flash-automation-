@@ -1,4 +1,4 @@
-"""C1：follow_default / pinned 模式解析器测试。"""
+"""C1：follow_default 模式解析器测试。"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -235,31 +235,7 @@ def test_follow_default_variant_dir_not_found(tmp_path: Path):
 
 
 # ---------------------------------------------------------------------------
-# 9. pinned — 路径存在，variants = [resolved_path]（不列举子目录）
-# ---------------------------------------------------------------------------
-
-def test_pinned_no_variant_listing(tmp_path: Path):
-    ws = tmp_path / "ws"
-    src = _make_source_root(ws, "L50S程序", "l50s")
-    variant_dir = src / "通用" / "手控UI" / "v2.0"
-    variant_dir.mkdir(parents=True, exist_ok=True)
-    (variant_dir / "sub1").mkdir()   # 有子目录，但 pinned 不应列举
-    (variant_dir / "sub2").mkdir()
-    (variant_dir / "fw.bin").write_bytes(b"X")
-
-    ref = _make_ref(
-        source_root_dir="L50S程序",
-        module_rel="通用/手控UI/v2.0",
-        mode="pinned",
-    )
-    res = resolve_shared_module(ref, ws)
-    assert res.status == "hit"
-    assert res.resolved_path == variant_dir.resolve()
-    assert res.variants == [variant_dir.resolve()]   # 不展开子目录
-
-
-# ---------------------------------------------------------------------------
-# 10. static 行为不退化（Phase B 基线）
+# 9. static 行为不退化（Phase B 基线）
 # ---------------------------------------------------------------------------
 
 def test_static_behavior_unchanged(tmp_path: Path):
@@ -281,7 +257,7 @@ def test_static_behavior_unchanged(tmp_path: Path):
 
 
 # ---------------------------------------------------------------------------
-# 11. follow_default — model_id 不符仍返回 id_mismatch
+# 10. follow_default — model_id 不符仍返回 id_mismatch
 # ---------------------------------------------------------------------------
 
 def test_follow_default_id_mismatch(tmp_path: Path):

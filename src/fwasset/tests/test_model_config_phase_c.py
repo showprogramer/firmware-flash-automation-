@@ -72,27 +72,17 @@ def test_follow_default_round_trip(tmp_path: Path):
 
 
 # ---------------------------------------------------------------------------
-# 3. pinned round-trip
+# 3. toml 中遗留 mode="pinned" → 容错回退为 "static"
 # ---------------------------------------------------------------------------
 
-def test_pinned_round_trip(tmp_path: Path):
+def test_legacy_pinned_falls_back_to_static(tmp_path: Path):
     root = tmp_path / "model"
-    root.mkdir()
-    save_model_id(root, "l36-dual")
-    ref = SharedModuleRef(
-        module_key="主板程序",
-        source_model_id="l50s",
-        source_group="l50s",
-        source_module="主板程序",
-        source_relative_path="L50S程序/通用/主板程序/v3.1.2",
-        mode="pinned",
-    )
-    save_shared_module(root, ref)
+    entry = {**_PHASE_B_ENTRY, "mode": "pinned"}
+    _write_phase_b_toml(root, "主板程序", entry)
+
     refs = load_shared_modules(root)
     assert len(refs) == 1
-    r = refs[0]
-    assert r.mode == "pinned"
-    assert r.source_platform == ""
+    assert refs[0].mode == "static"
 
 
 # ---------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-# TASK-20260727：Phase C — follow_default / pinned 模式
+# TASK-20260727：Phase C — 自动更新 / 固定版本模式
 
 ## 状态
 
@@ -29,15 +29,15 @@ Phase C 引入 `mode` 字段，让共享引用可以**动态跟随源型号模�
 
 ## 设计决策
 
-### D1：mode 字段（三值）
+### D1：mode 字段（二值）
 
-| mode | `source_relative_path` 指向 | 解析行为 |
-|---|---|---|
-| `"static"` | **变体目录**（Phase B 现有行为；或模块目录，解析器对两层透明） | 直接返回路径 + variants |
-| `"follow_default"` | **模块目录**（e.g. `L50S程序/通用/手控UI`；注册时由 C2 service 从 asset.path 派生） | 读源型号 `平台配置.toml` → 找默认变体 → 返回 `module_dir/variant_name` |
-| `"pinned"` | **特定变体目录**（e.g. `L50S程序/通用/手控UI/v2.3.1`） | 直接返回（意图明确的钉版，不列举 variants） |
+| mode | 烧录员视角 | `source_relative_path` 指向 | 解析行为 |
+|---|---|---|---|
+| `"static"` | **固定版本** | 变体目录（Phase B 现有行为；或模块目录，解析器对两层透明） | 直接返回路径 + variants |
+| `"follow_default"` | **自动更新** | 模块目录（e.g. `L50S程序/通用/手控UI`；注册时由 C2 service 从 asset.path 派生） | 读源型号 `平台配置.toml` → 找默认变体 → 返回 `module_dir/variant_name` |
 
-**向后兼容**：Phase B 写入的 toml 无 `mode` 键 → 读取时视为 `"static"`，行为完全不变。
+**向后兼容**：Phase B 写入的 toml 无 `mode` 键 → 读取时视为 `"static"`（固定版本），行为完全不变。
+存量 `mode = "pinned"` → 容错回退为 `"static"`。
 
 ---
 
@@ -101,25 +101,17 @@ resolve_shared_module(ref, mode="follow_default"):
 
 ---
 
-### D4：`pinned` 模式
-
-语义等同于「明确意图的静态引用」：`source_relative_path` 直接指向变体目录，
-解析器不做 variants 列举（返回 `variants=[resolved_path]`），
-UI 显示「钉住版本：`variant_dir_name`」以区别于普通 static。
-
----
-
-### D5：schema 字段增量（不破坏 Phase B）
+### D4：schema 字段增量（不破坏 Phase B）
 
 `SharedModuleRef` 新增两个可选字段：
 
 ```python
-mode: Literal["static", "follow_default", "pinned"] = "static"
+mode: Literal["static", "follow_default"] = "static"
 source_platform: str = ""  # 仅 follow_default 有效
 ```
 
 `_SHARED_FIELDS`（当前4 个必填）保持不变；`mode`/`source_platform` 作为**可选字段**单独读写：
-- 读：缺失 → 默认值（`"static"` / `""`）；存在但无效值 → fallback `"static"` + 警告
+- 读：缺失 → 默认值（`"static"` / `""`）；存在但无效值（含存量 `"pinned"`）→ fallback `"static"` + 警告
 - 写：`mode == "static"` 时**不写入**该键（保持 Phase B toml 格式兼容）；`source_platform` 为空时不写入
 
 ---
@@ -164,7 +156,7 @@ source_platform: str = ""  # 仅 follow_default 有效
 
 ### Task C3：Qt UI 模式选择与展示  `complexity: high`
 
-**复杂度理由：** 改登记对话框（新增 mode 选择 + source_platform 下拉）；改列表展示文案（`"跟随 [platform] 默认"` vs `"共享自…"` vs `"钉住版本 …"`）；需 Qt 人验。
+**复杂度理由：** 改登记对话框（新增 mode 选择 + source_platform 下拉）；改列表展示文案（`"自动更新"` / `"固定版本"`）；需 Qt 人验。
 
 **Files:**
 - Modify `src/fwasset/ui_qt/workbench_window.py`（或对话框文件）
@@ -172,9 +164,9 @@ source_platform: str = ""  # 仅 follow_default 有效
 - 必要时扩 `src/fwasset/tests/test_qt_smoke.py`
 
 **验收（Qt 人工验证）：**
-- 登记对话框有 mode 选择（默认 `static`）
-- 选 `follow_default` 后出现 source_platform 下拉（从源型号 `平台配置.toml` 动态读取）
-- 模块列表显示对应文案：`跟随「标准单机芯」默认` / `钉住版本 v2.3.1` / `共享自 …`
+- 登记对话框有 mode 选择（默认 `static` = 固定版本）
+- 选 `follow_default`（自动更新）后出现 source_platform 下拉（从源型号 `平台配置.toml` 动态读取）
+- 模块列表显示对应文案：`同 L50S`（自动更新）/ `来自 L50S`（固定版本）
 - 缺失态（`no_source_default` 等）展示「共享来源缺失」，不静默降级
 
 ---
@@ -182,7 +174,7 @@ source_platform: str = ""  # 仅 follow_default 有效
 ## Definition of Done（整体 Phase C）
 
 - [ ] C0 测试通过；Phase B toml 向后兼容无退化
-- [ ] C1 解析器：`follow_default` / `pinned` 边界测试全绿；Phase B 基线不破
+- [ ] C1 解析器：`follow_default` 边界测试全绿；Phase B 基线不破
 - [ ] C2 service 入口：模式参数测试全绿
 - [ ] C3 Qt 人工验证通过并记录日期
 - [ ] `.\scripts\test.ps1` coverage ≥ 80%（预期维持 93%+）

@@ -69,7 +69,7 @@ class DataGrid(QWidget):
         if variant.default_badge:
             text = f"{text}  {variant.default_badge}"
         if variant.shared_state == "shared_hit":
-            text = f"{text}  共享自 {variant.shared_source_label}"
+            text = f"{text}  {variant.shared_source_label}"
         elif variant.shared_state == "shared_missing":
             text = f"{text}  共享来源缺失"
         return text

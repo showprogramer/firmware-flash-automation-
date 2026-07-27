@@ -77,7 +77,7 @@ def test_all_modules_decorate_existing_row_with_shared_source(tmp_path: Path) ->
     assert len(shortcut) == 1
     card = shortcut[0]
     assert card.shared_state == "shared_hit"
-    assert card.shared_source_label == "L36"
+    assert card.shared_source_label == "\u6765\u81eaL36"
     assert card.asset["path"] == str(target_path)
     assert card.effective_asset is not None
     assert card.effective_asset["path"] == str(source_path)
