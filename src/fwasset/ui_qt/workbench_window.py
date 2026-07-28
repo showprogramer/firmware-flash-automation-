@@ -378,6 +378,28 @@ class WorkbenchInterface(QWidget):
 
         threading.Thread(target=run_scan, daemon=True).start()
 
+    def _auto_scan(self, directory: str) -> None:
+        """自动扫描（不弹目录选择对话框）。
+
+        向导完成后使用，直接扫描配置的根目录。
+        """
+        if self._busy:
+            return
+        if not directory or not directory.strip():
+            return
+        self.root_dir = directory
+
+        cancel_event = threading.Event()
+        self.scan_state_model.replace(cancel_event)
+        self.scan_btn.setText("取消扫描")
+        self._log(f"开始扫描目录: {directory}")
+
+        def run_scan():
+            result = build_scan_result(directory, log_fn=self._log, cancel_event=cancel_event)
+            self.scan_result_ready.emit(result)
+
+        threading.Thread(target=run_scan, daemon=True).start()
+
     def _load_cached_assets(self) -> None:
         result = build_cached_scan_result(log_fn=self._log)
         self._handle_scan_result(result)
@@ -1002,17 +1024,22 @@ def main() -> int:
     # 仅在冻结 exe 且 root_dir 未配置时弹出；开发模式跳过
     import importlib
     import fwasset.core.settings as _settings
+    wizard_completed = False
     if getattr(sys, "frozen", False) and not _settings.DEFAULT_ROOT:
         from fwasset.ui_qt.setup_wizard import SetupWizard
         wizard = SetupWizard()
-        wizard.exec()  # accept → write_config 已写入；reject → 跳过
-        # 重新加载 settings，使新写入的 config.toml 生效
+        if wizard.exec() == QDialog.DialogCode.Accepted:
+            wizard_completed = True
         importlib.reload(_settings)
         global DEFAULT_ROOT  # noqa: PLW0603
         DEFAULT_ROOT = _settings.DEFAULT_ROOT
 
     window = QtWorkbenchWindow()
     window.show()
+
+    # 向导完成后自动扫描配置的根目录
+    if wizard_completed and DEFAULT_ROOT:
+        QTimer.singleShot(300, lambda: window._auto_scan(DEFAULT_ROOT))
 
     # 自动化验证钩子（截图 / 自动选行 / 定时退出），供开发与 Phase 4 回归用
     if os.environ.get("FWASSET_QT_AUTOSELECT", ""):
