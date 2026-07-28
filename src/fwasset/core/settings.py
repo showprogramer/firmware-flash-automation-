@@ -29,7 +29,21 @@ def _find_app_root(start: Path | None = None) -> Path:
 APP_ROOT = _find_app_root()
 """应用程序根目录。配置文件和可执行文件同目录。"""
 
-CONFIG_PATH = APP_ROOT / "config.toml"
+def _config_path() -> Path:
+    """配置文件路径。
+
+    - 打包模式（frozen exe）：%%APPDATA%%/fwasset/config.toml
+    - 开发模式：项目根目录 / config.toml（维持原行为）
+    """
+    if getattr(sys, "frozen", False):
+        appdata = os.environ.get("APPDATA") or str(Path.home() / "AppData" / "Roaming")
+        config_dir = Path(appdata) / "fwasset"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        return config_dir / "config.toml"
+    return APP_ROOT / "config.toml"
+
+
+CONFIG_PATH = _config_path()
 
 
 def _default_runtime_dir(app_root: Path | None = None) -> Path:

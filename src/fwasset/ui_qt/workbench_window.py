@@ -997,6 +997,20 @@ class QtWorkbenchWindow(FluentWindow):
 def main() -> int:
     app = QApplication(sys.argv)
     setTheme(Theme.AUTO)
+
+    # ── 首次配置向导 ────────────────────────────────────────────────────
+    # 仅在冻结 exe 且 root_dir 未配置时弹出；开发模式跳过
+    import importlib
+    import fwasset.core.settings as _settings
+    if getattr(sys, "frozen", False) and not _settings.DEFAULT_ROOT:
+        from fwasset.ui_qt.setup_wizard import SetupWizard
+        wizard = SetupWizard()
+        wizard.exec()  # accept → write_config 已写入；reject → 跳过
+        # 重新加载 settings，使新写入的 config.toml 生效
+        importlib.reload(_settings)
+        global DEFAULT_ROOT  # noqa: PLW0603
+        DEFAULT_ROOT = _settings.DEFAULT_ROOT
+
     window = QtWorkbenchWindow()
     window.show()
 
