@@ -1,4 +1,4 @@
-from fwasset.core.usb_ops import clean_usb, copy_to_usb, eject_usb
+from fwasset.core.usb_ops import copy_to_usb, eject_usb, format_usb
 
 
 def run_one_click(
@@ -12,8 +12,20 @@ def run_one_click(
     try:
         log_fn("=" * 50)
         log_fn(f"一键执行: {model} {version}")
-        removed = clean_usb(drive, log_fn)
-        log_fn(f"  清理完成，删除 {removed} 个垃圾文件")
+
+        formatted = format_usb(drive, log_fn)
+        if not formatted:
+            log_fn("格式化失败，流程中止")
+            return {
+                "ok": False,
+                "code": "format_failed",
+                "message": "格式化失败",
+                "payload": {
+                    "format_ok": False,
+                    "copy_ok": False,
+                    "ejected": False,
+                },
+            }
 
         copied = copy_to_usb(rom_path, pkg_path, drive, log_fn)
         if not copied:
@@ -23,8 +35,8 @@ def run_one_click(
                 "code": "copy_failed",
                 "message": "复制失败",
                 "payload": {
+                    "format_ok": True,
                     "copy_ok": False,
-                    "removed_count": removed,
                     "ejected": False,
                 },
             }
@@ -35,8 +47,8 @@ def run_one_click(
             "code": "ok",
             "message": "一键执行完成",
             "payload": {
+                "format_ok": True,
                 "copy_ok": True,
-                "removed_count": removed,
                 "ejected": ejected,
             },
         }
@@ -46,8 +58,8 @@ def run_one_click(
             "code": "service_exception",
             "message": str(exc),
             "payload": {
+                "format_ok": False,
                 "copy_ok": False,
-                "removed_count": 0,
                 "ejected": False,
             },
         }

@@ -75,6 +75,18 @@ class AutoUsbPanel(BaseOperationPanel):
         rom_file, pkg_file = asset_rom_pkg_files(asset)
         if not rom_file or not pkg_file:
             return
+
+        # 格式化确认弹窗（防误操作）
+        reply = QMessageBox.question(
+            self,
+            "确认格式化",
+            f"将格式化 U 盘 {drive}（FAT32），所有现有内容将被清除。\n\n确定继续吗？",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
         rom_path = str(Path(asset["path"]) / rom_file)
         pkg_path = str(Path(asset["path"]) / pkg_file)
         self._panel_host._run_task(
