@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import os
 import sys
 import threading
@@ -10,7 +11,6 @@ from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QApplication,
     QCompleter,
-    QFileDialog,
     QFrame,
     QHBoxLayout,
     QDialog,
@@ -81,9 +81,20 @@ from fwasset.ui_qt.design_tokens import (
     USB_COMBO_MIN_WIDTH,
 )
 from fwasset.ui_qt.log_panel import LogPanel
+from fwasset.ui_qt.settings_interface import SettingsInterface
 
 
 SEARCH_REFRESH_DEBOUNCE_MS = 180
+
+
+def _reload_runtime_settings() -> tuple[str, str]:
+    """重新读取本机配置，并刷新本模块持有的默认根目录绑定。"""
+    import fwasset.core.settings as settings
+
+    importlib.reload(settings)
+    global DEFAULT_ROOT  # noqa: PLW0603
+    DEFAULT_ROOT = settings.DEFAULT_ROOT
+    return DEFAULT_ROOT, settings.TOOL_ROOT
 
 
 def _format_source_item_qt(asset: dict) -> str:
@@ -106,9 +117,10 @@ class WorkbenchInterface(QWidget):
     _task_failed = Signal(int, str, str)       # task_id, name, error
     # 日志跨线程回投：worker 线程里调用 _log 时不能直写 QPlainTextEdit
     log_message = Signal(str)
+    settings_requested = Signal()
 
     busy_message = "已有任务执行中，请稍后"
-    scanning_message = "正在扫描中，请稍后再执行任务"
+    scanning_message = "正在读取程序文件夹，请稍后再执行任务"
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -169,7 +181,7 @@ class WorkbenchInterface(QWidget):
         side_layout.addWidget(self.nav, stretch=1)
         self.nav.currentRowChanged.connect(self._on_nav_changed)
 
-        self.scan_btn = PrimaryPushButton("扫描目录", sidebar)
+        self.scan_btn = PrimaryPushButton("重新读取程序文件夹", sidebar)
         self.scan_btn.clicked.connect(self._on_scan_button_click)
         side_layout.addWidget(self.scan_btn)
         side_layout.addSpacing(SPACE_SM)
@@ -188,13 +200,28 @@ class WorkbenchInterface(QWidget):
         title_row.addWidget(self.header_badge)
         main.addLayout(title_row)
 
+        # 配置提示：跳过首次向导后仍可从工作台直接进入设置。
+        self.configuration_notice = QFrame(self)
+        notice_layout = QHBoxLayout(self.configuration_notice)
+        notice_layout.setContentsMargins(SPACE_SM, SPACE_XS, SPACE_SM, SPACE_XS)
+        notice_layout.setSpacing(SPACE_SM)
+        notice_layout.addWidget(
+            CaptionLabel("尚未配置程序文件夹。请前往“设置”完成配置。", self.configuration_notice)
+        )
+        notice_layout.addStretch(1)
+        self.open_settings_button = PushButton("前往设置", self.configuration_notice)
+        self.open_settings_button.clicked.connect(self.settings_requested.emit)
+        notice_layout.addWidget(self.open_settings_button)
+        self.configuration_notice.setVisible(not bool(self.root_dir.strip()))
+        main.addWidget(self.configuration_notice)
+
         # 头部：过滤行（型号 chips + 搜索 + U盘）
         filter_row = QHBoxLayout()
         filter_row.addWidget(BodyLabel("型号", self))
         self.chip_bar = QHBoxLayout()
         self.chip_bar.setSpacing(SPACE_XS)
         filter_row.addLayout(self.chip_bar)
-        self.model_hint = CaptionLabel("扫描后显示可选型号", self)
+        self.model_hint = CaptionLabel("读取后显示可选型号", self)
         filter_row.addWidget(self.model_hint)
         filter_row.addStretch(1)
 
@@ -340,6 +367,16 @@ class WorkbenchInterface(QWidget):
     def get_global_usb_drive(self) -> str:
         return self.usb_combo.currentText()
 
+    # ------------------------------------------------------------------ 配置状态
+    def set_configuration_required(self, required: bool) -> None:
+        """显示或隐藏未配置程序文件夹的非阻断提示。"""
+        self.configuration_notice.setVisible(required)
+
+    def set_configured_root(self, root_dir: str) -> None:
+        """更新当前会话的根目录，并同步隐藏配置提示。"""
+        self.root_dir = root_dir
+        self.set_configuration_required(not bool(root_dir.strip()))
+
     # ------------------------------------------------------------------ 扫描
     @property
     def _scan_cancel_event(self) -> threading.Event | None:
@@ -348,55 +385,43 @@ class WorkbenchInterface(QWidget):
     def _on_scan_button_click(self) -> None:
         if self._scan_cancel_event is not None:
             self._scan_cancel_event.set()
-            self._log("正在取消扫描，请稍候...")
+            self._log("正在取消读取，请稍候...")
             self.scan_btn.setText("取消中...")
             self.scan_btn.setEnabled(False)
             return
         self._start_scan()
 
     def _start_scan(self) -> None:
-        # 与烧录任务互锁：任务进行中禁止扫描（避免 save_assets 与面板拆除竞态）
+        """重新读取已在“设置”中配置的程序文件夹。"""
+        root = DEFAULT_ROOT.strip()
+        if not root:
+            self._log("请先在“设置”中配置程序文件夹。")
+            self.settings_requested.emit()
+            return
+        self.set_configured_root(root)
+        self._read_program_folder(root)
+
+    def _auto_scan(self, directory: str) -> None:
+        """配置完成后自动读取指定的已配置根目录。"""
+        if not directory or not directory.strip():
+            return
+        self.set_configured_root(directory)
+        self._read_program_folder(directory)
+
+    def _read_program_folder(self, directory: str) -> None:
+        """执行单工作区的后台读取；调用方必须已确定根目录。"""
         if self._busy:
             self._log(self.busy_message)
             return
-        # 单工作区：每次扫描都让用户确认/切换根目录。已绑定的 root（含启动时
-        # 从 scan_meta 恢复的）只作为对话框初始路径，不再静默重扫、无法换根。
-        initial = (self.root_dir or "").strip() or str(Path.cwd())
-        root = QFileDialog.getExistingDirectory(self, "选择固件所在的根目录", initial)
-        if not root:
-            return
-        self.root_dir = root
 
         cancel_event = threading.Event()
         self.scan_state_model.replace(cancel_event)
-        self.scan_btn.setText("取消扫描")
-        self._log(f"开始扫描目录: {root}")
-
-        def run_scan():
-            result = build_scan_result(root, log_fn=self._log, cancel_event=cancel_event)
-            # Signal 跨线程 emit 自动走 queued connection，回到 UI 线程处理
-            self.scan_result_ready.emit(result)
-
-        threading.Thread(target=run_scan, daemon=True).start()
-
-    def _auto_scan(self, directory: str) -> None:
-        """自动扫描（不弹目录选择对话框）。
-
-        向导完成后使用，直接扫描配置的根目录。
-        """
-        if self._busy:
-            return
-        if not directory or not directory.strip():
-            return
-        self.root_dir = directory
-
-        cancel_event = threading.Event()
-        self.scan_state_model.replace(cancel_event)
-        self.scan_btn.setText("取消扫描")
-        self._log(f"开始扫描目录: {directory}")
+        self.scan_btn.setText("取消读取")
+        self._log(f"开始读取程序文件夹: {directory}")
 
         def run_scan():
             result = build_scan_result(directory, log_fn=self._log, cancel_event=cancel_event)
+            # Signal 跨线程 emit 自动走 queued connection，回到 UI 线程处理
             self.scan_result_ready.emit(result)
 
         threading.Thread(target=run_scan, daemon=True).start()
@@ -407,7 +432,7 @@ class WorkbenchInterface(QWidget):
 
     def _handle_scan_result(self, result: ServiceResult) -> None:
         self.scan_state_model.replace(None)
-        self.scan_btn.setText("扫描目录")
+        self.scan_btn.setText("重新读取程序文件夹")
         self.scan_btn.setEnabled(True)
 
         if not result["ok"]:
@@ -416,18 +441,18 @@ class WorkbenchInterface(QWidget):
 
         # 取消：库未写、payload 为空，勿当「扫描完成 0 项」并错误 rebind
         if result.get("code") == "cancelled":
-            self._log(str(result.get("message") or "扫描已被用户取消"))
+            self._log(str(result.get("message") or "程序列表读取已取消"))
             return
 
         payload = result["payload"]
         if "asset_count" in payload:
-            self._log(f"已加载上次扫描的索引，共有 {payload['asset_count']} 个项目")
+            self._log(f"已加载上次读取的程序列表，共有 {payload['asset_count']} 个项目")
         else:
             assets = payload.get("assets", [])
             errors = payload.get("errors", [])
-            self._log(f"扫描完成，共找到 {len(assets)} 个项目")
+            self._log(f"程序列表读取完成，共找到 {len(assets)} 个项目")
             if errors:
-                self._log(f"扫描过程中有 {len(errors)} 个错误")
+                self._log(f"读取过程中有 {len(errors)} 个错误")
 
         root = (self.root_dir or "").strip()
         if not root:
@@ -438,7 +463,7 @@ class WorkbenchInterface(QWidget):
                 root = str(meta[0].get("root_dir", "")).strip()
                 if root:
                     self.root_dir = root
-                    self._log(f"使用上次扫描的根目录: {root}")
+                    self._log(f"使用上次读取的程序文件夹: {root}")
         root_dir = Path(root) if root else Path(".")
         self.workbench_model.bind(None, root_dir)
 
@@ -1013,8 +1038,60 @@ class QtWorkbenchWindow(FluentWindow):
         super().__init__()
         self.setWindowTitle("按摩椅程序资产管理系统 | Massage Chair Firmware Asset Manager")
         self.resize(1400, 850)
+
         self.workbench = WorkbenchInterface(self)
+        self.settings_interface = SettingsInterface(self)
+        self.workbench.settings_requested.connect(self._open_settings)
+        self.settings_interface.configure_requested.connect(self._open_configuration)
+
         self.addSubInterface(self.workbench, FluentIcon.HOME, "程序资产工作台")
+        self.addSubInterface(self.settings_interface, FluentIcon.SETTING, "设置")
+        self._refresh_settings_interface()
+
+    def _refresh_settings_interface(self) -> None:
+        import fwasset.core.settings as settings
+
+        self.settings_interface.set_paths(settings.DEFAULT_ROOT, settings.TOOL_ROOT)
+        self.workbench.set_configuration_required(not bool(settings.DEFAULT_ROOT.strip()))
+
+    def _open_settings(self) -> None:
+        self._refresh_settings_interface()
+        self.switchTo(self.settings_interface)
+
+    def _open_configuration(self) -> None:
+        import fwasset.core.settings as settings
+        from fwasset.ui_qt.setup_wizard import SetupWizard
+
+        previous_root = settings.DEFAULT_ROOT.strip()
+        wizard = SetupWizard(
+            self,
+            root_dir=settings.DEFAULT_ROOT,
+            tool_root=settings.TOOL_ROOT,
+            allow_skip=False,
+        )
+        if wizard.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        next_root = wizard.root_dir()
+        if previous_root and os.path.normcase(previous_root) != os.path.normcase(next_root):
+            answer = QMessageBox.question(
+                self,
+                "切换程序文件夹",
+                "将切换到新的程序文件夹并重新读取程序列表。"
+                "当前列表会更新为新位置的内容，是否继续？",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if answer != QMessageBox.StandardButton.Yes:
+                return
+
+        wizard.write_config()
+        root_dir, _tool_root = _reload_runtime_settings()
+        self._refresh_settings_interface()
+        self.workbench.set_configured_root(root_dir)
+        self.switchTo(self.workbench)
+        if root_dir and os.path.normcase(previous_root) != os.path.normcase(root_dir):
+            QTimer.singleShot(0, lambda: self.workbench._auto_scan(root_dir))
 
 
 def main() -> int:
@@ -1022,18 +1099,18 @@ def main() -> int:
     setTheme(Theme.AUTO)
 
     # ── 首次配置向导 ────────────────────────────────────────────────────
-    # 仅在冻结 exe 且 root_dir 未配置时弹出；开发模式跳过
-    import importlib
-    import fwasset.core.settings as _settings
+    # 仅在冻结 exe 且 root_dir 未配置时弹出；开发模式跳过。
+    import fwasset.core.settings as settings
+
     wizard_completed = False
-    if getattr(sys, "frozen", False) and not _settings.DEFAULT_ROOT:
+    if getattr(sys, "frozen", False) and not settings.DEFAULT_ROOT:
         from fwasset.ui_qt.setup_wizard import SetupWizard
+
         wizard = SetupWizard()
         if wizard.exec() == QDialog.DialogCode.Accepted:
+            wizard.write_config()
+            _reload_runtime_settings()
             wizard_completed = True
-        importlib.reload(_settings)
-        global DEFAULT_ROOT  # noqa: PLW0603
-        DEFAULT_ROOT = _settings.DEFAULT_ROOT
 
     window = QtWorkbenchWindow()
     window.show()

@@ -59,6 +59,136 @@ def test_import_workbench_window_module(qapp) -> None:
     assert hasattr(module, "main")
 
 
+def test_setup_wizard_prefills_validates_and_writes_config(qapp, tmp_path) -> None:
+    from fwasset.ui_qt.setup_wizard import SetupWizard
+
+    wizard = SetupWizard(root_dir=str(tmp_path), tool_root="")
+
+    assert wizard.root_dir() == str(tmp_path)
+    assert wizard.tool_root() == ""
+    assert wizard.validate_paths() == ""
+    assert wizard.windowTitle() == "初始配置"
+
+    settings_wizard = SetupWizard(root_dir=str(tmp_path), tool_root="", allow_skip=False)
+    assert settings_wizard.windowTitle() == "程序文件夹设置"
+
+    config_path = tmp_path / "config.toml"
+    wizard.write_config(config_path)
+    expected_root = str(tmp_path).replace("\\", "/")
+    assert f'root_dir = "{expected_root}"' in config_path.read_text(encoding="utf-8")
+
+    wizard._root_edit.setText("")
+    assert "请选择固件根目录" in wizard.validate_paths()
+    wizard._on_accept()
+    assert wizard.result() == 0
+
+    wizard._root_edit.setText(str(tmp_path))
+    wizard._tool_edit.setText(str(tmp_path / "missing-tool"))
+    assert "工具根目录不存在" in wizard.validate_paths()
+
+
+def test_settings_interface_shows_paths_and_emits_configure_request(qapp) -> None:
+    from fwasset.ui_qt.settings_interface import SettingsInterface
+
+    panel = SettingsInterface()
+    panel.set_paths("D:/firmware", "")
+    assert panel.root_path_label.text() == "D:/firmware"
+    assert panel.tool_path_label.text() == "未配置"
+
+    requested: list[bool] = []
+    panel.configure_requested.connect(lambda: requested.append(True))
+    panel.configure_button.click()
+    assert requested == [True]
+
+
+def test_workbench_missing_configuration_notice_opens_settings(qapp) -> None:
+    from fwasset.ui_qt.workbench_window import WorkbenchInterface
+
+    workbench = WorkbenchInterface()
+    workbench._search_timer.stop()
+    workbench._model_switch_timer.stop()
+    requested: list[bool] = []
+    workbench.settings_requested.connect(lambda: requested.append(True))
+
+    workbench.set_configuration_required(True)
+    assert workbench.scan_btn.text() == "重新读取程序文件夹"
+    assert not workbench.configuration_notice.isHidden()
+    workbench.open_settings_button.click()
+    assert requested == [True]
+
+def test_settings_completion_reloads_and_reads_new_root(qapp, tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import fwasset.core.settings as settings
+    from PySide6.QtWidgets import QDialog
+    from fwasset.ui_qt import workbench_window as window_module
+    from fwasset.ui_qt.setup_wizard import SetupWizard
+
+    monkeypatch.setattr(settings, "DEFAULT_ROOT", "")
+    monkeypatch.setattr(settings, "TOOL_ROOT", "")
+    monkeypatch.setattr(SetupWizard, "exec", lambda _self: QDialog.DialogCode.Accepted)
+    monkeypatch.setattr(SetupWizard, "root_dir", lambda _self: str(tmp_path))
+    monkeypatch.setattr(SetupWizard, "tool_root", lambda _self: "")
+
+    writes: list[bool] = []
+    monkeypatch.setattr(SetupWizard, "write_config", lambda _self: writes.append(True))
+
+    def reload_settings() -> tuple[str, str]:
+        monkeypatch.setattr(settings, "DEFAULT_ROOT", str(tmp_path))
+        return str(tmp_path), ""
+
+    monkeypatch.setattr(window_module, "_reload_runtime_settings", reload_settings)
+    window = window_module.QtWorkbenchWindow()
+    scanned_roots: list[str] = []
+    window.workbench._auto_scan = lambda root: scanned_roots.append(root)  # type: ignore[method-assign]
+
+    window._open_configuration()
+    qapp.processEvents()
+
+    assert writes == [True]
+    assert window.workbench.root_dir == str(tmp_path)
+    assert scanned_roots == [str(tmp_path)]
+
+def test_re_read_uses_configured_root_without_folder_picker(qapp, tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from fwasset.ui_qt import workbench_window as window_module
+
+    monkeypatch.setattr(window_module, "DEFAULT_ROOT", str(tmp_path))
+    workbench = window_module.WorkbenchInterface()
+    workbench._search_timer.stop()
+    workbench._model_switch_timer.stop()
+    roots: list[str] = []
+
+    def build_result(root: str, **_kwargs) -> dict:
+        roots.append(root)
+        return {"ok": True, "code": "ok", "message": "", "payload": {"assets": [], "errors": []}}
+
+    class InlineThread:
+        def __init__(self, *, target, daemon: bool) -> None:
+            self._target = target
+
+        def start(self) -> None:
+            self._target()
+
+    monkeypatch.setattr(window_module, "build_scan_result", build_result)
+    monkeypatch.setattr(window_module.threading, "Thread", InlineThread)
+    workbench._start_scan()
+
+    assert roots == [str(tmp_path)]
+    assert workbench.root_dir == str(tmp_path)
+
+
+def test_re_read_without_config_opens_settings(qapp, monkeypatch: pytest.MonkeyPatch) -> None:
+    from fwasset.ui_qt import workbench_window as window_module
+
+    monkeypatch.setattr(window_module, "DEFAULT_ROOT", "")
+    workbench = window_module.WorkbenchInterface()
+    workbench._search_timer.stop()
+    workbench._model_switch_timer.stop()
+    requested: list[bool] = []
+    workbench.settings_requested.connect(lambda: requested.append(True))
+
+    workbench._start_scan()
+
+    assert requested == [True]
+
 def test_populate_tree_empty_is_noop(qapp) -> None:
     grid = DataGrid(lambda _m: None)
     grid.populate_tree([])
@@ -461,5 +591,6 @@ def test_shared_badges_render_on_existing_variant_row() -> None:
     missing = _variant("快捷键", kind="common")
     missing.shared_state = "shared_missing"
 
-    assert "共享自 L36" in DataGrid._variant_text(hit, "快捷键程序")
+    assert DataGrid._variant_text(hit, "快捷键程序").endswith("L36")
+    assert "共享自" not in DataGrid._variant_text(hit, "快捷键程序")
     assert "共享来源缺失" in DataGrid._variant_text(missing, "快捷键程序")

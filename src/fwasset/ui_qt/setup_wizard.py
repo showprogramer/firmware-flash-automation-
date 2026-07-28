@@ -2,7 +2,7 @@
 
 冻结 exe 首次启动时，若 AppData 无配置文件，弹出此对话框引导用户
 选择固件根目录（必填）和工具根目录（可选）。用户也可跳过，
-待进入主界面后从设置页完成配置。
+待进入主界面后从“设置”完成配置。
 """
 from __future__ import annotations
 
@@ -16,55 +16,63 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from qfluentwidgets import BodyLabel, PrimaryPushButton, PushButton, SubtitleLabel
+from qfluentwidgets import BodyLabel, CaptionLabel, PrimaryPushButton, PushButton, SubtitleLabel
 
 
 class SetupWizard(QDialog):
-    """首次配置向导对话框。
+    """首次配置和后续路径修改共用的对话框。"""
 
-    完成后调用 :meth:`write_config` 将路径写入
-    ``settings.CONFIG_PATH``（AppData 位置）。
-    """
-
-    def __init__(self, parent=None) -> None:
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        *,
+        root_dir: str = "",
+        tool_root: str = "",
+        allow_skip: bool = True,
+    ) -> None:
         super().__init__(parent)
-        self.setWindowTitle("初始配置")
+        self._allow_skip = allow_skip
+        self.setWindowTitle("初始配置" if allow_skip else "程序文件夹设置")
         self.setMinimumWidth(540)
+        self._initial_root_dir = root_dir
+        self._initial_tool_root = tool_root
         self._root_edit: QLineEdit
         self._tool_edit: QLineEdit
+        self._error_label: CaptionLabel
         self._build_ui()
 
-    # ------------------------------------------------------------------
-    # UI
-    # ------------------------------------------------------------------
-
+    # ------------------------------------------------------------------ UI
     def _build_ui(self) -> None:
         layout = QVBoxLayout(self)
         layout.setSpacing(16)
         layout.setContentsMargins(28, 24, 28, 24)
 
-        layout.addWidget(SubtitleLabel("初始配置", self))
+        layout.addWidget(SubtitleLabel(self.windowTitle(), self))
 
-        desc = BodyLabel(
-            "欢迎使用固件资产管理工具。\n"
-            "请选择固件根目录（存放各型号程序文件夹的目录），配置完成后即可开始使用。\n"
+        description_lines = [
+            "欢迎使用固件资产管理工具。",
+            "请选择固件根目录（存放各型号程序文件夹的目录），配置完成后即可开始使用。",
             "工具根目录为可选项，留空不影响主要功能。",
-            self,
-        )
+        ]
+        if self._allow_skip:
+            description_lines.append("跳过不会保存配置，下次启动仍会显示此向导。也可进入主界面的“设置”完成配置。")
+        desc = BodyLabel("\n".join(description_lines), self)
         desc.setWordWrap(True)
         layout.addWidget(desc)
 
-        self._root_edit, root_row = self._make_path_row("固件根目录（必填）")
+        self._root_edit, root_row = self._make_path_row("固件根目录（必填）", self._initial_root_dir)
         layout.addWidget(root_row)
 
-        self._tool_edit, tool_row = self._make_path_row("工具根目录（可选）")
+        self._tool_edit, tool_row = self._make_path_row("工具根目录（可选）", self._initial_tool_root)
         layout.addWidget(tool_row)
 
+        self._error_label = CaptionLabel("", self)
+        self._error_label.setWordWrap(True)
+        layout.addWidget(self._error_label)
         layout.addSpacing(8)
 
-        # 按钮行
         btn_row = QHBoxLayout()
-        skip_btn = PushButton("跳过")
+        skip_btn = PushButton("跳过" if self._allow_skip else "取消")
         skip_btn.setFixedWidth(90)
         skip_btn.clicked.connect(self.reject)
 
@@ -77,16 +85,17 @@ class SetupWizard(QDialog):
         btn_row.addWidget(ok_btn)
         layout.addLayout(btn_row)
 
-    def _make_path_row(self, label_text: str) -> tuple[QLineEdit, QWidget]:
+    def _make_path_row(self, label_text: str, initial_value: str) -> tuple[QLineEdit, QWidget]:
         container = QWidget(self)
-        v = QVBoxLayout(container)
-        v.setContentsMargins(0, 0, 0, 0)
-        v.setSpacing(4)
-        v.addWidget(BodyLabel(label_text, container))
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+        layout.addWidget(BodyLabel(label_text, container))
 
         row = QHBoxLayout()
         edit = QLineEdit(container)
-        edit.setPlaceholderText("点击「浏览」选择目录…")
+        edit.setPlaceholderText("点击“浏览”选择目录…")
+        edit.setText(initial_value)
         row.addWidget(edit)
 
         browse_btn = PushButton("浏览", container)
@@ -94,13 +103,10 @@ class SetupWizard(QDialog):
         browse_btn.clicked.connect(lambda: self._browse(edit))
         row.addWidget(browse_btn)
 
-        v.addLayout(row)
+        layout.addLayout(row)
         return edit, container
 
-    # ------------------------------------------------------------------
-    # Actions
-    # ------------------------------------------------------------------
-
+    # ------------------------------------------------------------------ Actions
     def _browse(self, edit: QLineEdit) -> None:
         start = edit.text().strip() or str(Path.home())
         path = QFileDialog.getExistingDirectory(self, "选择目录", start)
@@ -108,24 +114,40 @@ class SetupWizard(QDialog):
             edit.setText(path)
 
     def _on_accept(self) -> None:
-        self.write_config()
+        error = self.validate_paths()
+        self._error_label.setText(error)
+        if error:
+            return
         self.accept()
 
-    # ------------------------------------------------------------------
-    # Public helpers
-    # ------------------------------------------------------------------
-
+    # ------------------------------------------------------------------ Public helpers
     def root_dir(self) -> str:
         return self._root_edit.text().strip()
 
     def tool_root(self) -> str:
         return self._tool_edit.text().strip()
 
-    def write_config(self) -> None:
-        """将向导填写的路径写入 ``settings.CONFIG_PATH``。"""
-        from fwasset.core.settings import CONFIG_PATH
+    def validate_paths(self) -> str:
+        """返回首个用户可见校验错误；空字符串表示可保存。"""
+        root_dir = self.root_dir()
+        if not root_dir:
+            return "请选择固件根目录。"
+        if not Path(root_dir).is_dir():
+            return "固件根目录不存在或不是目录，请重新选择。"
 
-        CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        tool_root = self.tool_root()
+        if tool_root and not Path(tool_root).is_dir():
+            return "工具根目录不存在或不是目录，请重新选择。"
+        return ""
+
+    def write_config(self, config_path: Path | None = None) -> None:
+        """将已校验的路径写入指定配置文件或 ``settings.CONFIG_PATH``。"""
+        if config_path is None:
+            from fwasset.core.settings import CONFIG_PATH
+
+            config_path = CONFIG_PATH
+
+        config_path.parent.mkdir(parents=True, exist_ok=True)
         root = self.root_dir().replace("\\", "/")
         tool = self.tool_root().replace("\\", "/")
         content = (
@@ -133,4 +155,4 @@ class SetupWizard(QDialog):
             f'root_dir = "{root}"\n'
             f'tool_root = "{tool}"\n'
         )
-        CONFIG_PATH.write_text(content, encoding="utf-8")
+        config_path.write_text(content, encoding="utf-8")
