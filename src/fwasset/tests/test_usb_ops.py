@@ -4,7 +4,6 @@ from types import SimpleNamespace
 import pytest
 
 from fwasset.core.usb_ops import (
-    clean_usb,
     copy_directory_to_usb,
     copy_to_usb,
     diagnose_usb_health,
@@ -31,24 +30,6 @@ def test_get_usb_drives_filters_expected_partitions(monkeypatch: pytest.MonkeyPa
     drives = get_usb_drives()
 
     assert drives == ["E:\\", "F:\\"]
-
-
-def test_clean_usb_deletes_only_junk_files(tmp_path: Path):
-    junk_ext = tmp_path / "a.tmp"
-    junk_name = tmp_path / "autorun.inf"
-    keep = tmp_path / "keep.txt"
-    junk_ext.write_text("x", encoding="utf-8")
-    junk_name.write_text("x", encoding="utf-8")
-    keep.write_text("x", encoding="utf-8")
-
-    logs, log_fn = _logs()
-    removed = clean_usb(str(tmp_path), log_fn=log_fn)
-
-    assert removed == 2
-    assert not junk_ext.exists()
-    assert not junk_name.exists()
-    assert keep.exists()
-    assert any("删除垃圾文件" in msg for msg in logs)
 
 
 def test_copy_to_usb_replaces_old_rom_pkg(tmp_path: Path):
@@ -151,6 +132,7 @@ def test_eject_usb_failure_and_exception(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_format_usb_success_failure_and_exception(monkeypatch: pytest.MonkeyPatch):
+    # 正常：格式化成功 + 驱动器立即就绪
     logs1, log_fn1 = _logs()
     calls = []
 
@@ -159,7 +141,8 @@ def test_format_usb_success_failure_and_exception(monkeypatch: pytest.MonkeyPatc
         return SimpleNamespace(returncode=0, stderr="", stdout="")
 
     monkeypatch.setattr("fwasset.core.usb_ops.subprocess.run", run_success)
-    monkeypatch.setattr("fwasset.core.usb_ops.time.sleep", lambda s: None)  # mock sleep
+    monkeypatch.setattr("fwasset.core.usb_ops.time.sleep", lambda s: None)
+    monkeypatch.setattr("fwasset.core.usb_ops.Path.is_dir", lambda self: True)  # 驱动器就绪
     ok1 = format_usb("E:\\", log_fn=log_fn1)
     assert ok1 is True
     cmd = calls[0][0][0]
@@ -169,6 +152,7 @@ def test_format_usb_success_failure_and_exception(monkeypatch: pytest.MonkeyPatc
     assert "DriveLetter E" in cmd[-1]
     assert any("格式化完成" in msg for msg in logs1)
 
+    # 失败：Format-Volume 返回非零
     logs2, log_fn2 = _logs()
     monkeypatch.setattr(
         "fwasset.core.usb_ops.subprocess.run",
@@ -178,6 +162,7 @@ def test_format_usb_success_failure_and_exception(monkeypatch: pytest.MonkeyPatc
     assert ok2 is False
     assert any("格式化失败" in msg for msg in logs2)
 
+    # 异常：subprocess 抛出异常
     logs3, log_fn3 = _logs()
 
     def raise_run(*args, **kwargs):
@@ -187,6 +172,65 @@ def test_format_usb_success_failure_and_exception(monkeypatch: pytest.MonkeyPatc
     ok3 = format_usb("E:\\", log_fn=log_fn3)
     assert ok3 is False
     assert any("格式化异常" in msg for msg in logs3)
+
+
+def test_format_usb_drive_ready_after_delay(monkeypatch: pytest.MonkeyPatch):
+    """Issue 6: 驱动器延迟就绪，轮询第二次才返回 True。"""
+    logs, log_fn = _logs()
+    call_count = [0]
+
+    def is_dir_delayed(self):
+        call_count[0] += 1
+        return call_count[0] >= 2  # 第二次调用才就绪
+
+    monkeypatch.setattr(
+        "fwasset.core.usb_ops.subprocess.run",
+        lambda *args, **kwargs: SimpleNamespace(returncode=0, stderr="", stdout=""),
+    )
+    monkeypatch.setattr("fwasset.core.usb_ops.time.sleep", lambda s: None)
+    monkeypatch.setattr("fwasset.core.usb_ops.Path.is_dir", is_dir_delayed)
+    ok = format_usb("E:\\", log_fn=log_fn)
+    assert ok is True
+    assert call_count[0] >= 2
+
+
+def test_format_usb_drive_not_ready_timeout(monkeypatch: pytest.MonkeyPatch):
+    """Issue 6: 驱动器始终未就绪，超时后返回 False。"""
+    logs, log_fn = _logs()
+    # 让 monotonic 快速进入超时：首次返回 0（设 deadline=10），之后返回 11
+    mono_calls = [0]
+
+    def mono_mock():
+        mono_calls[0] += 1
+        return 0.0 if mono_calls[0] == 1 else 11.0
+
+    monkeypatch.setattr(
+        "fwasset.core.usb_ops.subprocess.run",
+        lambda *args, **kwargs: SimpleNamespace(returncode=0, stderr="", stdout=""),
+    )
+    monkeypatch.setattr("fwasset.core.usb_ops.time.sleep", lambda s: None)
+    monkeypatch.setattr("fwasset.core.usb_ops.time.monotonic", mono_mock)
+    monkeypatch.setattr("fwasset.core.usb_ops.Path.is_dir", lambda self: False)
+    ok = format_usb("E:\\", log_fn=log_fn)
+    assert ok is False
+    assert any("未重新就绪" in msg for msg in logs)
+
+
+def test_format_usb_invalid_drive_letter(monkeypatch: pytest.MonkeyPatch):
+    """Issue 7: 非单个英文字母盘符直接返回 False，不调用 subprocess。"""
+    subprocess_called = [False]
+    monkeypatch.setattr(
+        "fwasset.core.usb_ops.subprocess.run",
+        lambda *args, **kwargs: (subprocess_called.__setitem__(0, True) or SimpleNamespace(returncode=0, stdout="", stderr="")),
+    )
+
+    # 无效盘符：空串、数字开头、符号开头
+    for bad_drive in ["", "1:\\", "!:\\"]:
+        subprocess_called[0] = False
+        logs, log_fn = _logs()
+        ok = format_usb(bad_drive, log_fn=log_fn)
+        assert ok is False, f"应拒绝无效盘符: {bad_drive!r}"
+        assert not subprocess_called[0], f"不应调用 subprocess（drive={bad_drive!r}）"
 
 
 def test_format_usb_timeout(monkeypatch: pytest.MonkeyPatch):

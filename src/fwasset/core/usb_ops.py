@@ -5,8 +5,6 @@ from pathlib import Path
 
 import psutil
 
-from fwasset.core.settings import JUNK_EXTENSIONS, JUNK_FILENAMES
-
 
 _PERMISSION_HINTS = [
     "access is denied",
@@ -42,21 +40,6 @@ def get_usb_drives() -> list[str]:
         if "removable" in part.opts.lower() or part.fstype.upper() in ("FAT32", "FAT", "EXFAT"):
             drives.append(part.mountpoint)
     return drives
-
-
-def clean_usb(drive: str, log_fn=print) -> int:
-    """Delete junk files at USB root and return removed count."""
-    removed = 0
-    root = Path(drive)
-    for f in root.iterdir():
-        if f.is_file() and (f.suffix.lower() in JUNK_EXTENSIONS or f.name.lower() in JUNK_FILENAMES):
-            try:
-                f.unlink()
-                log_fn(f"  删除垃圾文件: {f.name}")
-                removed += 1
-            except Exception as e:
-                log_fn(f"  删除失败 {f.name}: {e}")
-    return removed
 
 
 def copy_to_usb(rom_path: str, pkg_path: str, drive: str, log_fn=print) -> bool:
@@ -273,7 +256,8 @@ def format_usb(drive: str, log_fn=print) -> bool:
     Requires explicit user confirmation before calling.
     """
     letter = _extract_drive_letter(drive)
-    if not letter:
+    # Issue 7: 盘符必须是单个英文字母，防止异常输入进入破坏性操作
+    if not (len(letter) == 1 and letter.isalpha()):
         log_fn("  格式化异常: 无效盘符")
         return False
 
@@ -291,13 +275,19 @@ def format_usb(drive: str, log_fn=print) -> bool:
             text=True,
             timeout=120,
         )
-        if result.returncode == 0:
-            # 格式化完成后等待驱动器重新就绪再进行后续文件操作
-            time.sleep(2)
-            log_fn("  格式化完成")
-            return True
-        msg = (result.stderr or result.stdout or "Format-Volume 失败").strip()
-        log_fn(f"  格式化失败: {msg}")
+        if result.returncode != 0:
+            msg = (result.stderr or result.stdout or "Format-Volume 失败").strip()
+            log_fn(f"  格式化失败: {msg}")
+            return False
+
+        # Issue 6: 轮询驱动器就绪（最长 10 秒，每 0.5 秒检查一次）
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            if Path(drive).is_dir():
+                log_fn("  格式化完成")
+                return True
+            time.sleep(0.5)
+        log_fn("  格式化完成，但驱动器未重新就绪（超时）")
         return False
     except (subprocess.TimeoutExpired, TimeoutError):
         log_fn("  格式化超时")

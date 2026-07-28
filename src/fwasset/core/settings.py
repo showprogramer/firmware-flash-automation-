@@ -139,11 +139,7 @@ TOOL_ROOT = _resolve_path(
     _DEFAULTS["paths"]["tool_root"],
 )
 
-# USB 操作常量（硬编码，不再从用户配置读取）
-JUNK_EXTENSIONS: frozenset[str] = frozenset({".usu", ".tmp", ".bak"})
-JUNK_FILENAMES: frozenset[str] = frozenset({"autorun.inf"})
-
-# 扫描常量（硬编码，不再从用户配置读取）
+# USB 扫描常量（硬编码，不再从用户配置读取）
 SCAN_ROM_EXTENSIONS: list[str] = [".rom"]
 SCAN_PKG_EXTENSIONS: list[str] = [".pkg"]
 SCAN_EXCLUDE_DIR_KEYWORDS: list[str] = ["CH341SER", "接线图", "旧", "新建文件夹", "照片"]
