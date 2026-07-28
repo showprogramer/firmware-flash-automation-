@@ -118,7 +118,7 @@ def format_usb(drive: str, log_fn=print) -> bool:
     """
     letter = _extract_drive_letter(drive)
     # Issue 7: 盘符必须是单个英文字母，防止异常输入进入破坏性操作
-    if not (len(letter) == 1 and letter.isalpha()):
+    if not (len(letter) == 1 and letter.isascii() and letter.isalpha()):
         log_fn("  格式化异常: 无效盘符")
         return False
 

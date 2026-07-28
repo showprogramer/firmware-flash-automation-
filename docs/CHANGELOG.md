@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### fix(usb): 严格校验格式化盘符为 ASCII 字母
+
+- `format_usb()` 拒绝中文、数字、符号等非 Windows 盘符输入，不会调用 PowerShell 格式化命令。
+- 补充非 ASCII 盘符回归测试；USB 审查 Issue 7 已于 2026-07-28 完成人工验证。
+
+验证：`.\scripts\test.ps1` → 381 passed，coverage 94.33%。
+
 ### feat(ui,config): 新增程序文件夹设置入口（TASK-20260728）
 
 - 新增应用级「设置」页与「程序文件夹」区块，可查看并修改固件根目录、工具根目录；保存新根目录后同一会话自动读取新位置。

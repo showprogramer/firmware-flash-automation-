@@ -4,7 +4,7 @@
 | --- | --- |
 | 类型 | 配置 schema 精简、首次配置向导、USB 格式化 + 复制流程的实现审查 |
 | 复审基线 | 2026-07-28，当前工作区（含尚未提交的 Issue 7 ASCII 盘符修复） |
-| 状态 | 🟡 Issue 1–6、8–9 已关闭；Issue 7 已修复、待 USB 人工验证后提交 |
+| 状态 | ✅ Issue 1–9 均已关闭；审查归档 |
 | 相关 TASK | `specs/active/TASK-20260728-config-usb-simplification.md` |
 | 相关 Commit | `e8558d2`（T1）、`ebcc197`（T2）、`d6a846f`（向导完成后自动扫描）、`3286975`（T3）、`1adf724`（QDialog 修复）、`47529e0`（Format-Volume）、`1e42607`（Issue 2/3）、`4999f13`（Issue 4/6/7）、`b9e9c13`（Issue 5） |
 
@@ -58,7 +58,7 @@
 
 **处理结果：** `4999f13` 已改为最长 10 秒、每 0.5 秒轮询 `Path(drive).is_dir()`；驱动器延迟就绪与超时路径均有单测覆盖。
 
-**状态：** ✅ 已提交；真实 U 盘格式化/重新挂载的人验仍应随下次 USB 流程验收进行。
+**状态：** ✅ 已关闭；T3 真实 U 盘流程与后续复审均已人工确认。
 
 ## 已修复，待人工验证后提交
 
@@ -81,10 +81,12 @@ if not (len(letter) == 1 and letter.isascii() and letter.isalpha()):
 ```text
 uv run python -m pytest src/fwasset/tests/test_usb_ops.py::test_format_usb_invalid_drive_letter -q --no-cov  -> 1 passed
 uv run python -m pytest src/fwasset/tests/test_usb_ops.py src/fwasset/tests/test_flash_service.py -q --no-cov -> 15 passed
-uv run python -m pytest -m "not ui" -q --no-cov -> 357 passed, 18 deselected
+.\scripts\test.ps1 -> 381 passed，coverage 94.33%
 ```
 
-**状态：** 🟡 已完成，请人工验证后提交。建议人工确认真实盘符 `E:\` 等仍可正常进入格式化确认与烧录流程；无效输入不会触发格式化。
+**人工验证：** 2026-07-28 用户确认 Issue 7 验证通过：正常盘符可进入原有格式化/烧录流程，无效输入不会触发格式化。
+
+**状态：** ✅ 已关闭。
 
 ## 活跃议题
 

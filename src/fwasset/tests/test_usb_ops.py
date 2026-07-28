@@ -222,8 +222,8 @@ def test_format_usb_invalid_drive_letter(monkeypatch: pytest.MonkeyPatch):
         lambda *args, **kwargs: (subprocess_called.__setitem__(0, True) or SimpleNamespace(returncode=0, stdout="", stderr="")),
     )
 
-    # 无效盘符：空串、数字开头、符号开头
-    for bad_drive in ["", "1:\\", "!:\\"]:
+    # 无效盘符：空串、数字开头、符号开头、非 ASCII 字母
+    for bad_drive in ["", "1:\\", "!:\\", "中:\\"]:
         subprocess_called[0] = False
         logs, log_fn = _logs()
         ok = format_usb(bad_drive, log_fn=log_fn)
@@ -243,5 +243,3 @@ def test_format_usb_timeout(monkeypatch: pytest.MonkeyPatch):
 
     assert ok is False
     assert any("格式化超时" in msg for msg in logs)
-
-

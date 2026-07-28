@@ -5,6 +5,7 @@
 
 | 文件 | 日期 | 主题 | 处置 |
 |------|------|------|------|
+| [REVIEW-20260728-config-usb-simplification.md](./REVIEW-20260728-config-usb-simplification.md) | 2026-07-28 | 配置简化 + USB 烧录流程对齐 | Issue 1–9 已关闭；冻结 exe、真实 U 盘与自动化验证通过 |
 | [REVIEW-20260709-branch-pyside6.md](./REVIEW-20260709-branch-pyside6.md) | 2026-07-09 | PySide6 迁移分支总审 | Phase 4 完成；exe 冷启动人验通过 2026-07-27 |
 | [REVIEW-20260724-qt-only-ui-cleanup.md](./REVIEW-20260724-qt-only-ui-cleanup.md) | 2026-07-24 | Qt-only 界面收敛 | Qt 三场景人验通过；CTk 已移除；自动化回归通过 |
 | [REVIEW-20260720-shared-module-registration.md](./REVIEW-20260720-shared-module-registration.md) | 2026-07-24 | B2 共享手动登记入口 | Qt 3 场景人验通过；CTk 随 B3；已闭环 |

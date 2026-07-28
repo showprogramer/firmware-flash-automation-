@@ -13,7 +13,6 @@
 
 | 文件 | 说明 |
 |------|------|
-| [REVIEW-20260728-config-usb-simplification.md](./REVIEW-20260728-config-usb-simplification.md) | 配置简化 + USB 烧录流程对齐（T1/T2/T3）审查 |
 | [REVIEW-20260709-branch-pyside6.md](./REVIEW-20260709-branch-pyside6.md) | `feature/pyside6-migration` 分支总审与遗留项看板 |
 
 历史列表见 [archive/INDEX.md](./archive/INDEX.md)。
