@@ -1,23 +1,20 @@
 # TASK-20260708: UI 框架迁移 CustomTkinter → PySide6
 
-## 状态（2026-07-24 更新）
+## 状态（2026-07-28 收口）
 
-| 项                   | 状态                                                              |
-| ------------------- | --------------------------------------------------------------- |
-| 分支                  | `feature/pyside6-migration`                                     |
-| Phase 0–3           | ✅ 完成                                                            |
-| 审查阻断项 Issue 1–20 主体 | ✅ 完成并人验（见 `docs/code-review/REVIEW-20260709-branch-pyside6.md`） |
-| Phase 4.0–4.2       | ✅ 完成（功能验收与契约；**尚未**切默认入口 / 打包）                              |
-| **Phase 4.3**       | ✅ 默认入口已切 Qt（`TASK-20260724-qt-only-ui-cleanup`） |
-| **Phase 4.4**       | 🟡 Qt-only 打包配置已更新并成功构建，冻结 exe 人工点验待完成 |
-| **Phase 4.5**       | ✅ CTk 源码、依赖与专属测试已移除 |
-| **Phase 4.6–4.7**   | 🟡 文档与 Qt-only 人工验收收口中（由 `TASK-20260724` 负责） |
-| **当前主线**            | → **`TASK-20260724-qt-only-ui-cleanup.md`**（Qt-only 清理与 B3 前置）                 |
-| CRUD / 增量写盘         | 📋 配置接管 TASK 之后再立                                              |
+| 项 | 状态 |
+| --- | --- |
+| 分支 | `feature/pyside6-migration` |
+| Phase 0–3 | ✅ 完成 |
+| 审查阻断项 Issue 1–20 | ✅ 完成并人验；分支总审已归档 |
+| Phase 4.0–4.7 | ✅ 默认入口、Qt-only 打包、CTk 退役、文档与人工验收均完成 |
+| 迁移任务 | ✅ 已完成，归档保留历史与验收总表 |
+| 分支合并 | ⏸ 按用户决定暂不合并 `feature/pyside6-migration` → `main`；不影响迁移任务闭环 |
+| 后续主线 | 配置接管与 firmware CRUD；不属于本迁移 TASK |
 
 **默认入口现状**：`app.py` 默认进入 `ui_qt`，Qt 是唯一受支持界面；`FWASSET_UI` 不再控制界面选择。
 
-**收口说明**：默认入口、依赖清理、CTk 退役和 Qt-only 打包已在 `TASK-20260724-qt-only-ui-cleanup.md` 实施；本文件保留迁移历史与 Phase 4 验收总表，待 Qt 人工验收完成后再归档。
+**收口说明**：默认入口、依赖清理、CTk 退役和 Qt-only 打包已由 `TASK-20260724-qt-only-ui-cleanup.md` 实施并验收。本 TASK 已完成，现归档；分支整合另按用户决定处理。
 
 ---
 
@@ -167,7 +164,7 @@ Qt-only 阶段使用无环境变量的 `uv run fwasset` 验证默认入口；不
 - [x] 本 TASK Phase 4 与验收清单全部勾选（2026-07-27）。
 - [x] `docs/CHANGELOG.md` Unreleased：默认 Qt、打包与 CTk 退役结论。
 - [x] `docs/code-review/REVIEW-20260709-branch-pyside6.md`：归档到 `archive/`（2026-07-27）。
-- [ ] 合并 `feature/pyside6-migration` → `main`（PR 或本地约定流程）。
+- [ ] 分支合并 `feature/pyside6-migration` → `main`：按用户决定暂不执行；这是分支整合决策，不属于迁移实现验收。
 - [ ] **不要**在本 PR 夹带 CRUD。
 
 ### 4.7 完成定义（Definition of Done）
@@ -186,13 +183,38 @@ Qt-only 阶段使用无环境变量的 `uv run fwasset` 验证默认入口；不
 
 > 文案以现行产品为准：归属 **定制专属 / 通用**（非「通用默认」）。
 
-- [ ] 扫描/取消/缓存加载；多型号根双型号识别；单型号根兼容
-- [ ] 侧边树、全部/通用/方案三种视图、搜索空格分词、防抖；点方案清搜索且高亮正确
-- [ ] 方案视图整机层级：单变体折叠、多变体展开、定制专属/通用、无「回源」
-- [ ] 右键设默认（单/多平台）、★默认徽章（含空默认唯一变体）、toml 写回、免重扫生效
-- [ ] 四类操作面板 + 一键烧录 + 全局 U 盘选择器 + 日志
+- [x] 扫描/取消/缓存加载；多型号根双型号识别；单型号根兼容
+- [x] 侧边树、全部/通用/方案三种视图、搜索空格分词、防抖；点方案清搜索且高亮正确
+- [x] 方案视图整机层级：单变体折叠、多变体展开、定制专属/通用、无「回源」
+- [x] 右键设默认（单/多平台）、★默认徽章（含空默认唯一变体）、toml 写回、免重扫生效
+- [x] 四类操作面板 + 一键烧录 + 全局 U 盘选择器 + 日志
 - [x] 默认入口 Qt；不保留 `FWASSET_UI=ctk` 回退
-- [ ] PyInstaller exe 可运行；`.\scripts\test.ps1` 通过
+- [x] PyInstaller exe 可运行；`.\scripts\test.ps1` 通过
+
+---
+
+## 最终验证记录（2026-07-28）
+
+### 自动化验证
+
+```powershell
+.\scripts\test.ps1
+```
+
+结果：381 passed，coverage 94.33%。
+
+### 人工验证
+
+- 2026-07-23：Qt-only 人工验收通过；默认入口进入 Qt，B2 三个场景通过，CTk 不再作为支持界面。
+- 2026-07-27：PyInstaller 冻结 exe 冷启动与 Qt 工作台主路径点验通过。
+- 2026-07-28：首次配置、跳过后前往设置、设置中切换程序文件夹及重新读取根目录等后续 Qt 工作流验证通过。
+
+### 结论
+
+- Phase 0–4.7、迁移审查阻断项和 Qt-only 收口均已完成。
+- CustomTkinter 运行入口、依赖、专属源码与测试已退役。
+- CRUD、资产行级写入和分支合并均为迁移完成后的独立事项；其中 `feature/pyside6-migration` → `main` 按用户决定暂不执行。
+- 本 TASK 可归档，不代表合并分支。
 
 ---
 
@@ -209,9 +231,9 @@ Qt-only 阶段使用无环境变量的 `uv run fwasset` 验证默认入口；不
 
 | 优先级 | TASK | 说明 |
 | --- | --- | --- |
-| **当前** | [`TASK-20260714-config-takeover.md`](./TASK-20260714-config-takeover.md) | 软件接管配置 → 共享引用（见 `specs/prompts/task-exchange.md` 1–4） |
+| **当前** | [`TASK-20260714-config-takeover.md`](../active/TASK-20260714-config-takeover.md) | 软件接管配置 → 共享引用（见 `specs/prompts/task-exchange.md` 1–4） |
 | 其后 | `TASK-YYYYMMDD-firmware-crud` | 程序 CRUD + 增量索引 / 对账（exchange 5–6） |
-| 迁移恢复 | 本文 §4.3–4.7 | 默认 Qt + 打包 + 合 main |
-| 迁移收口 | [`TASK-20260724-qt-only-ui-cleanup.md`](./TASK-20260724-qt-only-ui-cleanup.md) | Qt-only 入口、依赖、旧壳清理与 B3 前置 |
+| 分支整合 | `feature/pyside6-migration` → `main` | 按用户决定暂不执行；不属于本 TASK 的实现收口 |
+| 迁移收口 | [`TASK-20260724-qt-only-ui-cleanup.md`](../active/TASK-20260724-qt-only-ui-cleanup.md) | Qt-only 入口、依赖、旧壳清理与 B3 前置（已完成） |
 
 命名建议：`TASK-YYYYMMDD-firmware-crud.md`。CTk 退役已由 `TASK-20260724-qt-only-ui-cleanup.md` 完成。

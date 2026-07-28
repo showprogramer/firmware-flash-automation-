@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### docs: 收口并归档 PySide6 迁移总 TASK
+
+- `TASK-20260708-pyside6-migration` 补最终自动化、冻结 exe 与后续 Qt 工作流验证记录，Phase 0–4.7 标记完成。
+- 明确分支 `feature/pyside6-migration` 暂不合并至 `main`；这是独立整合决策，不影响迁移任务闭环。
+- 迁移总 TASK 移入 `specs/archive/`，配置接管 TASK 的历史引用同步到归档路径。
+
 ### fix(usb): 严格校验格式化盘符为 ASCII 字母
 
 - `format_usb()` 拒绝中文、数字、符号等非 Windows 盘符输入，不会调用 PowerShell 格式化命令。

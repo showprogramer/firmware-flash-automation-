@@ -360,7 +360,7 @@ source_relative_path = "L36程序/通用/快捷键/贝乐"
 | 5 程序文件 CRUD | `TASK-YYYYMMDD-firmware-crud` |
 | 6 外部目录对账 / 扫描冷路径 | 同上或独立对账 TASK |
 | **`copied` 私有化拷贝** | 固件 CRUD TASK |
-| PySide6 4.3–4.7 | 回到 `TASK-20260708-pyside6-migration` |
+| PySide6 4.3–4.7 | ✅ 已完成；见 `specs/archive/TASK-20260708-pyside6-migration.md` |
 
 ---
 
@@ -419,6 +419,6 @@ source_relative_path = "L36程序/通用/快捷键/贝乐"
 ## 相关文档
 
 - `specs/prompts/task-exchange.md` — 总序 1–6  
-- `specs/active/TASK-20260708-pyside6-migration.md` — 迁移；4.3+ 暂停  
+- `specs/archive/TASK-20260708-pyside6-migration.md` — PySide6 迁移已完成；分支合并按用户决定暂不执行
 - **`specs/active/TASK-20260716-platform-config-write-safety.md`** — **B0 代码前置**（平台配置严格读 + 原子写）  
 - 现场：`D:\按摩器程序`（固件工作区）/ `L36程序`、`L36双机芯-上3D-下2D程序`（型号根）  
