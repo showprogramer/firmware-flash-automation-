@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
     QHBoxLayout,
+    QDialog,
     QLabel,
     QListWidget,
     QListWidgetItem,
