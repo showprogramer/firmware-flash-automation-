@@ -156,22 +156,23 @@ def test_format_usb_success_failure_and_exception(monkeypatch: pytest.MonkeyPatc
 
     def run_success(*args, **kwargs):
         calls.append((args, kwargs))
-        return SimpleNamespace(returncode=0, stderr="")
+        return SimpleNamespace(returncode=0, stderr="", stdout="")
 
-    monkeypatch.setattr(
-        "fwasset.core.usb_ops.subprocess.run",
-        run_success,
-    )
+    monkeypatch.setattr("fwasset.core.usb_ops.subprocess.run", run_success)
+    monkeypatch.setattr("fwasset.core.usb_ops.time.sleep", lambda s: None)  # mock sleep
     ok1 = format_usb("E:\\", log_fn=log_fn1)
     assert ok1 is True
-    assert calls[0][0][0] == ["format", "E:", "/FS:FAT32", "/Q", "/Y"]
-    assert "shell" not in calls[0][1]
+    cmd = calls[0][0][0]
+    assert cmd[0] == "powershell"
+    assert "-NoProfile" in cmd
+    assert "Format-Volume" in cmd[-1]
+    assert "DriveLetter E" in cmd[-1]
     assert any("格式化完成" in msg for msg in logs1)
 
     logs2, log_fn2 = _logs()
     monkeypatch.setattr(
         "fwasset.core.usb_ops.subprocess.run",
-        lambda *args, **kwargs: SimpleNamespace(returncode=1, stderr="failed"),
+        lambda *args, **kwargs: SimpleNamespace(returncode=1, stderr="failed", stdout=""),
     )
     ok2 = format_usb("E:\\", log_fn=log_fn2)
     assert ok2 is False

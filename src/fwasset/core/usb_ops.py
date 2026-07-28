@@ -1,5 +1,6 @@
 import shutil
 import subprocess
+import time
 from pathlib import Path
 
 import psutil
@@ -267,19 +268,36 @@ $vol.Put()
 
 
 def format_usb(drive: str, log_fn=print) -> bool:
-    """Format USB to FAT32 (dangerous operation, call after explicit confirmation)."""
+    """Format USB to FAT32 using PowerShell Format-Volume.
+
+    Requires explicit user confirmation before calling.
+    """
     letter = _extract_drive_letter(drive)
     if not letter:
         log_fn("  格式化异常: 无效盘符")
         return False
-    command = ["format", f"{letter}:", "/FS:FAT32", "/Q", "/Y"]
+
+    # PowerShell Format-Volume 不需要交互输入，适合脚本化调用
+    script = (
+        f"Format-Volume -DriveLetter {letter} "
+        f"-FileSystem FAT32 -NewFileSystemLabel '' "
+        f"-Confirm:$false -Force"
+    )
     try:
-        log_fn(f"  正在格式化 {drive} ...")
-        result = subprocess.run(command, capture_output=True, text=True, timeout=60)
+        log_fn(f"  正在格式化 {drive} (FAT32) ...")
+        result = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", script],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
         if result.returncode == 0:
+            # 格式化完成后等待驱动器重新就绪再进行后续文件操作
+            time.sleep(2)
             log_fn("  格式化完成")
             return True
-        log_fn(f"  格式化失败: {result.stderr}")
+        msg = (result.stderr or result.stdout or "Format-Volume 失败").strip()
+        log_fn(f"  格式化失败: {msg}")
         return False
     except (subprocess.TimeoutExpired, TimeoutError):
         log_fn("  格式化超时")
