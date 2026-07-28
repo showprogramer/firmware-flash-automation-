@@ -106,7 +106,7 @@ All services in `core/services/` return `dict` matching `ServiceResult`: `{"ok":
 | Service | Error Codes |
 |---------|-------------|
 | scan_service | `"ok"`, `"cancelled"`, `"scan_failed"`, `"index_empty"`, `"index_unavailable"` |
-| flash_service | `"ok"`, `"copy_failed"`, `"service_exception"` |
+| flash_service | `"ok"`, `"format_failed"`, `"copy_failed"`, `"service_exception"` |
 | usb_repair_service | `"ok"`, `"unhealthy"`, `"repair_failed"`, `"service_exception"` |
 | music_flash_service | `"ok"`, `"format_failed"`, `"copy_failed"`, `"service_exception"` |
 

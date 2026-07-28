@@ -114,13 +114,25 @@ uv run pyinstaller fwasset.spec
 
 ## 配置说明
 
-系统行为由项目根目录下的 TOML 文件控制。首次运行前先复制样例配置：
+### 冻结 exe（发布版本）
+
+首次启动时会自动弹出配置向导，引导选择固件根目录。配置写入：
+
+```
+%APPDATA%\fwasset\config.toml
+```
+
+向导完成后直接进入主界面并自动扫描。若选择「跳过」，下次启动时仍会再次提示。
+
+### 开发模式
+
+配置文件位于项目根目录。首次运行前复制样例配置：
 
 ```powershell
 Copy-Item config.example.toml config.toml
 ```
 
-然后按本机环境填写 `config.toml` 中的 `paths.root_dir`（固件根目录路径）和 `paths.tool_root`（外部烧录工具目录路径）。
+按本机环境填写 `config.toml` 中的两个路径字段。
 
 > `config.toml` 是本机运行配置，已在 `.gitignore` 中排除；`firmware_catalog.toml` 是项目级固件类型注册表，随代码版本管理。
 
@@ -128,19 +140,10 @@ Copy-Item config.example.toml config.toml
 
 | 配置段 | 说明 |
 |---|---|
-| `paths.root_dir` | 固件根目录默认路径 |
-| `paths.tool_root` | 外部烧录工具所在目录 |
-| `usb.junk_extensions` | U 盘垃圾文件扩展名列表 |
-| `usb.junk_filenames` | U 盘垃圾文件名列表 |
-| `usb.auto_diagnose_on_insert` | 插入 U 盘时自动诊断 |
-| `usb.health_check_interval_sec` | U 盘健康检查间隔（秒） |
-| `scan.rom_extensions` / `scan.pkg_extensions` | ROM/PKG 文件扩展名 |
-| `scan.exclude_dir_keywords` | 扫描排除的目录关键字 |
-| `scan.model_patterns` | 从文件名提取型号的正则列表 |
-| `scan.version_patterns` | 从文件名提取版本号的正则列表 |
-| `scan.path_model_patterns` | 从路径提取型号的正则列表 |
-| `scan.path_version_patterns` | 从路径提取版本号的正则列表 |
-| `music.default_source_dir` | 音乐固件默认源目录 |
+| `paths.root_dir` | 固件根目录（必填） |
+| `paths.tool_root` | 外部烧录工具目录（预留，暂未启用） |
+
+其余扫描规则、USB 参数等均已硬编码为程序内默认值，不再出现在用户配置文件中。
 
 ### `firmware_catalog.toml` — 固件类型注册表
 
