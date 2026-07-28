@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 import fwasset.core.settings as settings
-from fwasset.core.settings import _as_str_list, _resolve_runtime_dir, ensure_runtime_dir, load_toml_config
+from fwasset.core.settings import _resolve_runtime_dir, ensure_runtime_dir, load_toml_config
 
 
 def test_load_toml_config_missing_file(tmp_path: Path):
@@ -60,17 +60,6 @@ def test_load_toml_config_parser_missing(tmp_path: Path, monkeypatch: pytest.Mon
     assert "tomli" in err
 
 
-
-def test_as_str_list_falls_back_to_default_on_invalid_value():
-    assert _as_str_list("bad", [".rom"], lower=True) == [".rom"]
-
-
-
-def test_as_str_list_falls_back_to_default_on_empty_list():
-    assert _as_str_list([], [".rom"], lower=True) == [".rom"]
-
-
-
 def test_scan_defaults_are_available():
     assert isinstance(settings.TOOL_ROOT, str)
     assert settings.SCAN_ROM_EXTENSIONS == [".rom"]
@@ -80,9 +69,6 @@ def test_scan_defaults_are_available():
     assert settings.SCAN_VERSION_PATTERNS
     assert settings.SCAN_PATH_MODEL_PATTERNS
 
-
-def test_music_defaults_are_available():
-    assert isinstance(settings.MUSIC_DEFAULT_SOURCE_DIR, str)
 
 
 def test_runtime_dir_defaults_to_project_runtime():

@@ -69,37 +69,6 @@ _DEFAULTS = {
         "root_dir": "",
         "tool_root": "",
     },
-    "usb": {
-        "junk_extensions": [".usu", ".tmp", ".bak"],
-        "junk_filenames": ["autorun.inf"],
-        "auto_diagnose_on_insert": True,
-        "health_check_interval_sec": 3,
-    },
-    "scan": {
-        "rom_extensions": [".rom"],
-        "pkg_extensions": [".pkg"],
-        "exclude_dir_keywords": ["CH341SER", "接线图", "旧", "新建文件夹", "照片"],
-        "model_patterns": [r"(?:^|[_\-])((L\d+[A-Za-z]*))(?![A-Za-z0-9])"],
-        "version_patterns": [
-            r"[Vv](\d+\.\d+(?:\.\d+)?(?:_\d+)?)",
-            r"_(\d+\.\d+(?:\.\d+)?(?:_\d+)?)$",
-            r"_UI_(\d+\.\d+(?:\.\d+)?(?:_\d+)?)",
-            r"_(\d+\.\d+\.\d+(?:_\d+))$",
-            r"_(\d+\.\d+\.\d+(?:_\d+)?)$",
-            r"_(\d+_\d+(?:_\d+)?)$",
-            r"(?<![0-9A-Za-z])(\d+\.\d+\.\d+(?:_\d+)?)(?![0-9A-Za-z])",
-        ],
-        "path_model_patterns": [r"(L\d+[A-Za-z]*(?:max|pro|s)?)(?![A-Za-z0-9])"],
-        "path_version_patterns": [
-            r"(?:^|[_\-])([Vv]\d+\.\d+(?:\.\d+)?(?:_\d+)?)(?:[_\-]|$)",
-            r"\b(\d+\.\d+(?:\.\d+)?(?:_\d+))\b",
-            r"\b(\d+\.\d+\.\d+(?:_\d+))\b",
-            r"\b(\d+\.\d+\.\d+)\b",
-        ],
-    },
-    "music": {
-        "default_source_dir": "",
-    },
 }
 
 
@@ -137,45 +106,6 @@ def _cfg_get(cfg: dict, section: str, key: str, default):
     return node.get(key, default)
 
 
-def _as_int(value, default: int) -> int:
-    try:
-        return int(value)
-    except Exception:
-        return default
-
-
-def _as_bool(value, default: bool) -> bool:
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        text = value.strip().lower()
-        if text in {"1", "true", "yes", "on"}:
-            return True
-        if text in {"0", "false", "no", "off"}:
-            return False
-    return default
-
-
-def _as_str_set(values, default: set[str], lower: bool = False) -> set[str]:
-    if not isinstance(values, list):
-        return default
-    out: set[str] = set()
-    for item in values:
-        if isinstance(item, str):
-            out.add(item.lower() if lower else item)
-    return out or default
-
-
-def _as_str_list(values, default: list[str], lower: bool = False) -> list[str]:
-    if not isinstance(values, list):
-        return list(default)
-    out: list[str] = []
-    for item in values:
-        if isinstance(item, str):
-            out.append(item.lower() if lower else item)
-    return out or list(default)
-
-
 def _resolve_path(value, default: str = "") -> str:
     text = str(value or "").strip()
     if not text:
@@ -195,60 +125,28 @@ TOOL_ROOT = _resolve_path(
     _DEFAULTS["paths"]["tool_root"],
 )
 
-JUNK_EXTENSIONS = _as_str_set(
-    _cfg_get(_cfg, "usb", "junk_extensions", _DEFAULTS["usb"]["junk_extensions"]),
-    set(_DEFAULTS["usb"]["junk_extensions"]),
-    lower=True,
-)
-JUNK_FILENAMES = _as_str_set(
-    _cfg_get(_cfg, "usb", "junk_filenames", _DEFAULTS["usb"]["junk_filenames"]),
-    set(_DEFAULTS["usb"]["junk_filenames"]),
-    lower=True,
-)
-USB_AUTO_DIAGNOSE_ON_INSERT = _as_bool(
-    _cfg_get(_cfg, "usb", "auto_diagnose_on_insert", _DEFAULTS["usb"]["auto_diagnose_on_insert"]),
-    True,
-)
-USB_HEALTH_CHECK_INTERVAL_SEC = max(
-    2,
-    _as_int(
-        _cfg_get(_cfg, "usb", "health_check_interval_sec", _DEFAULTS["usb"]["health_check_interval_sec"]),
-        3,
-    ),
-)
+# USB 操作常量（硬编码，不再从用户配置读取）
+JUNK_EXTENSIONS: frozenset[str] = frozenset({".usu", ".tmp", ".bak"})
+JUNK_FILENAMES: frozenset[str] = frozenset({"autorun.inf"})
 
-SCAN_ROM_EXTENSIONS = _as_str_list(
-    _cfg_get(_cfg, "scan", "rom_extensions", _DEFAULTS["scan"]["rom_extensions"]),
-    _DEFAULTS["scan"]["rom_extensions"],
-    lower=True,
-)
-SCAN_PKG_EXTENSIONS = _as_str_list(
-    _cfg_get(_cfg, "scan", "pkg_extensions", _DEFAULTS["scan"]["pkg_extensions"]),
-    _DEFAULTS["scan"]["pkg_extensions"],
-    lower=True,
-)
-SCAN_EXCLUDE_DIR_KEYWORDS = _as_str_list(
-    _cfg_get(_cfg, "scan", "exclude_dir_keywords", _DEFAULTS["scan"]["exclude_dir_keywords"]),
-    _DEFAULTS["scan"]["exclude_dir_keywords"],
-)
-SCAN_MODEL_PATTERNS = _as_str_list(
-    _cfg_get(_cfg, "scan", "model_patterns", _DEFAULTS["scan"]["model_patterns"]),
-    _DEFAULTS["scan"]["model_patterns"],
-)
-SCAN_VERSION_PATTERNS = _as_str_list(
-    _cfg_get(_cfg, "scan", "version_patterns", _DEFAULTS["scan"]["version_patterns"]),
-    _DEFAULTS["scan"]["version_patterns"],
-)
-SCAN_PATH_MODEL_PATTERNS = _as_str_list(
-    _cfg_get(_cfg, "scan", "path_model_patterns", _DEFAULTS["scan"]["path_model_patterns"]),
-    _DEFAULTS["scan"]["path_model_patterns"],
-)
-SCAN_PATH_VERSION_PATTERNS = _as_str_list(
-    _cfg_get(_cfg, "scan", "path_version_patterns", _DEFAULTS["scan"]["path_version_patterns"]),
-    _DEFAULTS["scan"]["path_version_patterns"],
-)
-
-MUSIC_DEFAULT_SOURCE_DIR = _resolve_path(
-    _cfg_get(_cfg, "music", "default_source_dir", _DEFAULTS["music"]["default_source_dir"]),
-    _DEFAULTS["music"]["default_source_dir"],
-)
+# 扫描常量（硬编码，不再从用户配置读取）
+SCAN_ROM_EXTENSIONS: list[str] = [".rom"]
+SCAN_PKG_EXTENSIONS: list[str] = [".pkg"]
+SCAN_EXCLUDE_DIR_KEYWORDS: list[str] = ["CH341SER", "接线图", "旧", "新建文件夹", "照片"]
+SCAN_MODEL_PATTERNS: list[str] = [r"(?:^|[_\-])((L\d+[A-Za-z]*))(?![A-Za-z0-9])"]
+SCAN_VERSION_PATTERNS: list[str] = [
+    r"[Vv](\d+\.\d+(?:\.\d+)?(?:_\d+)?)",
+    r"_(\d+\.\d+(?:\.\d+)?(?:_\d+)?)$",
+    r"_UI_(\d+\.\d+(?:\.\d+)?(?:_\d+)?)",
+    r"_(\d+\.\d+\.\d+(?:_\d+))$",
+    r"_(\d+\.\d+\.\d+(?:_\d+)?)$",
+    r"_(\d+_\d+(?:_\d+)?)$",
+    r"(?<![0-9A-Za-z])(\d+\.\d+\.\d+(?:_\d+)?)(?![0-9A-Za-z])",
+]
+SCAN_PATH_MODEL_PATTERNS: list[str] = [r"(L\d+[A-Za-z]*(?:max|pro|s)?)(?![A-Za-z0-9])"]
+SCAN_PATH_VERSION_PATTERNS: list[str] = [
+    r"(?:^|[_\-])([Vv]\d+\.\d+(?:\.\d+)?(?:_\d+)?)(?:[_\-]|$)",
+    r"\b(\d+\.\d+(?:\.\d+)?(?:_\d+))\b",
+    r"\b(\d+\.\d+\.\d+(?:_\d+))\b",
+    r"\b(\d+\.\d+\.\d+)\b",
+]
