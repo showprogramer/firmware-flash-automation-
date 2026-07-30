@@ -200,18 +200,10 @@ class WorkbenchInterface(QWidget):
         title_row.addWidget(self.header_badge)
         main.addLayout(title_row)
 
-        # 配置提示：跳过首次向导后仍可从工作台直接进入设置。
-        self.configuration_notice = QFrame(self)
-        notice_layout = QHBoxLayout(self.configuration_notice)
-        notice_layout.setContentsMargins(SPACE_SM, SPACE_XS, SPACE_SM, SPACE_XS)
-        notice_layout.setSpacing(SPACE_SM)
-        notice_layout.addWidget(
-            CaptionLabel("尚未配置程序文件夹。请前往“设置”完成配置。", self.configuration_notice)
+        # 配置提示（无按钮）：入口统一由左侧导航「设置」承担。
+        self.configuration_notice = CaptionLabel(
+            "尚未配置程序文件夹，请前往左侧「设置」完成配置。", self
         )
-        notice_layout.addStretch(1)
-        self.open_settings_button = PushButton("前往设置", self.configuration_notice)
-        self.open_settings_button.clicked.connect(self.settings_requested.emit)
-        notice_layout.addWidget(self.open_settings_button)
         self.configuration_notice.setVisible(not bool(self.root_dir.strip()))
         main.addWidget(self.configuration_notice)
 
@@ -1072,7 +1064,8 @@ class QtWorkbenchWindow(FluentWindow):
         if wizard.exec() != QDialog.DialogCode.Accepted:
             return
 
-        next_root = wizard.root_dir()
+        # 留空表示保持原值（方案 A），故用 resolved_* 而非原始输入框内容。
+        next_root = wizard.resolved_root_dir()
         if previous_root and os.path.normcase(previous_root) != os.path.normcase(next_root):
             answer = QMessageBox.question(
                 self,

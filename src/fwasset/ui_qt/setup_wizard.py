@@ -49,18 +49,25 @@ class SetupWizard(QDialog):
 
         layout.addWidget(SubtitleLabel(self.windowTitle(), self))
 
-        description_lines = [
-            "欢迎使用固件资产管理工具。",
-            "请选择固件根目录（存放各型号程序文件夹的目录），配置完成后即可开始使用。",
-            "工具根目录为可选项，留空不影响主要功能。",
-        ]
         if self._allow_skip:
-            description_lines.append("跳过不会保存配置，下次启动仍会显示此向导。也可进入主界面的“设置”完成配置。")
+            description_lines = [
+                "欢迎使用固件资产管理工具。",
+                "请选择固件根目录（存放各型号程序文件夹的目录），配置完成后即可开始使用。",
+                "工具根目录为可选项，留空不影响主要功能。",
+                "跳过不会保存配置，下次启动仍会显示此向导。也可进入主界面的“设置”完成配置。",
+            ]
+        else:
+            description_lines = [
+                "修改程序文件夹路径。",
+                "留空的项将保持当前配置不变。",
+            ]
         desc = BodyLabel("\n".join(description_lines), self)
         desc.setWordWrap(True)
         layout.addWidget(desc)
 
-        self._root_edit, root_row = self._make_path_row("固件根目录（必填）", self._initial_root_dir)
+        # 首次配置时固件根目录必填；修改场景留空表示保持原值（方案 A）。
+        root_label = "固件根目录（必填）" if self._allow_skip else "固件根目录"
+        self._root_edit, root_row = self._make_path_row(root_label, self._initial_root_dir)
         layout.addWidget(root_row)
 
         self._tool_edit, tool_row = self._make_path_row("工具根目录（可选）", self._initial_tool_root)
@@ -94,7 +101,9 @@ class SetupWizard(QDialog):
 
         row = QHBoxLayout()
         edit = QLineEdit(container)
-        edit.setPlaceholderText("点击“浏览”选择目录…")
+        edit.setPlaceholderText(
+            "点击“浏览”选择目录…" if self._allow_skip else "留空保持当前配置"
+        )
         edit.setText(initial_value)
         row.addWidget(edit)
 
@@ -127,12 +136,24 @@ class SetupWizard(QDialog):
     def tool_root(self) -> str:
         return self._tool_edit.text().strip()
 
+    def resolved_root_dir(self) -> str:
+        """实际写入配置的固件根目录：修改场景留空时保持原值。"""
+        return self.root_dir() or ("" if self._allow_skip else self._initial_root_dir.strip())
+
+    def resolved_tool_root(self) -> str:
+        """实际写入配置的工具根目录：修改场景留空时保持原值。"""
+        return self.tool_root() or ("" if self._allow_skip else self._initial_tool_root.strip())
+
     def validate_paths(self) -> str:
-        """返回首个用户可见校验错误；空字符串表示可保存。"""
+        """返回首个用户可见校验错误；空字符串表示可保存。
+
+        首次配置（``allow_skip=True``）强制要求固件根目录有效；
+        修改场景允许留空以保持原配置，但填写的项必须是有效目录。
+        """
         root_dir = self.root_dir()
-        if not root_dir:
+        if self._allow_skip and not root_dir:
             return "请选择固件根目录。"
-        if not Path(root_dir).is_dir():
+        if root_dir and not Path(root_dir).is_dir():
             return "固件根目录不存在或不是目录，请重新选择。"
 
         tool_root = self.tool_root()
@@ -148,8 +169,8 @@ class SetupWizard(QDialog):
             config_path = CONFIG_PATH
 
         config_path.parent.mkdir(parents=True, exist_ok=True)
-        root = self.root_dir().replace("\\", "/")
-        tool = self.tool_root().replace("\\", "/")
+        root = self.resolved_root_dir().replace("\\", "/")
+        tool = self.resolved_tool_root().replace("\\", "/")
         content = (
             "[paths]\n"
             f'root_dir = "{root}"\n'

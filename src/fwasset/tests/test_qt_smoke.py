@@ -87,34 +87,81 @@ def test_setup_wizard_prefills_validates_and_writes_config(qapp, tmp_path) -> No
     assert "工具根目录不存在" in wizard.validate_paths()
 
 
+def test_settings_wizard_blank_root_keeps_current_config(qapp, tmp_path) -> None:
+    """修改场景（allow_skip=False）留空固件根目录时保持原值，不清空配置（方案 A）。"""
+    from fwasset.ui_qt.setup_wizard import SetupWizard
+
+    tool_dir = tmp_path / "tools"
+    tool_dir.mkdir()
+    wizard = SetupWizard(root_dir=str(tmp_path), tool_root="", allow_skip=False)
+
+    # 只改工具根目录，固件根目录留空
+    wizard._root_edit.setText("")
+    wizard._tool_edit.setText(str(tool_dir))
+
+    assert wizard.validate_paths() == ""
+    assert wizard.resolved_root_dir() == str(tmp_path)
+    assert wizard.resolved_tool_root() == str(tool_dir)
+
+    config_path = tmp_path / "config.toml"
+    wizard.write_config(config_path)
+    content = config_path.read_text(encoding="utf-8")
+    assert f'root_dir = "{str(tmp_path).replace(chr(92), "/")}"' in content
+    assert f'tool_root = "{str(tool_dir).replace(chr(92), "/")}"' in content
+
+    # 修改场景不再显示首次配置的欢迎语
+    assert "欢迎使用" not in _dialog_text(wizard)
+
+
+def test_first_run_wizard_still_requires_root(qapp, tmp_path) -> None:
+    """放宽校验只作用于修改场景；首次配置仍强制固件根目录有效。"""
+    from fwasset.ui_qt.setup_wizard import SetupWizard
+
+    wizard = SetupWizard(root_dir="", tool_root="", allow_skip=True)
+    assert "请选择固件根目录" in wizard.validate_paths()
+    assert wizard.resolved_root_dir() == ""
+    assert "欢迎使用" in _dialog_text(wizard)
+
+
+def _dialog_text(widget) -> str:
+    from qfluentwidgets import BodyLabel
+
+    return "\n".join(lbl.text() for lbl in widget.findChildren(BodyLabel))
+
+
 def test_settings_interface_shows_paths_and_emits_configure_request(qapp) -> None:
     from fwasset.ui_qt.settings_interface import SettingsInterface
 
     panel = SettingsInterface()
     panel.set_paths("D:/firmware", "")
-    assert panel.root_path_label.text() == "D:/firmware"
-    assert panel.tool_path_label.text() == "未配置"
+    assert panel.root_card.contentLabel.text() == "D:/firmware"
+    assert panel.tool_card.contentLabel.text() == "未配置"
+    # 完整路径通过 tooltip 可查看，避免长路径截断后不可读
+    assert panel.root_card.toolTip() == "D:/firmware"
 
     requested: list[bool] = []
     panel.configure_requested.connect(lambda: requested.append(True))
-    panel.configure_button.click()
+    panel.root_card.button.click()
     assert requested == [True]
+    panel.tool_card.button.click()
+    assert requested == [True, True]
 
 
-def test_workbench_missing_configuration_notice_opens_settings(qapp) -> None:
+def test_workbench_configuration_notice_visibility(qapp) -> None:
+    """未配置时指示可见、配置后隐藏；不再有「前往设置」按钮（入口统一由导航承担）。"""
     from fwasset.ui_qt.workbench_window import WorkbenchInterface
 
     workbench = WorkbenchInterface()
     workbench._search_timer.stop()
     workbench._model_switch_timer.stop()
-    requested: list[bool] = []
-    workbench.settings_requested.connect(lambda: requested.append(True))
 
     workbench.set_configuration_required(True)
     assert workbench.scan_btn.text() == "重新读取程序文件夹"
     assert not workbench.configuration_notice.isHidden()
-    workbench.open_settings_button.click()
-    assert requested == [True]
+    assert not hasattr(workbench, "open_settings_button")
+
+    workbench.set_configuration_required(False)
+    assert workbench.configuration_notice.isHidden()
 
 def test_settings_completion_reloads_and_reads_new_root(qapp, tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     import fwasset.core.settings as settings
