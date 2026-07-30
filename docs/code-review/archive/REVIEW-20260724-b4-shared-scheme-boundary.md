@@ -1,11 +1,11 @@
-# REVIEW-20260724：B4 共享 / 方案边界硬化收口
+﻿# REVIEW-20260724：B4 共享 / 方案边界硬化收口
 
 | 项 | 内容 |
 | --- | --- |
 | 类型 | Phase B4 / B4b / B6 ViewModel 边界硬化 |
 | 模块 | `ui_common/view_models/scheme_workbench_model.py` |
 | 状态 | ✅ 已修复并人验通过（2026-07-24）；待归档 |
-| 相关 TASK | `specs/active/TASK-20260724-b4-shared-scheme-boundary.md` |
+| 相关 TASK | `specs/archive/TASK-20260724-b4-shared-scheme-boundary.md` |
 
 ## Issue 1（P1·缺口）：方案回源把保留本地副本当通用行 `complexity: medium`
 
@@ -33,7 +33,7 @@ uv run python -m pytest src/fwasset/tests/test_b4_shared_scheme_boundary.py src/
 
 ## 相关文件
 
-- `specs/active/TASK-20260724-b4-shared-scheme-boundary.md`
-- `specs/active/TASK-20260714-config-takeover.md`
+- `specs/archive/TASK-20260724-b4-shared-scheme-boundary.md`
+- `specs/archive/TASK-20260714-config-takeover.md`
 - `src/fwasset/tests/test_b4_shared_scheme_boundary.py`
 - `docs/CHANGELOG.md`

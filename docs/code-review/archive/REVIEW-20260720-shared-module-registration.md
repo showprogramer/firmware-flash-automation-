@@ -1,11 +1,11 @@
-# REVIEW-20260720: 共享登记入口（Phase B2）
+﻿# REVIEW-20260720: 共享登记入口（Phase B2）
 
 | 项 | 内容 |
 | --- | --- |
 | 类型 | 新服务 + 双轨 UI |
 | 模块 | `core/services/shared_module_service`、`core/services/shared_migration_service`、`core/firmware_catalog`、`ui/view_models/scheme_workbench_model`、`ui/workbench_panel`、`ui/workbench_helpers`、`ui_qt/workbench_window` |
 | 状态 | ✅ 已闭环归档：Qt 人验 3 场景通过（2026-07-23）；代码已提交；CTk 留待 B3 切默认入口时随带验证 |
-| 相关 TASK | `specs/active/TASK-20260720-shared-module-registration.md`（裁剪后）、`specs/active/TASK-20260723-firmware-ref-migration.md`（迁移后置） |
+| 相关 TASK | `specs/archive/TASK-20260720-shared-module-registration.md`（裁剪后）、`specs/active/TASK-20260723-firmware-ref-migration.md`（迁移后置） |
 | 审查日期 | 2026-07-20（Issue 1 修复并入本 TASK；2026-07-23 范围裁剪 + 人验 + commit） |
 
 ## 范围调整（2026-07-23）

@@ -1,4 +1,4 @@
-# TASK-20260718: 共享引用 schema + 解析器（Phase B1）
+﻿# TASK-20260718: 共享引用 schema + 解析器（Phase B1）
 
 > **For Hermes:** 实施时使用 `test-driven-development`，逐项 RED → GREEN → REFACTOR；本 TASK 动 core（`型号配置.toml` 共享段读写 + 新解析器）与工作台 view model，**必须人工验证通过后才能 commit**。
 
@@ -8,7 +8,7 @@
 | --- | --- |
 | 类型 | 父任务 Phase B1（B2–B3 前置） |
 | 当前状态 | ✅ 数据层验收通过并提交 |
-| 父任务 | `specs/active/TASK-20260714-config-takeover.md`（B1 专节 + 落盘文件专节为契约源） |
+| 父任务 | `specs/archive/TASK-20260714-config-takeover.md`（B1 专节 + 落盘文件专节为契约源） |
 | 分支 | 继续 `feature/pyside6-migration`（或按父任务约定，实施前定） |
 | 前置（代码） | **B0**（`TASK-20260717`）已提交（`1c287b8`）；`TASK-20260716`（原子写）已提交（`72d1cca`） |
 | 后续 | 本 TASK 人验并提交后，才开始 B2（登记入口）/ B3（UI 共享态） |
@@ -244,7 +244,7 @@ Expected: 全部非 UI 通过；coverage ≥ 80%；UI 测试 deselect。
 **Files:**
 - Create `docs/code-review/REVIEW-20260718-shared-module-schema.md`（类型：核心配置扩展 / 新解析器；问题：跨型号共享需稳定引用 + 命中/缺失一套解析；处理：`型号配置.toml` `[shared_modules]` 读-合并-写回 + `resolve_shared_module`；验证记录；人验状态；commit 后补哈希）
 - Modify `docs/CHANGELOG.md`（Unreleased 增条目）
-- Modify `specs/active/TASK-20260714-config-takeover.md`（B1 checklist 勾选、注明 `TASK-20260718` 承载；解锁 B2–B3）
+- Modify `specs/archive/TASK-20260714-config-takeover.md`（B1 checklist 勾选、注明 `TASK-20260718` 承载；解锁 B2–B3）
 - Modify 本文件状态与 DoD
 
 ---
@@ -304,7 +304,7 @@ feat(core): 共享引用 schema + 解析器（Phase B1）
 | Modify | `src/fwasset/tests/test_scheme_workbench_model.py` | API / B4 隔离 / 回归 |
 | Create | `docs/code-review/REVIEW-20260718-shared-module-schema.md` | 审查记录 |
 | Modify | `docs/CHANGELOG.md` | 未发布变更 |
-| Modify | `specs/active/TASK-20260714-config-takeover.md` | B1 勾选、解锁 B2–B3 |
+| Modify | `specs/archive/TASK-20260714-config-takeover.md` | B1 勾选、解锁 B2–B3 |
 | Modify | 本文件 | 进度 |
 
 预计不改：`platform_config.py` / `save_platform_config`、`scheme_config.py` 回源、`get_scheme_modules` / `get_scheme_module_tree`、`types.py`、数据库 schema、CTk/Qt 面板渲染、`D:\按摩器程序`。
@@ -313,20 +313,20 @@ feat(core): 共享引用 schema + 解析器（Phase B1）
 
 ## Definition of Done
 
-- [ ] `SharedModuleRef` 四字段（无 `mode`）；`load_shared_modules` 读回、缺字段条目按固定策略处理、容错不抛。
-- [ ] **统一 dict 合并写 helper（`tomli-w`）**：`save_model_id` / `save_shared_module` / `remove_shared_module` 三者共用；`save_model_id` 弃行级替换；合并 = 改现有完整 dict 的键、非重建。
-- [ ] `save_shared_module` / `remove_shared_module` **读-合并-写回**：保留 `model_id`、保留其它共享段与**未知 table**；同键幂等覆盖；删除只动 toml 不删固件文件；固定重打文件头注释；经 `atomic_write_text`（失败无半成品/`.tmp`）。
-- [ ] **B0 往返**：`save_model_id` ↔ `save_shared_module` 互不丢段；B0 既有测试全过。
-- [ ] `tomli-w` 加入 `pyproject.toml` `dependencies`（无条件）。
-- [ ] `resolve_shared_module` 一套路径：命中（`variants` 按叶子/模块目录判定产出、过滤噪声、排序、永不为空）；缺失四因（源未导入 / 路径无 / id 不符 / 越界）；**不**跨型号搜同名、**不**回落本地副本、**不**递归引用链。
-- [ ] `source_relative_path` 相对工作区根；路径首段 id 校验；`..` 越界拒绝。
-- [ ] view model `get_shared_modules` / `resolve_shared_module` 可用；型号根枚举不落 `通用/`。
-- [ ] **B4 隔离**：`get_scheme_modules` / `get_scheme_module_tree` 不含共享行；回源代码未被改。
-- [ ] **无 `mode`**；共享引用**只**存 `型号配置.toml`，**不**进 SQLite 索引 / 不改 `types.py` / schema。
-- [ ] 不写 `平台配置.toml`；设默认后共享段与 `model_id` 保留。
-- [ ] `pytest -m "not ui"` 通过且 coverage ≥ 80%；未自动启动 UI；未破坏性写入 `D:\按摩器程序`。
-- [ ] CHANGELOG、审查文档、父任务 B1 状态同步。
-- [ ] 人验通过后按模板提交；B2–B3 才解除阻塞。
+- [x] `SharedModuleRef` 四字段（无 `mode`）；`load_shared_modules` 读回、缺字段条目按固定策略处理、容错不抛。
+- [x] **统一 dict 合并写 helper（`tomli-w`）**：`save_model_id` / `save_shared_module` / `remove_shared_module` 三者共用；`save_model_id` 弃行级替换；合并 = 改现有完整 dict 的键、非重建。
+- [x] `save_shared_module` / `remove_shared_module` **读-合并-写回**：保留 `model_id`、保留其它共享段与**未知 table**；同键幂等覆盖；删除只动 toml 不删固件文件；固定重打文件头注释；经 `atomic_write_text`（失败无半成品/`.tmp`）。
+- [x] **B0 往返**：`save_model_id` ↔ `save_shared_module` 互不丢段；B0 既有测试全过。
+- [x] `tomli-w` 加入 `pyproject.toml` `dependencies`（无条件）。
+- [x] `resolve_shared_module` 一套路径：命中（`variants` 按叶子/模块目录判定产出、过滤噪声、排序、永不为空）；缺失四因（源未导入 / 路径无 / id 不符 / 越界）；**不**跨型号搜同名、**不**回落本地副本、**不**递归引用链。
+- [x] `source_relative_path` 相对工作区根；路径首段 id 校验；`..` 越界拒绝。
+- [x] view model `get_shared_modules` / `resolve_shared_module` 可用；型号根枚举不落 `通用/`。
+- [x] **B4 隔离**：`get_scheme_modules` / `get_scheme_module_tree` 不含共享行；回源代码未被改。
+- [x] **无 `mode`**；共享引用**只**存 `型号配置.toml`，**不**进 SQLite 索引 / 不改 `types.py` / schema。
+- [x] 不写 `平台配置.toml`；设默认后共享段与 `model_id` 保留。
+- [x] `pytest -m "not ui"` 通过且 coverage ≥ 80%；未自动启动 UI；未破坏性写入 `D:\按摩器程序`。
+- [x] CHANGELOG、审查文档、父任务 B1 状态同步。
+- [x] 人验通过后按模板提交；B2–B3 才解除阻塞。（实现提交：`4c8b6db` + 修复 `fafd65a`）
 
 ## Risks and Trade-offs
 

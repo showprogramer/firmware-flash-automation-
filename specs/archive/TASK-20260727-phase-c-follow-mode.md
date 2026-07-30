@@ -1,13 +1,13 @@
-# TASK-20260727：Phase C — 自动更新 / 固定版本模式
+﻿# TASK-20260727：Phase C — 自动更新 / 固定版本模式
 
 ## 状态
 
 | 项 | 状态 |
 | --- | --- |
 | 类型 | Phase C 设计 + 分解（xhigh 主线；子 TASK 立项前置） |
-| 当前状态 | 📐 设计完成，待逐 子TASK 开工 |
+| 当前状态 | ✅ Phase C C0–C3 人验通过（2026-07-27）；DoD 全部勾选；后续 `follow_default` 匹配 / 容错修复见 commit `3f6b545` / `66e9720` / `9132353` |
 | 前置 | Phase B（B0–B6）已全部人验通过并提交 |
-| 父任务 | `specs/active/TASK-20260714-config-takeover.md`（Phase C 节） |
+| 父任务 | `specs/archive/TASK-20260714-config-takeover.md`（Phase C 节） |
 | 分支 | `feature/pyside6-migration`（或从此处切子分支） |
 | 验收界面 | Qt-only |
 
@@ -185,8 +185,8 @@ source_platform: str = ""  # 仅 follow_default 有效
 
 ## 相关文档
 
-- 父任务：`specs/active/TASK-20260714-config-takeover.md`（Phase C 节）
-- Phase B 共享登记：`specs/active/TASK-20260720-shared-module-registration.md`
+- 父任务：`specs/archive/TASK-20260714-config-takeover.md`（Phase C 节）
+- Phase B 共享登记：`specs/archive/TASK-20260720-shared-module-registration.md`
 - 解析器：`src/fwasset/core/shared_module_resolver.py`
 - 数据层：`src/fwasset/core/model_config.py`
 - 平台配置服务：`src/fwasset/core/services/platform_default_service.py`

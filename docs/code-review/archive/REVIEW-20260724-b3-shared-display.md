@@ -1,11 +1,11 @@
-# REVIEW-20260724：B3 共享模块展示与烧录候选
+﻿# REVIEW-20260724：B3 共享模块展示与烧录候选
 
 | 项 | 内容 |
 | --- | --- |
 | 类型 | Phase B3 Qt UI / 共享候选收敛 |
 | 模块 | `ui_common/view_models/scheme_workbench_model.py`、`ui_qt/data_grid.py`、`ui_qt/workbench_window.py` |
 | 状态 | 🟡 实现与自动化完成，待归档；Qt 人工验证已通过（2026-07-24） |
-| 相关 TASK | `specs/active/TASK-20260724-b3-shared-display.md` |
+| 相关 TASK | `specs/archive/TASK-20260724-b3-shared-display.md` |
 
 ## 处理内容
 
@@ -31,6 +31,6 @@ B3 + scheme model tests
 
 ## 相关文件
 
-- `specs/active/TASK-20260724-b3-shared-display.md`
-- `specs/active/TASK-20260714-config-takeover.md`
+- `specs/archive/TASK-20260724-b3-shared-display.md`
+- `specs/archive/TASK-20260714-config-takeover.md`
 - `docs/CHANGELOG.md`

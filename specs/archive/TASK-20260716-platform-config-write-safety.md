@@ -1,4 +1,4 @@
-# TASK-20260716: 平台配置读取与原子写盘安全收口
+﻿# TASK-20260716: 平台配置读取与原子写盘安全收口
 
 > **For Hermes:** 实施时使用 `test-driven-development`，逐项完成 RED → GREEN → REFACTOR；本 TASK 涉及核心配置逻辑，必须在人工验证通过后才能 commit。
 
@@ -8,7 +8,7 @@
 | --- | --- |
 | 类型 | Phase A.1 安全收口 / Phase B0 前置 |
 | 当前状态 | ✅ 人验通过并提交 |
-| 父任务 | `specs/active/TASK-20260714-config-takeover.md` |
+| 父任务 | `specs/archive/TASK-20260714-config-takeover.md` |
 | 分支 | 建议从 `feature/pyside6-migration` 当前 HEAD 切 `feature/config-takeover` 后实施 |
 | 前置 | Phase A 已提交并人验通过（`094f441`） |
 | 后续 | 本 TASK 人验并提交后，才开始父任务 Phase B0 |
@@ -424,7 +424,7 @@ FWASSET_UI=qt uv run fwasset
 
 - Create: `docs/code-review/REVIEW-20260716-platform-config-safety.md`
 - Modify: `docs/CHANGELOG.md`
-- Modify: `specs/active/TASK-20260714-config-takeover.md`
+- Modify: `specs/archive/TASK-20260714-config-takeover.md`
 - Modify: 本文件状态与 checklist
 
 审查文档记录：
@@ -524,8 +524,8 @@ fix(core): 防止平台配置损坏时被覆盖
 | Modify | `src/fwasset/tests/test_scheme_workbench_model.py` | 工作台失败透传与 Phase A 回归 |
 | Create | `docs/code-review/REVIEW-20260716-platform-config-safety.md` | 核心配置审查记录 |
 | Modify | `docs/CHANGELOG.md` | 未发布变更 |
-| Modify | `specs/active/TASK-20260714-config-takeover.md` | 标记 B0 前置状态 |
-| Modify | `specs/active/TASK-20260716-platform-config-write-safety.md` | 实施与验收进度 |
+| Modify | `specs/archive/TASK-20260714-config-takeover.md` | 标记 B0 前置状态 |
+| Modify | `specs/archive/TASK-20260716-platform-config-write-safety.md` | 实施与验收进度 |
 
 预计不改：
 
@@ -539,20 +539,20 @@ fix(core): 防止平台配置损坏时被覆盖
 
 ## Definition of Done
 
-- [ ] 严格读取能区分 `ok` / `missing` / `parse_error` / `parser_missing`。
-- [ ] 原 `load_platform_config()` 兼容接口未破坏。
-- [ ] 损坏 TOML 和解析器缺失时，两个写 API 都拒绝写入。
-- [ ] 失败结果保持标准 `ServiceResult` 四键结构和中文消息。
-- [ ] `save_platform_config()` 使用同目录临时文件 + `os.replace`。
-- [ ] 写入/替换失败时原文件不变、无临时文件残留。
-- [ ] 无配置首次初始化、方案 platform bootstrap、全块同步、A4/A5 行为不回退。
-- [ ] 针对性纯数据层测试通过。
-- [ ] `pytest -m "not ui"` 通过且 coverage >= 80%。
-- [ ] 未自动启动 UI，未自动运行 UI 测试。
-- [ ] CTk + Qt 人工验证通过。
-- [ ] 未对 `D:\按摩器程序` 做故障注入或破坏性验证。
-- [ ] CHANGELOG、代码审查文档、父任务状态同步。
-- [ ] 人工确认后按模板提交；B0 才解除阻塞。
+- [x] 严格读取能区分 `ok` / `missing` / `parse_error` / `parser_missing`。
+- [x] 原 `load_platform_config()` 兼容接口未破坏。
+- [x] 损坏 TOML 和解析器缺失时，两个写 API 都拒绝写入。
+- [x] 失败结果保持标准 `ServiceResult` 四键结构和中文消息。
+- [x] `save_platform_config()` 使用同目录临时文件 + `os.replace`。
+- [x] 写入/替换失败时原文件不变、无临时文件残留。
+- [x] 无配置首次初始化、方案 platform bootstrap、全块同步、A4/A5 行为不回退。
+- [x] 针对性纯数据层测试通过。
+- [x] `pytest -m "not ui"` 通过且 coverage >= 80%。
+- [x] 未自动启动 UI，未自动运行 UI 测试。
+- [x] CTk + Qt 人工验证通过。
+- [x] 未对 `D:\按摩器程序` 做故障注入或破坏性验证。
+- [x] CHANGELOG、代码审查文档、父任务状态同步。
+- [x] 人工确认后按模板提交；B0 才解除阻塞。（实现提交：`72d1cca`）
 
 ## Risks and Trade-offs
 

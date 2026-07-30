@@ -5,7 +5,7 @@
 | 项 | 状态 |
 | --- | --- |
 | 类型 | UI 工作流 + 配置入口完善 |
-| 当前状态 | ✅ 已完成；冻结 exe 人工验证于 2026-07-28 通过，待提交 |
+| 当前状态 | ✅ 已完成并提交（`a8f3691`）；冻结 exe 人工验证于 2026-07-28 通过 |
 | 前置 | `TASK-20260728-config-usb-simplification.md` 的配置迁移已实施；REVIEW Issue 1–6 已关闭，Issue 7 待人工验证后提交 |
 | 父任务 | `TASK-20260728-config-usb-simplification.md`（原 Task 2 的“后期统一收入设置”决策落地） |
 | 分支 | `feature/pyside6-migration` |

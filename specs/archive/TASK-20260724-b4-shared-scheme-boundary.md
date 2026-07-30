@@ -1,4 +1,4 @@
-# TASK-20260724：B4 共享 / 方案边界硬化收口
+﻿# TASK-20260724：B4 共享 / 方案边界硬化收口
 
 ## 状态
 
@@ -7,7 +7,7 @@
 | 类型 | Phase B4 / B4b / B6 硬化收口 |
 | 当前状态 | ✅ 已完成：实现、自动化与 Qt 人工验证通过（2026-07-24，场景 4/6/7/8） |
 | 前置 | B3（`TASK-20260724-b3-shared-display`）已完成并人验；Qt-only |
-| 父任务 | `specs/active/TASK-20260714-config-takeover.md`（B4 / B4b / B6 专节已写死） |
+| 父任务 | `specs/archive/TASK-20260714-config-takeover.md`（B4 / B4b / B6 专节已写死） |
 | 分支 | `feature/pyside6-migration` |
 | 验收界面 | Qt-only |
 
@@ -97,7 +97,7 @@
 
 - Modify `docs/CHANGELOG.md`
 - Create `docs/code-review/REVIEW-20260724-b4-shared-scheme-boundary.md`
-- Modify `specs/active/TASK-20260714-config-takeover.md`（勾选 B4 行，人验通过后）
+- Modify `specs/archive/TASK-20260714-config-takeover.md`（勾选 B4 行，人验通过后）
 
 **验收：**
 
@@ -124,6 +124,6 @@
 
 ## 相关文档
 
-- 父任务：`specs/active/TASK-20260714-config-takeover.md`
-- B3：`specs/active/TASK-20260724-b3-shared-display.md`
+- 父任务：`specs/archive/TASK-20260714-config-takeover.md`
+- B3：`specs/archive/TASK-20260724-b3-shared-display.md`
 - `.ref` 后置：**已关闭** → `specs/archive/TASK-20260723-firmware-ref-migration.md`

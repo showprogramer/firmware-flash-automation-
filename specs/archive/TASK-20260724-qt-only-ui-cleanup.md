@@ -1,4 +1,4 @@
-# TASK-20260724：Qt 唯一支持界面清理（B3 前置）
+﻿# TASK-20260724：Qt 唯一支持界面清理（B3 前置）
 
 ## 状态
 
@@ -114,7 +114,7 @@
 - Verify `src/fwasset/tests/test_qt_smoke.py`
 - Verify B2 shared registration tests
 - Modify `docs/CHANGELOG.md`
-- Modify `specs/active/TASK-20260714-config-takeover.md`
+- Modify `specs/archive/TASK-20260714-config-takeover.md`
 - Create or update B3 task to state Qt-only acceptance
 
 **验收步骤：**
@@ -132,7 +132,7 @@
 
 ## 相关文件
 
-- `specs/active/TASK-20260720-shared-module-registration.md`
-- `specs/active/TASK-20260714-config-takeover.md`
+- `specs/archive/TASK-20260720-shared-module-registration.md`
+- `specs/archive/TASK-20260714-config-takeover.md`
 - `specs/archive/TASK-20260723-firmware-ref-migration.md`（`.ref` 迁移已 NO-GO 关闭）
 - `docs/code-review/archive/REVIEW-20260720-shared-module-registration.md`

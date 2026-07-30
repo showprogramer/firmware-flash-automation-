@@ -1,6 +1,26 @@
-# 记录变更
+﻿# 记录变更
 
 ## Unreleased
+
+### refactor(ui): 设置页 UI 重做 + 工作台重复入口清理（TASK-20260729）
+
+- 删除工作台主区「前往设置」按钮与其所在 QFrame 提示条；未配置状态保留为纯文字 `CaptionLabel`，设置入口统一由左侧导航承担；`settings_requested` 信号及「重新读取程序文件夹」→ 跳转设置页路径保持不变。
+- 设置页改用 `SettingCardGroup` + `PushSettingCard`（固件根目录 / 工具根目录各一张卡）替换裸 `QFrame`；路径显示改为响应式省略（`_elide_paths()` + `resizeEvent`），tooltip 始终显示完整路径；`SETTINGS_CARD_MAX_WIDTH = 760` 提取至 `design_tokens.py`；对外契约 `set_paths()` / `configure_requested` 保持不变。
+- `setup_wizard.py`：修改场景（`allow_skip=False`）改用简化描述文案，留空固件根目录保持原值（方案 A）。
+- 测试重写：`test_workbench_missing_configuration_notice_opens_settings` → `test_workbench_configuration_notice_visibility`，新增卡片路径、tooltip 与无 `open_settings_button` 断言。
+
+验证：`pytest src/fwasset/tests/test_qt_smoke.py` → 26 passed；`pytest -m "not ui"` → 357 passed。人工验收待完成（见 TASK-20260729 验收清单）。
+
+### docs: 收口并批量归档 2026-07 完成态 TASK + REVIEW
+
+- 父/总 TASK 补最终验证记录后整体归档：
+  - `TASK-20260714-config-takeover`（父任务；Phase A→C 全部人验通过；子 phase TASK 全部已归档）
+  - `TASK-20260728-config-usb-simplification`（父任务；T1/T2/T3 实现人验通过；REVIEW Issue 1–7 已闭环；后续设页入口由 `TASK-20260728-program-folder-settings-entry` 承接）
+- 各 Phase 子 TASK 补齐 DoD 勾选/状态头后归档：`TASK-20260706-ui-review`、`TASK-20260716-platform-config-write-safety`、`TASK-20260717-model-persistent-id`、`TASK-20260718-shared-module-schema`、`TASK-20260720-shared-module-registration`、`TASK-20260724-b3-shared-display`、`TASK-20260724-b4-shared-scheme-boundary`、`TASK-20260724-qt-only-ui-cleanup`、`TASK-20260727-phase-c-follow-mode`、`TASK-20260728-program-folder-settings-entry`。
+- 旧 CTk 工作台计划 `TASK-20260609-ui-rewrite-plan` 归档并标 ⛔「被后续方案取代」：旧 UI 计划 → PySide6 迁移 → Qt-only 收敛 → 配置/工作区统一 → 即将独立立项的 firmware CRUD 父 TASK；§5 未勾的 CRUD 设想不视作未完成工作。
+- 配套 5 份 REVIEW 移入 `docs/code-review/archive/`：`REVIEW-20260716-platform-config-safety`、`REVIEW-20260717-model-persistent-id`、`REVIEW-20260718-shared-module-schema`、`REVIEW-20260724-b3-shared-display`、`REVIEW-20260724-b4-shared-scheme-boundary`；`archive/INDEX.md` 同步补齐。
+- 同步更新仍在使用的交叉引用：`docs/CHANGELOG.md` 中 0609/0606/0723 路径与 PySide6 归档总 TASK 内 `../active/TASK-20260714-*` / `../active/TASK-20260724-qt-only-ui-cleanup.md` forward refs 改为归档路径；`docs/code-review/README.md` 当前有效表清空。
+- `specs/active/` 现仅承载待立项的新计划（如 firmware CRUD 父 TASK）。
 
 ### docs: 收口并归档 PySide6 迁移总 TASK
 
@@ -119,7 +139,7 @@
 - 删除：`workbench_helpers.py::filter_chosen_for_conflict`（仅迁移跨型号同名冲突批量过滤用）+ `shared_migration_button_label` / `shared_migration_dialog_title` + 对应测试。
 - 保留：`shared_source_picker_caption`（手动登记来源选择对话框使用）。
 - 理由：`-同X` / `.ref` 现场仍是占位、未整理完；优先级倒置（先做迁移再看不到共享效果）是"设置方式奇怪"的根；个位数关系手登记比写迁移器更快。
-- 迁移能力整建制移至 `specs/active/TASK-20260723-firmware-ref-migration.md`，待 B3 落地、烧录员真正用上共享后再评估是否重启；NO-GO 则关闭归档。
+- 迁移能力整建制移至 `specs/archive/TASK-20260723-firmware-ref-migration.md`，待 B3 落地、烧录员真正用上共享后再评估是否重启；NO-GO 则关闭归档。
 
 审查修复（裁剪前已完成，记录在档；裁剪后随迁移整迁出 B2）：
 
@@ -336,7 +356,7 @@
 验证:
 - `python -m py_compile src\fwasset\ui\base_panel.py src\fwasset\ui\workbench_panel.py src\fwasset\ui\operation_panels\host_types.py src\fwasset\ui\operation_panels\shared_actions.py src\fwasset\ui\view_models\scheme_workbench_model.py` -> passed
 - `python -m pytest -m "not ui" -q --no-cov` -> **188 passed, 34 deselected**（34 项 UI 标记测试需在有 display 的环境人验）
-- 对应规划：`specs/active/TASK-20260706-ui-review.md` 全部勾选
+- 对应规划：`specs/archive/TASK-20260706-ui-review.md` 全部勾选
 - 对应审查：`docs/code-review/archive/REVIEW-20260706-ui-review-bugfix.md`
 
 ### refactor(ui): Step D 工作台查询体验收尾

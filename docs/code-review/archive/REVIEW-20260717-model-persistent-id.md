@@ -1,11 +1,11 @@
-# REVIEW-20260717: 型号持久 id（Phase B0）
+﻿# REVIEW-20260717: 型号持久 id（Phase B0）
 
 | 项 | 内容 |
 | --- | --- |
 | 类型 | 核心配置 / 新服务 |
 | 模块 | `core/model_config.py`、`core/services/model_id_service.py`、`scheme_workbench_model` |
 | 状态 | ✅ 人验通过，已提交 |
-| 相关 TASK | `specs/active/TASK-20260717-model-persistent-id.md` |
+| 相关 TASK | `specs/archive/TASK-20260717-model-persistent-id.md` |
 
 ## 问题描述
 

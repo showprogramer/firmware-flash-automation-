@@ -1,11 +1,11 @@
-# REVIEW-20260720: 共享登记入口独立审查（Phase B2）
+﻿# REVIEW-20260720: 共享登记入口独立审查（Phase B2）
 
 | 项 | 内容 |
 | --- | --- |
 | 类型 | 独立代码审查：新服务 + 双轨 UI |
 | 模块 | `shared_module_service`、`shared_migration_service`、`firmware_catalog`、`scheme_workbench_model`、`workbench_panel`、`workbench_window` |
 | 状态 | ✅ **已闭环归档**；范围调整后迁移议题移交后置 TASK；Qt 人验 3 场景通过（2026-07-23），CTk 待 B3；见下方「范围调整生效说明」 |
-| 相关 TASK | `specs/active/TASK-20260720-shared-module-registration.md`（裁剪后）、`specs/active/TASK-20260723-firmware-ref-migration.md`（迁移后置） |
+| 相关 TASK | `specs/archive/TASK-20260720-shared-module-registration.md`（裁剪后）、`specs/active/TASK-20260723-firmware-ref-migration.md`（迁移后置） |
 | 审查日期 | 独立审查 2026-07-20；核对+修复 2026-07-20；范围调整 + 人验 2026-07-23 |
 | 被审记录 | `REVIEW-20260720-shared-module-registration.md`（实现自检，保留不改） |
 
@@ -101,7 +101,7 @@ uv run python -m pytest -m "not ui" -q
 ### Issue 4（P2·流程）：父任务 B2 过早标记完成  `complexity: low`
 
 **复杂度理由：** 仅改父任务 checklist 一行 `[x] → [ ]` + 加注；纯文档，不动代码。
-**文件：** `specs/active/TASK-20260714-config-takeover.md:378`
+**文件：** `specs/archive/TASK-20260714-config-takeover.md:378`
 
 父任务已将 B2 标为 `[x]`，但当前任务仍有未关闭阻断项，且尚未人工验证。项目规则要求 UI 和核心流程改动在人工验证通过后才能标记完成和提交。
 

@@ -1,4 +1,6 @@
-# TASK-20260706 · UI Code Review Bugfix Plan
+﻿# TASK-20260706 · UI Code Review Bugfix Plan
+
+> ⛔ **已完成并归档（2026-07-06）**：6 项 P0/P1/P2 全部勾选；统一提交 `b35bb48`；自动化门禁 195 passed。代码审查见 `docs/code-review/archive/REVIEW-20260706-ui-review-bugfix.md`；时代背景为旧 CTk 工作台，已被 PySide6 迁移 → Qt-only 链路取代，本 TASK 仅作历史快照保存。
 
 > 来源：`docs/code-review/ui_code_review.pdf` 第 6 节「具体代码缺陷与待修复清单」
 > 当前基线：Step D 已提交（`refactor(ui): polish workbench step d experience`）。
@@ -147,7 +149,7 @@ python -m py_compile src\fwasset\ui\base_panel.py src\fwasset\ui\workbench_panel
 
 ## 5. 实际提交记录
 
-经用户拍板，按 1 个综合 commit 一次性提交（避免 `workbench_panel.py` 被多个 commit 拆分 hunk 带来的 staging 风险），完全合入 `specs/active/TASK-20260609-ui-rewrite-plan.md` Step D 之后的同一个分支 `feature/ui-workbench-redesign`：
+经用户拍板，按 1 个综合 commit 一次性提交（避免 `workbench_panel.py` 被多个 commit 拆分 hunk 带来的 staging 风险），完全合入 `specs/archive/TASK-20260609-ui-rewrite-plan.md` Step D 之后的同一个分支 `feature/ui-workbench-redesign`：
 
 - `b35bb48` · `fix(ui): 加固工作台契约、性能与归属显示`
   - P0-1 / P0-2 / P1-1 / P1-2 / P2-1 / P2-2 全部 6 项主任务

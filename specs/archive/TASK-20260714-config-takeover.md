@@ -1,11 +1,11 @@
-# TASK-20260714: 软件接管配置（型号默认 → 共享引用）
+﻿# TASK-20260714: 软件接管配置（型号默认 → 共享引用）
 
 ## 状态
 
 | 项 | 状态 |
 | --- | --- |
 | 分支建议 | 可在 `feature/pyside6-migration` 上继续，或切 `feature/config-takeover`（实施前定） |
-| **当前主线** | ⏳ **是**（本文件契约）；**Phase A 人验通过**（2026-07-14） |
+| **当前主线** | ✅ **已完成**（本文件契约）；Phase A→C 全部人验通过并提交；子 TASK 全部已归档至 `specs/archive/` |
 | **实现顺序（写死）** | ① 本文件契约收口 → ② **`TASK-20260716-platform-config-write-safety`**（平台配置严格读 + 原子写）人验提交 → ③ 本 TASK **B0** → B1… |
 | 前置（代码） | Phase A 已提交（`094f441`）；**B0 开工前**必须完成 `TASK-20260716` |
 | 入口现状 | Qt 已为默认且唯一支持界面；Qt-only 清理与打包由 `TASK-20260724-qt-only-ui-cleanup.md` 收口 |
@@ -350,7 +350,7 @@ source_relative_path = "L36程序/通用/快捷键/贝乐"
 | **`copied`** | 复制到本型号后脱钩 | ❌ → firmware-crud |
 
 - Phase C 才允许在 `shared_modules` 增加 `mode` 及必要映射字段。
-- **设计已完成**（platform 映射采用 per-ref 显式方案）→ 见 `specs/active/TASK-20260727-phase-c-follow-mode.md`。  
+- **设计已完成**（platform 映射采用 per-ref 显式方案）→ 见 `specs/archive/TASK-20260727-phase-c-follow-mode.md`。  
 - **pinned ≠ 拷贝**。防误：源升级时 pinned 不被误伤；follow 有意跟随。
 
 ### 明确不做（本 TASK 内）
@@ -381,6 +381,18 @@ source_relative_path = "L36程序/通用/快捷键/贝乐"
 - [x] **B4 / B4b / B6** 回源不跳共享；本地副本覆盖规则；缺失不回落本地；人验 4、6、7、8 → 子 TASK：`TASK-20260724-b4-shared-scheme-boundary.md`（2026-07-24 Qt 人验通过）
 - [x] **C** `mode` = follow_default / pinned + platform 映射 → 子 TASK：`TASK-20260727-phase-c-follow-mode.md`（2026-07-27 人验通过）
 - [x] 本 TASK 收尾：CHANGELOG、审查笔记（若动 types/服务契约）
+
+### 最终验证记录（2026-07-28 收口）
+
+- Phase A：`094f441`（2026-07-14 人验通过）
+- Phase A.1 / `TASK-20260716` 平台配置严格读 + 原子写盘：`72d1cca`
+- B0 / `TASK-20260717` 型号持久 id：`1c287b8`
+- B1 / `TASK-20260718` 共享引用 schema + 解析器：`4c8b6db` + 修复 `fafd65a`
+- B2 / `TASK-20260720` 手动登记入口（Qt-only 收口 `TASK-20260724-qt-only-ui-cleanup`）：`1a03706`
+- B3 / `TASK-20260724-b3-shared-display`：2026-07-24 Qt 人验通过
+- B4/B4b/B6 / `TASK-20260724-b4-shared-scheme-boundary`：`c6e9819`，2026-07-24 Qt 人验场景 4/6/7/8 通过
+- C / `TASK-20260727-phase-c-follow-mode`（C0–C3）：`f8e196a`→`0229b9e`→`cc3fc40`+`cc12add`，2026-07-27 人验通过；后续修复 `3f6b545`、`66e9720`、`9132353`
+- 子 TASK 全部已归档至 `specs/archive/`；本父 TASK 同步归档；后续 firmware CRUD 由独立父 TASK 承接
 
 ---
 
@@ -420,5 +432,5 @@ source_relative_path = "L36程序/通用/快捷键/贝乐"
 
 - `specs/prompts/task-exchange.md` — 总序 1–6  
 - `specs/archive/TASK-20260708-pyside6-migration.md` — PySide6 迁移已完成；分支合并按用户决定暂不执行
-- **`specs/active/TASK-20260716-platform-config-write-safety.md`** — **B0 代码前置**（平台配置严格读 + 原子写）  
+- **`specs/archive/TASK-20260716-platform-config-write-safety.md`** — **B0 代码前置**（平台配置严格读 + 原子写）  
 - 现场：`D:\按摩器程序`（固件工作区）/ `L36程序`、`L36双机芯-上3D-下2D程序`（型号根）  

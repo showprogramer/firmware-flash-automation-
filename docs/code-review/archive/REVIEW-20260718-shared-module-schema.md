@@ -1,11 +1,11 @@
-# REVIEW-20260718: 共享引用 schema + 解析器（Phase B1）
+﻿# REVIEW-20260718: 共享引用 schema + 解析器（Phase B1）
 
 | 项 | 内容 |
 | --- | --- |
 | 类型 | 核心配置扩展 / 新解析器 |
 | 模块 | `model_config`、`shared_module_resolver`、`scheme_workbench_model` |
 | 状态 | ✅ 二轮独立审查完成；2 个真 bug 已修，其余记录可接受 |
-| 相关 TASK | `specs/active/TASK-20260718-shared-module-schema.md` |
+| 相关 TASK | `specs/archive/TASK-20260718-shared-module-schema.md` |
 | 审查日期 | 首轮 2026-07-17；二轮独立审查 2026-07-20 |
 
 ## 问题描述

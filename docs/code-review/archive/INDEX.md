@@ -5,6 +5,11 @@
 
 | 文件 | 日期 | 主题 | 处置 |
 |------|------|------|------|
+| [REVIEW-20260724-b4-shared-scheme-boundary.md](./REVIEW-20260724-b4-shared-scheme-boundary.md) | 2026-07-24 | B4 共享 / 方案边界硬化 | 回源不跳共享；本地副本覆盖；缺失不回落本地；Qt 人验 4/6/7/8 通过 |
+| [REVIEW-20260724-b3-shared-display.md](./REVIEW-20260724-b3-shared-display.md) | 2026-07-24 | B3 共享模块展示与烧录候选 | Qt 角标 / 可烧 / 缺失禁用 / 列表只显共享来源；2026-07-24 人验通过 |
+| [REVIEW-20260718-shared-module-schema.md](./REVIEW-20260718-shared-module-schema.md) | 2026-07-18 | 共享引用 schema + 解析器 | B1 数据层验收通过并提交（`4c8b6db` + 修复 `fafd65a`） |
+| [REVIEW-20260717-model-persistent-id.md](./REVIEW-20260717-model-persistent-id.md) | 2026-07-17 | 型号持久 id（Phase B0） | 人验通过并提交（`1c287b8`）；B1 解锁 |
+| [REVIEW-20260716-platform-config-safety.md](./REVIEW-20260716-platform-config-safety.md) | 2026-07-16 | 平台配置严格读 + 原子写盘 | 人验通过并提交（`72d1cca`）；B0 解锁 |
 | [REVIEW-20260728-config-usb-simplification.md](./REVIEW-20260728-config-usb-simplification.md) | 2026-07-28 | 配置简化 + USB 烧录流程对齐 | Issue 1–9 已关闭；冻结 exe、真实 U 盘与自动化验证通过 |
 | [REVIEW-20260709-branch-pyside6.md](./REVIEW-20260709-branch-pyside6.md) | 2026-07-09 | PySide6 迁移分支总审 | Phase 4 完成；exe 冷启动人验通过 2026-07-27 |
 | [REVIEW-20260724-qt-only-ui-cleanup.md](./REVIEW-20260724-qt-only-ui-cleanup.md) | 2026-07-24 | Qt-only 界面收敛 | Qt 三场景人验通过；CTk 已移除；自动化回归通过 |

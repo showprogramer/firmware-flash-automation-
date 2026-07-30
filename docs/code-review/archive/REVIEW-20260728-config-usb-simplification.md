@@ -1,11 +1,11 @@
-# REVIEW-20260728：配置简化 + USB 烧录流程对齐（T1/T2/T3）
+﻿# REVIEW-20260728：配置简化 + USB 烧录流程对齐（T1/T2/T3）
 
 | 项 | 内容 |
 | --- | --- |
 | 类型 | 配置 schema 精简、首次配置向导、USB 格式化 + 复制流程的实现审查 |
 | 复审基线 | 2026-07-28，当前工作区（含尚未提交的 Issue 7 ASCII 盘符修复） |
 | 状态 | ✅ Issue 1–9 均已关闭；审查归档 |
-| 相关 TASK | `specs/active/TASK-20260728-config-usb-simplification.md` |
+| 相关 TASK | `specs/archive/TASK-20260728-config-usb-simplification.md` |
 | 相关 Commit | `e8558d2`（T1）、`ebcc197`（T2）、`d6a846f`（向导完成后自动扫描）、`3286975`（T3）、`1adf724`（QDialog 修复）、`47529e0`（Format-Volume）、`1e42607`（Issue 2/3）、`4999f13`（Issue 4/6/7）、`b9e9c13`（Issue 5） |
 
 > 本文档只把当前仍需采取行动的项目保留为活跃议题。UI、USB 与 core 流程改动仍须按 `AGENTS.md` 人工验证通过后才能提交。
@@ -94,7 +94,7 @@ uv run python -m pytest src/fwasset/tests/test_usb_ops.py src/fwasset/tests/test
 
 **复杂度理由：** 涉及 Qt UI 导航、向导调用、settings reload 与人工 UI 验证；并须保持未来 CRUD 与低频外部目录读取的职责边界。
 
-**处理：** 已转入 `specs/active/TASK-20260728-program-folder-settings-entry.md`。实现新增「设置 → 程序文件夹」、向导路径校验/预填、跳过后的「前往设置」提示，并将用户可见的低频读取动作命名为「重新读取程序文件夹」。
+**处理：** 已转入 `specs/archive/TASK-20260728-program-folder-settings-entry.md`。实现新增「设置 → 程序文件夹」、向导路径校验/预填、跳过后的「前往设置」提示，并将用户可见的低频读取动作命名为「重新读取程序文件夹」。
 
 **验证：** 新增 Qt smoke 6 项通过；冻结 exe 人工验证于 2026-07-28 通过；`.\scripts\test.ps1` → 381 passed，coverage 94.33%。
 

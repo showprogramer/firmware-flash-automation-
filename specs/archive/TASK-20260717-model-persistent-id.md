@@ -1,4 +1,4 @@
-# TASK-20260717: 型号持久 id（Phase B0）
+﻿# TASK-20260717: 型号持久 id（Phase B0）
 
 > **For Hermes:** 实施时使用 `test-driven-development`，逐项 RED → GREEN → REFACTOR；本 TASK 动 core 与工作台 view model，**必须人工验证通过后才能 commit**。
 
@@ -8,7 +8,7 @@
 | --- | --- |
 | 类型 | 父任务 Phase B0（B1 前置） |
 | 当前状态 | ✅ 人验通过并提交 |
-| 父任务 | `specs/active/TASK-20260714-config-takeover.md`（B0 专节为契约源） |
+| 父任务 | `specs/archive/TASK-20260714-config-takeover.md`（B0 专节为契约源） |
 | 分支 | 继续当前分支或按父任务约定切 `feature/config-takeover`（实施前定） |
 | 前置（代码） | `TASK-20260716`（严格读 + `atomic_write_text`）已提交（`72d1cca`） |
 | 后续 | 本 TASK 人验并提交后，才开始 B1（引用 schema + 解析器） |
@@ -196,7 +196,7 @@ Expected: 全部非 UI 通过；coverage ≥ 80%；UI 测试 deselect。
 **Files:**
 - Create `docs/code-review/REVIEW-20260717-model-persistent-id.md`（类型：核心配置/新服务；问题：型号无稳定身份；处理：`型号配置.toml` + `ensure_model_ids`；新服务错误码；验证记录；人验状态；commit 后补哈希）
 - Modify `docs/CHANGELOG.md`（Unreleased 增条目）
-- Modify `specs/active/TASK-20260714-config-takeover.md`（B0 checklist 勾选、注明 `TASK-20260717` 承载）
+- Modify `specs/archive/TASK-20260714-config-takeover.md`（B0 checklist 勾选、注明 `TASK-20260717` 承载）
 - Modify 本文件状态与 DoD
 
 ---
@@ -250,7 +250,7 @@ feat(core): 型号持久 id（Phase B0）
 | Modify | `src/fwasset/tests/test_scheme_workbench_model.py` | 映射 / API / 回归 |
 | Create | `docs/code-review/REVIEW-20260717-model-persistent-id.md` | 审查记录 |
 | Modify | `docs/CHANGELOG.md` | 未发布变更 |
-| Modify | `specs/active/TASK-20260714-config-takeover.md` | B0 勾选 |
+| Modify | `specs/archive/TASK-20260714-config-takeover.md` | B0 勾选 |
 | Modify | 本文件 | 进度 |
 
 预计不改：`platform_config.py`、`save_platform_config`、`types.py`、数据库 schema、CTk/Qt 面板文件、`D:\按摩器程序`。
@@ -259,18 +259,18 @@ feat(core): 型号持久 id（Phase B0）
 
 ## Definition of Done
 
-- [ ] `slugify_model_id` 按规则产出，中文保留、ASCII 小写、危险字符清除、空串兜底。
-- [ ] `型号配置.toml` load/save 可用；save **保留未知键**（为 B1 打底）；经 `atomic_write_text`。
-- [ ] `ensure_model_ids` **先读全量已有 id 再生成**；碰撞 `-2/-3`；改名不变；碰撞后 id 稳定。
-- [ ] 损坏 `型号配置.toml` 不被覆盖；写失败返回 `write_failed`，无半成品/`.tmp` 残留。
-- [ ] view model 三 API（`ensure_model_id` / `resolve_model_id` / `model_root_for_id`）可用；display 与 dir 都能解析到同一 id。
-- [ ] `model_id` 不写入 `通用/`；不写入 `平台配置.toml`。
-- [ ] UI 选型键仍用 `display_name`；`load_all_models` / 设默认 / A4-A5 行为不回退。
-- [ ] 资产字段 `model` 未被当作 id。
-- [ ] `pytest -m "not ui"` 通过且 coverage ≥ 80%；未自动启动 UI。
-- [ ] 未对 `D:\按摩器程序` 做破坏性写入。
-- [ ] CHANGELOG、审查文档、父任务 B0 状态同步。
-- [ ] 人验通过后按模板提交；B1 才解除阻塞。
+- [x] `slugify_model_id` 按规则产出，中文保留、ASCII 小写、危险字符清除、空串兜底。
+- [x] `型号配置.toml` load/save 可用；save **保留未知键**（为 B1 打底）；经 `atomic_write_text`。
+- [x] `ensure_model_ids` **先读全量已有 id 再生成**；碰撞 `-2/-3`；改名不变；碰撞后 id 稳定。
+- [x] 损坏 `型号配置.toml` 不被覆盖；写失败返回 `write_failed`，无半成品/`.tmp` 残留。
+- [x] view model 三 API（`ensure_model_id` / `resolve_model_id` / `model_root_for_id`）可用；display 与 dir 都能解析到同一 id。
+- [x] `model_id` 不写入 `通用/`；不写入 `平台配置.toml`。
+- [x] UI 选型键仍用 `display_name`；`load_all_models` / 设默认 / A4-A5 行为不回退。
+- [x] 资产字段 `model` 未被当作 id。
+- [x] `pytest -m "not ui"` 通过且 coverage ≥ 80%；未自动启动 UI。
+- [x] 未对 `D:\按摩器程序` 做破坏性写入。
+- [x] CHANGELOG、审查文档、父任务 B0 状态同步。
+- [x] 人验通过后按模板提交；B1 才解除阻塞。（实现提交：`1c287b8`）
 
 ## Risks and Trade-offs
 

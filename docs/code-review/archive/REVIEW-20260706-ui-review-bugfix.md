@@ -1,4 +1,4 @@
-# 代码审查：UI Review Bugfix（性能 / 健壮性 / 契约）
+﻿# 代码审查：UI Review Bugfix（性能 / 健壮性 / 契约）
 
 - 日期：2026-07-06
 - 类型：Bugfix / 性能 / 接口契约
@@ -8,7 +8,7 @@
   - `ui/workbench_panel.py`（搜索 debounce、方法内 import 清理）
   - `ui/operation_panels/shared_actions.py`（间距 token 化）
   - `ui/view_models/scheme_workbench_model.py`（资产查询缓存）
-- 来源：`docs/code-review/ui_code_review.pdf` 第 6 节「具体代码缺陷与待修复清单」+ `specs/active/TASK-20260706-ui-review.md`
+- 来源：`docs/code-review/ui_code_review.pdf` 第 6 节「具体代码缺陷与待修复清单」+ `specs/archive/TASK-20260706-ui-review.md`
 
 ## 问题描述
 
@@ -107,4 +107,4 @@
 ## 关联 Commit
 
 - （占位，待人工验证后填写）见上 4 个 commit hash。
-- 对应规划：`specs/active/TASK-20260706-ui-review.md` 全部勾选。
+- 对应规划：`specs/archive/TASK-20260706-ui-review.md` 全部勾选。

@@ -13,6 +13,6 @@
 
 | 文件 | 说明 |
 |------|------|
-| [REVIEW-20260709-branch-pyside6.md](./REVIEW-20260709-branch-pyside6.md) | `feature/pyside6-migration` 分支总审与遗留项看板 |
+| _（暂无活文档）_ | 2026-07-28 之前所有审查均已闭环并归档；新审查按 `AGENTS.md` 命名在本目录创建 |
 
 历史列表见 [archive/INDEX.md](./archive/INDEX.md)。

@@ -231,9 +231,9 @@ Qt-only 阶段使用无环境变量的 `uv run fwasset` 验证默认入口；不
 
 | 优先级 | TASK | 说明 |
 | --- | --- | --- |
-| **当前** | [`TASK-20260714-config-takeover.md`](../active/TASK-20260714-config-takeover.md) | 软件接管配置 → 共享引用（见 `specs/prompts/task-exchange.md` 1–4） |
+| **当前** | [`TASK-20260714-config-takeover.md`](./TASK-20260714-config-takeover.md) | 软件接管配置 → 共享引用（见 `specs/prompts/task-exchange.md` 1–4）｜已完成并归档 |
 | 其后 | `TASK-YYYYMMDD-firmware-crud` | 程序 CRUD + 增量索引 / 对账（exchange 5–6） |
 | 分支整合 | `feature/pyside6-migration` → `main` | 按用户决定暂不执行；不属于本 TASK 的实现收口 |
-| 迁移收口 | [`TASK-20260724-qt-only-ui-cleanup.md`](../active/TASK-20260724-qt-only-ui-cleanup.md) | Qt-only 入口、依赖、旧壳清理与 B3 前置（已完成） |
+| 迁移收口 | [`TASK-20260724-qt-only-ui-cleanup.md`](./TASK-20260724-qt-only-ui-cleanup.md) | Qt-only 入口、依赖、旧壳清理与 B3 前置（已完成并归档） |
 
 命名建议：`TASK-YYYYMMDD-firmware-crud.md`。CTk 退役已由 `TASK-20260724-qt-only-ui-cleanup.md` 完成。

@@ -1,4 +1,4 @@
-# TASK-20260720: 共享登记入口（Phase B2）
+﻿# TASK-20260720: 共享登记入口（Phase B2）
 
 > **For Hermes:** 实施时使用 `test-driven-development`，逐项 RED → GREEN → REFACTOR；本 TASK 动 core 服务与**两套 UI**（CTk `ui/` + PySide6 `ui_qt/`），**必须人工验证通过后才能 commit**（右键登记、冲突弹窗为 UI 交互）。范围裁剪（2026-07-23）后**不含 `.ref` 迁移**——已写完的迁移代码与服务按「回退清单」删除。
 
@@ -8,7 +8,7 @@
 | --- | --- |
 | 类型 | 父任务 Phase B2（手动登记入口；B3 展示前置） |
 | 当前状态 | ✅ **Qt 人验通过（2026-07-23，3 场景）；代码已 commit（`1a03706`）**。CTk 验证故意推迟到 B3 切默认入口同次随带——B2 期 CTk 仍是默认入口但双壳共用 `workbench_helpers` 纯函数保证文案/禁语一致，无需独立再验。范围裁剪：原计划含 `.ref` 一次性迁移已砍掉，迁移独立后置（见 `TASK-20260723-firmware-ref-migration.md`） |
-| 父任务 | `specs/active/TASK-20260714-config-takeover.md`（B2 专节 + 落盘文件专节为契约源） |
+| 父任务 | `specs/archive/TASK-20260714-config-takeover.md`（B2 专节 + 落盘文件专节为契约源） |
 | 分支 | 继续 `feature/pyside6-migration` |
 | 前置（代码） | **B1**（`TASK-20260718`）已提交（`4c8b6db` + 审查修复 `fafd65a`）；B0（`1c287b8`）、原子写（`72d1cca`）已合入 |
 | 后续 | 开始 **B3**（角标 / 可烧 / 缺失灰掉 / 列表只显共享）另立 TASK；B3 立项时同切默认入口到 Qt，并随带 CTk 退化验证 |
@@ -197,7 +197,7 @@ Expected: 全部非 UI 通过；coverage ≥ 80%；UI 测试 deselect。
 
 - Create `docs/code-review/REVIEW-20260720-shared-module-registration.md`（类型：新服务 + 双轨 UI；问题：共享手动登记入口；处理：set/clear service + 两套右键；验证记录；人验状态；commit 后补哈希）。
 - Modify `docs/CHANGELOG.md`（Unreleased 增条目，注明 `.ref` 迁移已移至后置 TASK）。
-- Modify `specs/active/TASK-20260714-config-takeover.md`（B2 checklist 勾选、注明本 TASK 承载；解锁 B3）。
+- Modify `specs/archive/TASK-20260714-config-takeover.md`（B2 checklist 勾选、注明本 TASK 承载；解锁 B3）。
 - Modify 本文件状态与 DoD。
 
 > **Task 编号说明**：原计划 Task 1–8（含迁移 Task 3、Task 5/6 迁移子项）。裁剪后重新编号为 Task 1–7，迁移相关任务整建制移至 `TASK-20260723-firmware-ref-migration.md`。原实施已完成的迁移代码与测试**需在提交前回退**（见「回退清单」）。
@@ -301,7 +301,7 @@ feat(core,ui): 共享手动登记入口（Phase B2）
 | Modify | `src/fwasset/tests/test_scheme_workbench_model.py` | view model 登记 API + B4 隔离回归 |
 | Create | `docs/code-review/REVIEW-20260720-shared-module-registration.md` | 审查记录 |
 | Modify | `docs/CHANGELOG.md` | 未发布变更 |
-| Modify | `specs/active/TASK-20260714-config-takeover.md` | B2 勾选、解锁 B3 |
+| Modify | `specs/archive/TASK-20260714-config-takeover.md` | B2 勾选、解锁 B3 |
 | Modify | 本文件 | 进度 |
 
 > **裁剪**：原 Files 含 `shared_migration_service.py` / `preview`/`apply` view model API / `.ref` 扫描 + 幂等迁移 / 迁移服务测试 —— 全部移至 `TASK-20260723-firmware-ref-migration.md`。

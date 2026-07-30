@@ -1,5 +1,10 @@
 # TASK-20260609 · 工作台 UI 改写计划（主区树 + 精简操作区 + Fluent 风格）
 
+> ⛔ **本计划已被后续方案取代，仅作历史快照归档。** 后续路线：
+> 旧 CTk 工作台 UI 计划（本文件）→ PySide6 迁移（`TASK-20260708-pyside6-migration`，已归档）→ Qt-only 收敛（`TASK-20260724-qt-only-ui-cleanup`）→ 配置与工作区统一（`TASK-20260714-config-takeover` 系列 + `TASK-20260728-config-usb-simplification`）→ 即将独立立项的 firmware CRUD 父 TASK。
+> 本文件 §5「Step E/F · 增删改查（CRUD）」的未勾选项 [ ] **不是当前未完成工作**，而是旧 CTk 工作台时期对免重扫双写 CRUD 的设想，已由后续独立 CRUD 父 TASK 重新规划取代，不视作 backlog。
+> 本 TASK 已完成可见产物：Step A–D 全部勾选并通过 commit `b35bb48`（见 `docs/code-review/archive/REVIEW-20260706-ui-review-bugfix.md`）；剩余部分（含 CTk 专属 UI）已被 Qt-only 收敛移除或重写。
+
 > 分支：`feature/ui-workbench-redesign`
 > 前置：P0 崩溃已修、数据层 `get_scheme_module_tree()` 已完成并验证（崩溃没了、数据对了）。
 > 本计划只覆盖 **UI 渲染层**，数据层不再改。

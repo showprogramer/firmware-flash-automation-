@@ -1,11 +1,11 @@
-# REVIEW-20260724：Qt 唯一支持界面清理
+﻿# REVIEW-20260724：Qt 唯一支持界面清理
 
 | 项 | 内容 |
 | --- | --- |
 | 类型 | UI 入口、依赖与目录重构 |
 | 模块 | `src/fwasset/app.py`、`ui_qt/`、`ui_common/`、PyInstaller、项目文档 |
 | 状态 | ✅ 已闭环；Qt 人工验证通过（2026-07-23） |
-| 相关 TASK | `specs/active/TASK-20260724-qt-only-ui-cleanup.md` |
+| 相关 TASK | `specs/archive/TASK-20260724-qt-only-ui-cleanup.md` |
 | 分支 | `feature/pyside6-migration` |
 
 ## 审查议题
@@ -59,4 +59,4 @@ uv run pyinstaller fwasset.spec --noconfirm
 
 - `docs/migrations/MIGRATION-20260724-qt-only-ui.md`
 - `docs/CHANGELOG.md`
-- `specs/active/TASK-20260724-qt-only-ui-cleanup.md`
+- `specs/archive/TASK-20260724-qt-only-ui-cleanup.md`

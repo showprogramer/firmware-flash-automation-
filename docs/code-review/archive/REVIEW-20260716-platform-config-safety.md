@@ -1,11 +1,11 @@
-# REVIEW-20260716: 平台配置读取与原子写盘安全
+﻿# REVIEW-20260716: 平台配置读取与原子写盘安全
 
 | 项 | 内容 |
 | --- | --- |
 | 类型 | 核心配置安全 / 服务错误码 |
 | 模块 | `core/config_io.py`、`core/platform_config.py`、`core/services/platform_default_service.py` |
 | 状态 | ✅ 人验通过，已提交 |
-| 相关 TASK | `specs/active/TASK-20260716-platform-config-write-safety.md` |
+| 相关 TASK | `specs/archive/TASK-20260716-platform-config-write-safety.md` |
 
 ## 问题描述
 
