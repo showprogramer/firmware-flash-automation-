@@ -8,8 +8,8 @@
 | 当前状态 | ✅ 已完成 |
 | 前置 | 无 |
 | 父任务 | 无 |
-| 分支 | `main` |
-| 完成 commit | 待提交 |
+| 分支 | `feature/pyside6-migration` |
+| 完成 commit | `0616fe3`（文档整理，本任务收尾） |
 
 ---
 
