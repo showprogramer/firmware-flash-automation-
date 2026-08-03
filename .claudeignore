@@ -43,7 +43,6 @@ fwasset.db-shm
 massagechairproject.md
 specs/project-overview.md
 specs/archive/
-specs/prompts/
 specs/ui-reactor/
 docs/code-review/archive/
 
@@ -65,6 +64,8 @@ nul
 .claude/
 .opencode/
 .codex/
+.qoder/
+.local/
 .agents/
 .cursor/
 .aider*

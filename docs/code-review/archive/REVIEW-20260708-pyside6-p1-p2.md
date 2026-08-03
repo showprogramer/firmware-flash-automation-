@@ -207,7 +207,7 @@ if __name__ == "__main__":
 提交前请人工跑一遍,贴结果:
 
 - [ ] **FWASSET_UI=qt 启动**:`uv run fwasset`(环境变量前置)能弹出 FluentWindow,标题栏中文不糊
-- [ ] **真实数据截图**:`.runtime/qt_phase1b.png` 与新截图肉眼一致(7 通用模块 + 6 方案、双型号 chips、★默认徽章)
+- [ ] **真实数据截图**:`docs/ui-reference/screenshots/archive/qt_phase1b.png` 与新截图肉眼一致(7 通用模块 + 6 方案、双型号 chips、★默认徽章)
 - [ ] **缓存加载**:无 scan_meta 时启动显示「请扫描」;有 scan_meta 时显示「使用上次扫描的根目录: …」
 - [ ] **扫描**:点「扫描目录」选根,扫描期间按钮变「取消中…」,完成后自动 populate_tree
 - [ ] **取消扫描**:扫描中点按钮,线程退出,按钮回到「扫描目录」

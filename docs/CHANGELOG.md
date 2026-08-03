@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### docs: reorganize project and Agent documentation
+
+- Move the project overview from `docs/README.md` to the repository root `README.md`.
+- Move runtime UI screenshots to `docs/ui-reference/screenshots/` and initial UI sketches to `specs/design/sketches/`.
+- Move personal AI communication drafts to local `.local/ai-prompts/`; they are excluded from Git and Agent context.
+- Reduce `AGENTS.md` to high-frequency shared rules and move detailed architecture and workflow guidance to `docs/architecture.md` and `docs/agent-workflow.md`.
+- Ignore `.codex/`, `.qoder/`, and `.local/` in Git, Claude Code, Codex, and Cursor project ignore files.
+- Clean historical UI prototype files from `.runtime/`; retain only the runtime database and application log, and archive the Review-referenced screenshot under `docs/ui-reference/screenshots/archive/`.
+- Make Task DoD mandatory for every task while keeping manual verification, Review, CHANGELOG, and migration notes conditional with explicit `done` or `not applicable` states.
+
 ### refactor(ui): 设置页 UI 重做 + 工作台重复入口清理（TASK-20260729）
 
 - 删除工作台主区「前往设置」按钮与其所在 QFrame 提示条；未配置状态保留为纯文字 `CaptionLabel`，设置入口统一由左侧导航承担；`settings_requested` 信号及「重新读取程序文件夹」→ 跳转设置页路径保持不变。
