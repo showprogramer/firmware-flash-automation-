@@ -21,6 +21,15 @@ uv run python -m pytest -m "not ui" -q
 .\scripts\test.ps1
 ```
 
+**环境约束：** `.venv` 是 Windows 虚拟环境（WSL 的 uv 会因平台不匹配尝试重建它而损坏包，曾导致 psutil 文件被删）。在 WSL/Linux 下运行测试一律使用 `.venv-wsl`，不得执行裸 `uv run` / `uv sync`：
+
+```bash
+.venv-wsl/bin/python -m pytest -m "not ui" -q
+UV_PROJECT_ENVIRONMENT=.venv-wsl uv run python -m pytest -m "not ui" -q
+```
+
+Windows 侧 `.venv` 损坏（如 psutil `ImportError: _common`）时：`uv pip install --reinstall psutil` 或删除 `site-packages/psutil*` 后 `uv sync --extra dev`。
+
 覆盖率门槛为 `src/fwasset` 80%；`app.py` 和 `ui_qt/*` 不计入覆盖率，`ui_common/*` 计入覆盖率。当前没有独立 lint 或 type-check 命令。
 
 ## 必须遵守的代码约束

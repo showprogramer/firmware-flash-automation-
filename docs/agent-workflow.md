@@ -97,3 +97,17 @@ uv run python -m pytest -m "not ui" -q
 ```
 
 具体模块的 focused test 由任务范围决定；没有对应命令时应明确记录为未验证，而不是猜测结果。
+
+## 双平台虚拟环境纪律
+
+- `.venv` 只在 Windows 下使用；`.venv-wsl` 只在 WSL/Linux 下使用。
+- **WSL 下禁止执行裸 `uv run` / `uv sync`**：uv 检测到 `.venv` 平台不匹配会尝试重建它，在 `/mnt/d` 挂载上删除失败会留下残缺包（2026-08-03 曾损坏 psutil，缺 8 个文件导致 `ImportError: cannot import name '_common'`）。
+- WSL 下正确的测试方式（二选一）：
+
+```bash
+.venv-wsl/bin/python -m pytest -m "not ui" -q
+UV_PROJECT_ENVIRONMENT=.venv-wsl uv run python -m pytest -m "not ui" -q
+```
+
+- 若 `.venv-wsl` 未安装依赖：`UV_PROJECT_ENVIRONMENT=.venv-wsl uv sync --extra dev`（不会触碰 `.venv`）。
+- Windows 侧 `.venv` 修复：`uv pip install --reinstall psutil`，或删除 `site-packages/psutil*` 后 `uv sync --extra dev`。

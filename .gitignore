@@ -9,6 +9,7 @@ fwasset.db
 
 # Python environment and caches
 .venv/
+.venv-wsl/
 __pycache__/
 *.pyc
 *.pyo
