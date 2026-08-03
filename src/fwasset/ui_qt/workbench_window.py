@@ -6,7 +6,7 @@ import sys
 import threading
 from pathlib import Path
 
-from PySide6.QtCore import QItemSelectionModel, Qt, QTimer, Signal
+from PySide6.QtCore import QItemSelectionModel, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QApplication,
@@ -19,7 +19,6 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QMenu,
     QMessageBox,
-    QPushButton,
     QVBoxLayout,
     QWidget,
 )
@@ -74,6 +73,10 @@ from fwasset.ui_qt.operation_panels import get_panel
 from fwasset.ui_qt.design_tokens import (
     SEARCH_MIN_WIDTH,
     SIDEBAR_WIDTH,
+    SHARED_SOURCE_PICKER_DEFAULT_SIZE,
+    SHARED_SOURCE_PICKER_ITEM_HEIGHT,
+    SHARED_SOURCE_PICKER_MIN_WIDTH,
+    SPACE_LG,
     SPACE_MD,
     SPACE_SM,
     SPACE_XS,
@@ -98,11 +101,11 @@ def _reload_runtime_settings() -> tuple[str, str]:
 
 
 def _format_source_item_qt(asset: dict) -> str:
-    """来源选择对话框的一行：模块 · 变体目录  ←  路径。"""
-    label = str(asset.get("firmware_label", "")) or "-"
+    """来源选择对话框的一项：型号/变体 + 完整路径。"""
+    model = str(asset.get("model", "")) or "未知型号"
     variant = str(asset.get("directory_name", "")) or "-"
     path = str(asset.get("path", ""))
-    return f"{label} · {variant}   ←   {path}"
+    return f"{model} · {variant}\n{path}"
 
 
 class WorkbenchInterface(QWidget):
@@ -830,66 +833,61 @@ class WorkbenchInterface(QWidget):
             return
         module = module_label_from_asset(variant.asset)
         module_key = canonical_module_dir(module)
-        all_candidates: list[dict] = []
+        candidates: list[dict] = []
         for a in self.workbench_model._all_assets:
             try:
                 if self.workbench_model._model_of_asset(a) == target_model:
                     continue
             except Exception:  # noqa: BLE001
                 continue
-            all_candidates.append(a)
-        default_candidates = [
-            a for a in all_candidates
-            if canonical_module_dir(str(a.get("firmware_label", ""))) == module_key
-        ]
-        self._show_shared_source_picker(
-            target_model, module_key, module, all_candidates, default_candidates
-        )
+            if canonical_module_dir(str(a.get("firmware_label", ""))) != module_key:
+                continue
+            candidates.append(a)
+        self._show_shared_source_picker(target_model, module_key, module, candidates)
 
     def _show_shared_source_picker(
         self,
         target_model: str,
         module_key: str,
         module_label: str,
-        all_candidates: list[dict],
-        default_candidates: list[dict],
+        candidates: list[dict],
     ) -> None:
-        from PySide6.QtWidgets import QComboBox, QDialog
+        from PySide6.QtWidgets import QComboBox
 
         dlg = QDialog(self)
         dlg.setWindowTitle(shared_register_dialog_title(module_label))
-        dlg.resize(640, 480)
+        dlg.setMinimumWidth(SHARED_SOURCE_PICKER_MIN_WIDTH)
+        dlg.resize(*SHARED_SOURCE_PICKER_DEFAULT_SIZE)
         layout = QVBoxLayout(dlg)
+        layout.setContentsMargins(SPACE_LG, SPACE_LG, SPACE_LG, SPACE_LG)
+        layout.setSpacing(SPACE_MD)
 
-        state = {"strict": True, "items": default_candidates}
+        layout.addWidget(SubtitleLabel("选择共享来源", dlg))
 
-        caption = QLabel(shared_source_picker_caption(module_label, True))
+        caption = CaptionLabel(shared_source_picker_caption(module_label), dlg)
+        caption.setWordWrap(True)
         layout.addWidget(caption)
 
-        list_widget = QListWidget()
+        list_widget = QListWidget(dlg)
+        list_widget.setWordWrap(True)
         layout.addWidget(list_widget, stretch=1)
 
         def _fill(items: list[dict]) -> None:
             list_widget.clear()
+            if not items:
+                empty_item = QListWidgetItem(
+                    f"其它型号中没有可登记的「{module_label}」来源。"
+                )
+                empty_item.setFlags(Qt.ItemFlag.NoItemFlags)
+                list_widget.addItem(empty_item)
+                return
             for a in items:
                 item = QListWidgetItem(_format_source_item_qt(a))
+                item.setToolTip(str(a.get("path", "")))
+                item.setSizeHint(QSize(0, SHARED_SOURCE_PICKER_ITEM_HEIGHT))
                 list_widget.addItem(item)
 
-        _fill(default_candidates)
-
-        from qfluentwidgets import PushButton as _QFPushButton
-
-        toggle_btn = _QFPushButton("切换：只看同模块名 / 看全部", dlg)
-        layout.addWidget(toggle_btn)
-
-        def _toggle() -> None:
-            state["strict"] = not state["strict"]
-            current = default_candidates if state["strict"] else all_candidates
-            state["items"] = current
-            caption.setText(shared_source_picker_caption(module_label, state["strict"]))
-            _fill(current)
-
-        toggle_btn.clicked.connect(_toggle)
+        _fill(candidates)
 
         # --- Phase C：mode 选择器 ---
         mode_row = QHBoxLayout()
@@ -918,7 +916,7 @@ class WorkbenchInterface(QWidget):
             platform_combo.clear()
             platform_combo.addItem("（自动检测）", userData="")
             if row >= 0:
-                asset = state["items"][row]
+                asset = candidates[row]
                 names = self.workbench_model.get_source_platforms_for_asset(asset)
                 for n in names:
                     platform_combo.addItem(n, userData=n)
@@ -940,20 +938,28 @@ class WorkbenchInterface(QWidget):
 
         btn_row = QHBoxLayout()
         btn_row.addStretch(1)
-        confirm_btn = QPushButton("确认登记", dlg)
-        cancel_btn = QPushButton("取消", dlg)
+        confirm_btn = PrimaryPushButton("确认登记", dlg)
+        confirm_btn.setEnabled(False)
+        cancel_btn = PushButton("取消", dlg)
         btn_row.addWidget(confirm_btn)
         btn_row.addWidget(cancel_btn)
         layout.addLayout(btn_row)
 
+        list_widget.currentRowChanged.connect(
+            lambda row: confirm_btn.setEnabled(row >= 0)
+        )
+
         def _confirm() -> None:
             row = list_widget.currentRow()
             if row < 0:
-                QMessageBox.information(dlg, "请选择来源", "请先在列表中选择一条作为共享来源的资产。")
                 return
-            source_asset = state["items"][row]
+            source_asset = candidates[row]
             chosen_mode = mode_combo.currentData() or "static"
-            chosen_platform = platform_combo.currentData() or "" if chosen_mode == "follow_default" else ""
+            chosen_platform = (
+                str(platform_combo.currentData() or "")
+                if chosen_mode == "follow_default"
+                else ""
+            )
             dlg.accept()
             self._do_register_shared(
                 target_model, module_key, module_label,

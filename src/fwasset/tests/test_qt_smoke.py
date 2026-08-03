@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import os
+from types import SimpleNamespace
 
 import pytest
 
@@ -57,6 +58,83 @@ def test_import_workbench_window_module(qapp) -> None:
 
     assert hasattr(module, "QtWorkbenchWindow")
     assert hasattr(module, "main")
+
+
+def test_shared_source_picker_excludes_other_modules(qapp, monkeypatch) -> None:
+    """共享登记入口只传入其它型号的同模块来源。"""
+    from fwasset.ui_qt.workbench_window import WorkbenchInterface
+
+    workbench = WorkbenchInterface()
+    workbench.current_selection.model_name = "目标型号"
+    target_asset = {"model": "目标型号", "firmware_label": "快捷键程序"}
+    shortcut_source = {"model": "L36", "firmware_label": "快捷键程序"}
+    bluetooth_source = {"model": "L36", "firmware_label": "蓝牙程序"}
+    workbench.workbench_model._all_assets = [
+        target_asset,
+        shortcut_source,
+        bluetooth_source,
+    ]
+    monkeypatch.setattr(
+        workbench.workbench_model,
+        "_model_of_asset",
+        lambda asset: str(asset["model"]),
+    )
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(
+        workbench,
+        "_show_shared_source_picker",
+        lambda *args: captured.update(args=args),
+    )
+
+    workbench._register_shared_source(SimpleNamespace(asset=target_asset))
+
+    assert captured["args"] == (
+        "目标型号",
+        "快捷键程序",
+        "快捷键程序",
+        [shortcut_source],
+    )
+
+
+def test_shared_source_picker_requires_explicit_selection(qapp, monkeypatch) -> None:
+    """登记对话框没有来源选择时禁用确认，且不提供跨模块切换。"""
+    from PySide6.QtWidgets import QDialog, QListWidget, QPushButton
+
+    from qfluentwidgets import PrimaryPushButton
+
+    from fwasset.ui_qt.workbench_window import WorkbenchInterface
+
+    workbench = WorkbenchInterface()
+    captured: dict[str, QDialog] = {}
+
+    def _capture_exec(dialog: QDialog) -> int:
+        captured["dialog"] = dialog
+        return int(QDialog.DialogCode.Rejected)
+
+    monkeypatch.setattr(QDialog, "exec", _capture_exec)
+    workbench._show_shared_source_picker(
+        "目标型号",
+        "快捷键程序",
+        "快捷键程序",
+        [{"model": "L36", "directory_name": "量产_默认", "path": "D:/L36/快捷键/量产_默认"}],
+    )
+
+    dialog = captured["dialog"]
+    list_widget = dialog.findChild(QListWidget)
+    assert list_widget is not None
+    assert list_widget.count() == 1
+    assert list_widget.currentRow() == -1
+    confirm_button = next(
+        button
+        for button in dialog.findChildren(PrimaryPushButton)
+        if button.text() == "确认登记"
+    )
+    assert confirm_button.isEnabled() is False
+    assert all("看全部" not in button.text() for button in dialog.findChildren(QPushButton))
+
+    list_widget.setCurrentRow(0)
+    qapp.processEvents()
+    assert confirm_button.isEnabled() is True
 
 
 def test_setup_wizard_prefills_validates_and_writes_config(qapp, tmp_path) -> None:

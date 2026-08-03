@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### fix(core,ui): 共享来源限定为同模块并优化登记对话框（TASK-20260803）
+
+- `set_shared_module()` 现在要求目标模块与来源资产的规范模块键一致；不匹配返回 `module_mismatch`，来源缺少模块名返回 `invalid_args`，两种情况均不会写入 `型号配置.toml`。
+- 共享来源登记对话框只展示其它型号的同模块资产，移除“只看同模块名 / 看全部”切换，避免选择不相同模块的来源。
+- 对话框改为标题、简短说明、两行候选（型号/变体 + 完整路径）、tooltip、空状态和禁用态确认按钮；保留固定版本、自动更新与来源平台联动。
+- 新增服务层和 Qt 回归用例覆盖模块不匹配、候选范围、无跨模块切换与显式选择后才可确认。
+
+验证：服务与文案定向测试 19 passed；Qt 定向测试 2 passed。完整 Linux 套件的既有 Windows 路径语义与侧栏重选失败已记录；Windows 人工验收于 2026-08-03 通过。
+
 ### refactor(core,ui): R5 统一工作区路径守卫（TASK-20260803-r5-path-guard）
 
 - 新增 `core/path_guard.py`：`assert_within_workspace(path, workspace_root) -> Path`，失败抛 `PathGuardError`。最低契约：空工作区根拒绝、目标必须为绝对路径、resolve 前拒绝 `..` 词法段、resolve 后 normcase + 正斜杠归一确认落点在工作区内（允许等于根）。

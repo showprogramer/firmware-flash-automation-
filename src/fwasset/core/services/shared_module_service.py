@@ -130,6 +130,41 @@ def set_shared_module(
             "payload": {},
         }
 
+    source_module = _module_key_for_asset(source_asset)
+    key = canonical_module_dir(module_key) if module_key else source_module
+    if not source_module:
+        message = "登记共享来源失败：来源资产缺少可识别模块名"
+        log_fn(message)
+        return {
+            "ok": False,
+            "code": "invalid_args",
+            "message": message,
+            "payload": {},
+        }
+    if not key:
+        message = "登记共享来源失败：目标模块不能为空"
+        log_fn(message)
+        return {
+            "ok": False,
+            "code": "invalid_args",
+            "message": message,
+            "payload": {},
+        }
+    if key != source_module:
+        message = (
+            f"登记共享来源失败：目标模块「{key}」与来源模块「{source_module}」不一致"
+        )
+        log_fn(message)
+        return {
+            "ok": False,
+            "code": "module_mismatch",
+            "message": message,
+            "payload": {
+                "module_key": key,
+                "source_module": source_module,
+            },
+        }
+
     ws = Path(workspace_root)
     target_root = Path(root)
     asset_path = Path(asset_path_str)
@@ -218,19 +253,6 @@ def set_shared_module(
     else:
         final_rel = rel
         clean_platform = ""  # 固定版本不写 source_platform
-
-    # 模块键规范化
-    key = canonical_module_dir(module_key) if module_key else _module_key_for_asset(source_asset)
-    if not key:
-        message = "登记共享来源失败：无法从来源资产推断模块名，请指定目标模块"
-        log_fn(message)
-        return {
-            "ok": False,
-            "code": "invalid_args",
-            "message": message,
-            "payload": {},
-        }
-    source_module = _module_key_for_asset(source_asset) or key
 
     # 冲突检测（load 查重；save_shared_module 自身是幂等覆盖）
     existing = load_shared_modules(target_root)

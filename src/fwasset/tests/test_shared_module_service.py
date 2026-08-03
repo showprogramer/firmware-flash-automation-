@@ -178,6 +178,33 @@ def test_module_key_canonicalization(tmp_path: Path):
     assert refs[0].module_key == "机芯板"
 
 
+def test_rejects_source_module_mismatch_without_writing(tmp_path: Path):
+    """来源模块与目标模块不同，不得登记或创建配置。"""
+    ws, _src_root, tgt_root, asset = _setup_multi_model_workspace(tmp_path)
+
+    result = set_shared_module(tgt_root, asset, ws, module_key="蓝牙程序")
+
+    assert result["ok"] is False
+    assert result["code"] == "module_mismatch"
+    assert result["payload"] == {
+        "module_key": "蓝牙程序",
+        "source_module": "快捷键程序",
+    }
+    assert not (tgt_root / "型号配置.toml").exists()
+
+
+def test_rejects_source_without_recognizable_module(tmp_path: Path):
+    """来源资产没有模块名时，不能由目标模块名补足。"""
+    ws, _src_root, tgt_root, asset = _setup_multi_model_workspace(tmp_path)
+    asset["firmware_label"] = ""
+
+    result = set_shared_module(tgt_root, asset, ws, module_key="快捷键程序")
+
+    assert result["ok"] is False
+    assert result["code"] == "invalid_args"
+    assert not (tgt_root / "型号配置.toml").exists()
+
+
 def test_write_failed_keeps_original(tmp_path: Path, monkeypatch):
     ws, src_root, tgt_root, asset = _setup_multi_model_workspace(tmp_path)
     # 先正常写一次，建立原文件

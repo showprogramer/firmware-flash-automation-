@@ -110,9 +110,7 @@ def shared_conflict_prompt_message(module: str) -> str:
     return f"「{mod}」已登记共享来源，是否覆盖为新的来源？"
 
 
-def shared_source_picker_caption(module: str, strict_filter: bool) -> str:
+def shared_source_picker_caption(module: str) -> str:
     """来源选择对话框顶部说明。"""
     mod = (module or "").strip() or "该模块"
-    if strict_filter:
-        return f"工作区内可作「{mod}」共享来源的资产（默认按同模块名预过滤）"
-    return f"工作区内全部可作共享来源的资产（已放开查看全部）"
+    return f"从其它型号选择一个「{mod}」版本作为共享来源"
