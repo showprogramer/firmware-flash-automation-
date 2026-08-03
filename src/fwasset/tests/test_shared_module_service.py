@@ -223,7 +223,7 @@ def test_clear_shared_module_removes_ref(tmp_path: Path):
     set_shared_module(tgt_root, asset, ws)
     # 预存 model_id 以验证删除后保留
     save_model_id(tgt_root, "dual")
-    result = clear_shared_module(tgt_root, "快捷键程序")
+    result = clear_shared_module(tgt_root, "快捷键程序", ws)
     assert result["ok"] is True
     assert result["code"] == "ok"
     refs = load_shared_modules(tgt_root)
@@ -236,7 +236,7 @@ def test_clear_shared_module_removes_ref(tmp_path: Path):
 def test_clear_nonexistent_key_idempotent(tmp_path: Path):
     ws, src_root, tgt_root, asset = _setup_multi_model_workspace(tmp_path)
     # 无 型号配置.toml 的根
-    result = clear_shared_module(tgt_root, "蓝牙程序")
+    result = clear_shared_module(tgt_root, "蓝牙程序", ws)
     assert result["ok"] is True
     # 不建空文件
     assert not (tgt_root / "型号配置.toml").exists()
@@ -251,7 +251,26 @@ def test_clear_does_not_delete_firmware_files(tmp_path: Path):
     local_mod.mkdir(parents=True, exist_ok=True)
     local_file = local_mod / "local.hex"
     local_file.write_bytes(b"LOCAL")
-    clear_shared_module(tgt_root, "快捷键程序")
+    clear_shared_module(tgt_root, "快捷键程序", ws)
     # 本地固件文件仍在磁盘
     assert local_file.exists()
     assert local_file.read_bytes() == b"LOCAL"
+
+
+def test_set_shared_module_out_of_workspace_target(tmp_path: Path):
+    """R5：目标型号根在工作区外 → out_of_workspace 且不落盘。"""
+    ws, src_root, tgt_root, asset = _setup_multi_model_workspace(tmp_path)
+    outside = tmp_path.parent / f"{tmp_path.name}_外部"
+    outside.mkdir(exist_ok=True)
+    result = set_shared_module(outside, asset, ws)
+    assert result["code"] == "out_of_workspace"
+    assert not (outside / "型号配置.toml").exists()
+
+
+def test_clear_shared_module_out_of_workspace_target(tmp_path: Path):
+    """R5：取消登记目标根在工作区外 → out_of_workspace。"""
+    ws, src_root, tgt_root, asset = _setup_multi_model_workspace(tmp_path)
+    outside = tmp_path.parent / f"{tmp_path.name}_外部"
+    outside.mkdir(exist_ok=True)
+    result = clear_shared_module(outside, "蓝牙程序", ws)
+    assert result["code"] == "out_of_workspace"

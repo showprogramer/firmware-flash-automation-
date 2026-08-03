@@ -19,6 +19,7 @@ from fwasset.core.model_config import (
     remove_shared_module,
     save_shared_module,
 )
+from fwasset.core.path_guard import PathGuardError, assert_within_workspace
 from fwasset.core.platform_config import load_platform_config_with_status
 from fwasset.core.services.platform_default_service import canonical_module_dir
 from fwasset.core.types import FirmwareAsset
@@ -30,18 +31,13 @@ __all__ = [
 
 
 def _resolve_relative(path: Path, workspace_root: Path) -> str | None:
-    """绝对路径 → 工作区根相对路径（统一 `/`）；越界返回 None。"""
+    """绝对路径 → 工作区根相对路径（统一 `/`）；越界/非法返回 None。"""
     try:
-        rel = Path(path).resolve().relative_to(Path(workspace_root).resolve())
-    except ValueError:
+        resolved = assert_within_workspace(path, workspace_root)
+    except PathGuardError:
         return None
-    parts = [p for p in rel.parts if p not in (".", "")]
-    if not parts:
-        return None
-    # 拒绝 .. 段（与解析器一致）
-    if any(p == ".." for p in parts):
-        return None
-    return "/".join(parts)
+    ws = Path(workspace_root).resolve()
+    return "/".join(resolved.relative_to(ws).parts)
 
 
 def _source_model_root(asset_path: Path, workspace_root: Path) -> Path | None:
@@ -137,6 +133,19 @@ def set_shared_module(
     ws = Path(workspace_root)
     target_root = Path(root)
     asset_path = Path(asset_path_str)
+
+    # 目标写入路径守卫（R5）：型号配置.toml 必须落在工作区内
+    try:
+        target_root = assert_within_workspace(target_root, ws)
+    except PathGuardError as exc:
+        message = f"登记共享来源失败：{exc}"
+        log_fn(message)
+        return {
+            "ok": False,
+            "code": "out_of_workspace",
+            "message": message,
+            "payload": {},
+        }
 
     # 相对路径 + 越界校验
     rel = _resolve_relative(asset_path, ws)
@@ -285,6 +294,7 @@ def set_shared_module(
 def clear_shared_module(
     target_model_root: str | Path,
     module_key: str,
+    workspace_root: str | Path,
     log_fn: Callable[[str], None] = print,
 ) -> dict:
     """取消登记：删除目标型号根 `型号配置.toml` 中的共享引用条目。
@@ -301,8 +311,21 @@ def clear_shared_module(
             "payload": {},
         }
 
+    # 目标写入路径守卫（R5）
     try:
-        remove_shared_module(Path(root), key)
+        target_root = assert_within_workspace(root, workspace_root)
+    except PathGuardError as exc:
+        message = f"取消共享失败：{exc}"
+        log_fn(message)
+        return {
+            "ok": False,
+            "code": "out_of_workspace",
+            "message": message,
+            "payload": {},
+        }
+
+    try:
+        remove_shared_module(target_root, key)
     except Exception as exc:  # noqa: BLE001
         message = f"取消共享失败：写入型号配置失败 ({exc})"
         log_fn(message)

@@ -26,7 +26,7 @@
 
 ### 代码复核记录（当前 HEAD `b4250f0`）
 
-本轮按当前源码逐项复核了 `asset_index`、扫描器、工作区缓存恢复、型号/平台 TOML、共享引用解析与 USB 目录复制路径。结论仍为 **Conditional Go**，但它只表示“可以立项并推进只读准备”，**不表示当前已经允许新增 CRUD 写入口**。5 项 gate 当前均尚未实现；同时原文有以下几处需要收紧：
+本轮按当前源码逐项复核了 `asset_index`、扫描器、工作区缓存恢复、型号/平台 TOML、共享引用解析与 USB 目录复制路径。结论仍为 **Conditional Go**，但它只表示“可以立项并推进只读准备”，**不表示当前已经允许新增 CRUD 写入口**。R5 已实现并修正 Windows 路径规范化比较，待 Windows 人工验证；其余 4 项（#1 R1/R10、#2 R3、#4 R8、#5 R6d）当前尚未实现；同时原文有以下几处需要收紧：
 
 - `assets` 并非“只有 `save_assets` 一个写接口”：现有 `delete_missing_assets()` 已做逐行删除；准确缺口是**没有面向 CRUD 的定点 upsert / replace / delete / 子树重建 API，也没有路径变化时同步 hidden 状态的事务接口**。
 - SQLite 事务不能包住文件系统操作；一致性模型应明确为“文件动作成功后提交索引事务，任一步失败则按磁盘真相重扫子树”，不能写成把文件动作与数据库动作绑定在同一个事务。
@@ -43,7 +43,7 @@
 
 ### 🟡 Conditional Go（仅立项 / 只读准备）
 
-**可以立 CRUD TASK，也可以先推进只读对账与基础能力；但当前对“新增 CRUD 写入口”仍是 No-Go。** 文末 5 项是完整 CRUD 首版的准入 gate（R6e 已移出），以那张表为准。R12 是强烈建议的第一个子任务，不是第 6 个隐藏 gate。
+**可以立 CRUD TASK，也可以先推进公共边界收口；但当前对“新增 CRUD 写入口”仍是 No-Go。** 文末 5 项是完整 CRUD 首版的准入 gate（R6e 已移出；R5 已实现、待 Windows 人工验证），以那张表为准。
 
 更细地说：任何子任务要开始改真实程序目录，至少先完成公共边界 R1/R10、R3、R5；重命名/删除再叠加 R8，新增/复制/重命名再叠加 R6d。完整增删改首版发布前，5 项必须全部关闭。
 
@@ -308,6 +308,10 @@ schema_version 仍为 3 → 未迁移
 
 **建议**：抽出 `assert_within_workspace(path, workspace_root) -> Path`。最低契约是：空配置根先拒绝；对尚未归一化的输入显式拒绝 `..`；`resolve()` 后确认目标仍在工作区内；Windows 比较统一经 `os.path.normcase`。是否拒绝无害的显式 `.` 可作为输入规范决定，但不要依赖 `Path.parts` 在构造后仍保留它。所有文件写操作强制走该守卫。
 
+> **2026-08-03 已完成（TASK-20260803-r5-path-guard）**：新建 `core/path_guard.py`（`PathGuardError` + `assert_within_workspace`，含空根拒绝、`..` 词法拒绝、绝对路径要求、normcase + 正斜杠归一比较，允许目标等于工作区根）。已接入全部写入口：`set_shared_module`（源资产 + 目标根）、`clear_shared_module`、`set_default_variant`、`set_module_default_for_model`；`shared_module_resolver._is_under_workspace` 委托守卫（读端词法双保险保留）；view model 的 `unregister_shared_module` / `set_default_variant` 传入 `workspace_root` 并在未绑定时返回 `invalid_args`。越界/边界用例见 `tests/test_path_guard.py` 与服务层 `out_of_workspace` 用例。
+>
+> **2026-08-03 回归修复（Windows 实机验证发现）**：初版比较函数先 `as_posix()` 转正斜杠再 `normcase`，而 Windows 的 `os.path.normcase`（C 实现）会把 `/` 一并规范化为 `\`，导致前缀边界比较 `base + "/"` 永不匹配——Linux 上 normcase 是 no-op 故测试全绿，Windows 实机登记共享被误拒（`D:\按摩器程序\L36双机芯-上3D-下2D程序` 报"路径不在工作区内"）。已改为先 `normcase(str(p))` 再 `replace("\\", "/")` 统一斜杠，并补模拟 Windows normcase 的回归测试（`_fake_win_normcase`）。人工验证：Windows 实机登记共享成功。
+
 ### R6（P2）：各 CRUD 动作的文件语义需在 TASK 中逐条定稿  `complexity: medium`
 
 **复杂度理由：** 纯设计定稿产物（写进 TASK），但决定后续多个子任务的实现边界。
@@ -347,7 +351,7 @@ SHFileOperationW rc = 0 (0 = 成功)
 
 2. **A 并不真正降低风险，只是把风险转移给资源管理器。** 用户仍然要删，只是改用资源管理器删——而资源管理器**不知道 R8 的 TOML 引用关系**，删掉一个被 `平台配置.toml` 引用为默认、或被其它型号 `shared_modules` 引用的变体时，**不会有任何警告**。反倒是应用内删除能跑引用反查并弹确认。**A 让最危险的那次删除发生在最没有防护的地方。**
 
-3. **A 会让 CRUD 显得残缺，诱发绕过。** 一个能增能改不能删的工具，用户会习惯性切回资源管理器操作——而一旦养成「在软件外改目录」的习惯，R12 的对账负担和索引不一致风险都会上升，这与 CRUD 的初衷相悖。
+3. **A 会让 CRUD 显得残缺，诱发绕过。** 一个能增能改不能删的工具，用户会习惯性切回资源管理器操作——而一旦养成「在软件外改目录」的习惯，索引不一致风险会上升，这与 CRUD 的初衷相悖。
 
 #### B 的实施要点
 
@@ -757,16 +761,13 @@ CLAUDE.md 明确：默认变体**只由** `平台配置.toml` 定义，`_默认`
 
 **关键新增约定**：每个 CRUD 集成测试必须有一条 **文件-索引一致性断言**（操作后 `query_assets()` 的 path 集合 == 磁盘实际扫描结果）。这直接对应你担心的「文件改了库没改 / 库改了文件没改」。
 
-### R12（P3）：建议补一条「外部手动改目录后对账」的测试与入口  `complexity: medium`
+### R12（已取消·不再适用）：外部手动改目录后的对账入口  `complexity: n/a`
 
-**复杂度理由：** 新增对账 service + 测试；UI 侧只需一个按钮。
-
-用户在软件外用资源管理器改了目录，是**必然会发生**的。建议 CRUD 第一个子 TASK 就做只读对账：
-
-- `reconcile_workspace()`：只读扫描 → 与库 diff → 返回「新增 / 消失 / 同路径内容或派生字段变化」三列表，**不自动写**。目录重命名在当前 `path` 主键模型下只能可靠表示为“旧路径消失 + 新路径新增”；没有稳定 ID 时不得猜测二者一定是一次 rename。
-- UI 给一个「检查程序文件夹变化」按钮，展示 diff，用户确认后才应用。
-
-这个子任务是**只读的**，风险最低，却能提前把「文件与库一致性」的基础设施建好，给后续所有写操作复用。**建议作为 CRUD 的第一个子 TASK，但它不是额外准入条件。**
+> **2026-08-03 决策：不单独做「软件外改目录」的对账 UI 与服务。**
+>
+> 本系统是公司内部使用工具，用户在软件外用资源管理器改动目录属于用户操作责任；为此单独维护一套只读对账 UI（`reconcile_workspace()` + 「检查程序文件夹变化」按钮）收益有限，取消。
+>
+> **保留的底线**：CRUD **自身**失败时仍必须有「按磁盘真相重扫受影响子树」的恢复能力——文件动作成功但写库失败时，索引与磁盘会不一致，必须能重扫兜底。该能力属于 R3 的 `bulk_reindex_subtree` / `reconcile_subtree(path)` 冷接口，不因本决策而取消。
 
 ---
 
@@ -774,13 +775,13 @@ CLAUDE.md 明确：默认变体**只由** `平台配置.toml` 定义，`_默认`
 
 在完整 CRUD 首版开放写操作前必须完成下列 5 项。若按子 TASK 渐进实施，任何真实目录写入都先满足 #1–#3；涉及删除/重命名再满足 #4，涉及新增/复制/重命名再满足 #5。现有 TOML 写入口也应尽早接入 #1 与 #3：
 
-| # | 前置项 | 对应 Issue | 复杂度 |
-| --- | --- | --- | --- |
-| 1 | 配置根作为写操作权威 + scan_meta 一致性校验 + 未配置时禁用写入口 | R1、R10 | medium |
-| 2 | CRUD 定点写 API + 保留工作区上下文的局部扫描/子树对账 + SQLite 事务 + 文件/索引失败恢复策略（**不含 schema 迁移**；SQLite 事务不包含文件系统动作） | R3 | high |
-| 3 | 统一路径守卫 `assert_within_workspace` | R5 | medium |
-| 4 | TOML 引用反查 + 删除二次确认 + 重命名/移动时级联改写或阻止断链 | R8 | high |
-| 5 | 变体命名规范 + 新增/复制/重命名入口强制走它 | R6d | medium |
+| # | 前置项 | 对应 Issue | 复杂度 | 状态 |
+| --- | --- | --- | --- | --- |
+| 1 | 配置根作为写操作权威 + scan_meta 一致性校验 + 未配置时禁用写入口 | R1、R10 | medium | ⏳ 未开始 |
+| 2 | CRUD 定点写 API + 保留工作区上下文的局部扫描/子树对账 + SQLite 事务 + 文件/索引失败恢复策略（**不含 schema 迁移**；SQLite 事务不包含文件系统动作） | R3 | high | ⏳ 未开始 |
+| 3 | 统一路径守卫 `assert_within_workspace` | R5 | medium | ✅ 已完成（TASK-20260803-r5-path-guard，Windows 实机验证通过） |
+| 4 | TOML 引用反查 + 删除二次确认 + 重命名/移动时级联改写或阻止断链 | R8 | high | ⏳ 未开始 |
+| 5 | 变体命名规范 + 新增/复制/重命名入口强制走它 | R6d | medium | ⏳ 未开始（待版本段数产品决策） |
 | ~~6~~ | ~~放宽版本解析正则（+ 人验），可选覆写通道~~（已移出 gate） | ~~R6e~~ | —— |
 
 > **⚠️ R6d 立项前必须先关闭的产品决策**：版本号段数（两段 `V2.1` 还是三段 `V2.1.0`）须作为独立产品规则确定后，`core/naming.py` 的校验规则才能定稿。见 R6d「待确认产品规则」注。
@@ -791,10 +792,11 @@ CLAUDE.md 明确：默认变体**只由** `平台配置.toml` 定义，`_默认`
 - **R2 移出**（2026-07-29）：「切根后操作面板持有旧资产」判断不成立——`_on_grid_selection_changed(None)` 每次刷新都会销毁面板。降级 P3·UX。
 - **R4（schema v4）移出**（2026-07-29）：经实测，v3 现有 schema 无需迁移即可支撑行级 CRUD，详见 R4。迁移改为**按需触发**，不作为准入前提。
 - **R6e 移出**（2026-07-29）：版本解析放宽（R6e-a）与可选覆写通道均属独立低风险工作，不作为 CRUD 准入阻断条件。R6d 命名规范确保新建资产直接可被现有正则解析；R6e-a 可在出现实际解析问题时单独处理；覆写通道等出现无法解析资产后再做。降级 P3·非阻断。
+- **R12 取消**（2026-08-03）：内部使用工具，外部改目录属用户操作责任，不单独做只读对账 UI 与服务（`reconcile_workspace` 不再作为目标 API）。CRUD 失败恢复所需的子树重扫能力保留在 R3。
 
-**建议实施顺序**：R12（只读对账，建基础设施）→ R5 + R1/R10（先收口现有写入口与工作区边界）→ R3（索引行级写 + 局部扫描能力）→ **R6d（命名规范，必须早于新增/复制/重命名入口上线）** → R8（引用级联）→ 才开始做对应的增删改。
+**建议实施顺序**：R5 + R1/R10（先收口现有写入口与工作区边界）→ R3（索引行级写 + 局部扫描能力，含失败恢复用的子树重扫）→ **R6d（命名规范，必须早于新增/复制/重命名入口上线）** → R8（引用级联）→ 才开始做对应的增删改。
 
-> R6d 之所以必须早于新增/复制/重命名入口：命名规范只要晚一步，就会有不规范目录被 CRUD 写进真实目录树。规范本身是纯函数，成本低，没有理由延后；但它不阻断只读对账，也不影响与命名无关的既有 TOML 写入口。
+> R6d 之所以必须早于新增/复制/重命名入口：命名规范只要晚一步，就会有不规范目录被 CRUD 写进真实目录树。规范本身是纯函数，成本低，没有理由延后；它不影响既有 TOML 写入口的收口顺序。
 
 **明确不阻断的项**：R6（其余动作语义定稿，随 TASK 立项做）、**R6c（历史版本折叠，纯展示层，可安排在 CRUD 之后独立做）**、R7（跨卷移动，实现时处理）、R9、R11、**R2（切根重置，P3·UX）**。
 
@@ -813,7 +815,7 @@ uv run python -m pytest -m "not ui" -q
 
 - **当前 HEAD 复核**：`uv run python -m pytest -m "not ui" -q` → **357 passed, 26 deselected；coverage 89.22%**（门禁 80%）。与基线记录的 deselected/coverage 小幅差异来自基线后 Qt smoke 测试调整；核心测试数量仍为 357 passed。
 - 索引层单工作区语义由现有回归测试再次确认：换根会全量替换资产、`scan_meta` 只保留当前根、悬空 hidden 会被清理，`active_workspace_root()` 返回最近扫描根。
-- 静态枚举确认 5 项 gate 尚无完整实现：未发现 `upsert_asset` / `replace_asset` / `assert_within_workspace` / `find_references_to` / `build_variant_dir_name` / `reconcile_workspace` 等目标 API；同时现有扫描器也没有区分 `workspace_root` 与 `subtree_root` 的局部扫描入口。
+- 静态枚举确认 4 项 gate 尚无完整实现：未发现 `upsert_asset` / `replace_asset` / `find_references_to` / `build_variant_dir_name` 等目标 API；同时现有扫描器也没有区分 `workspace_root` 与 `subtree_root` 的局部扫描入口。（`assert_within_workspace` 已于 2026-08-03 随 TASK-20260803-r5-path-guard 实现，Windows 实机验证通过。）
 - 复核还确认现状已有 TOML 写入：`set_module_default_for_model()`、`set_shared_module()`、`clear_shared_module()` 均可由 Qt 右键入口触发，因此 R1/R5/R10 不能只按“未来 CRUD”处理。
 
 `asset_index` 公开 API 复核：已有 `delete_missing_assets` 的对账式逐行删除，但没有 CRUD 定点 upsert / replace / delete / 子树重建接口，见 §2 R3。

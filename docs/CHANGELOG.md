@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### refactor(core,ui): R5 统一工作区路径守卫（TASK-20260803-r5-path-guard）
+
+- 新增 `core/path_guard.py`：`assert_within_workspace(path, workspace_root) -> Path`，失败抛 `PathGuardError`。最低契约：空工作区根拒绝、目标必须为绝对路径、resolve 前拒绝 `..` 词法段、resolve 后 normcase + 正斜杠归一确认落点在工作区内（允许等于根）。
+- 全部写入口接入守卫：`set_shared_module`（源资产与目标根）、`clear_shared_module`、`set_default_variant`、`set_module_default_for_model`；越界统一返回 `out_of_workspace` 错误码，不落盘。
+- `clear_shared_module` / `set_default_variant` / `set_module_default_for_model` 新增必选 `workspace_root` 参数（服务契约变化，调用方已同步）。
+- `shared_module_resolver._is_under_workspace` 委托统一守卫，读端词法双保险保留。
+- 新增 `tests/test_path_guard.py`（14 用例）与服务层越界用例。REVIEW-20260728 R5 gate 关闭。
+- **Windows normcase 顺序回归（实机发现）**：初版比较先 `as_posix()` 转正斜杠再 `normcase`，而 Windows 的 `os.path.normcase`（C 实现）会把 `/` 一并规范化为 `\`，前缀边界比较永不匹配，登记共享被误拒（Linux 上 normcase 为 no-op 故测试未暴露）。改为先 `normcase(str(p))` 再 `replace("\\", "/")` 统一斜杠，并补 `_fake_win_normcase` 回归用例。
+
+验证：`pytest -m "not ui"`（WSL `.venv-wsl`）→ 362 passed, 1 skipped（7 个既有 Windows 专属用例在 Linux 环境失败，基线同）。人工验证：Windows 实机登记共享成功。
+
 ### docs: reorganize project and Agent documentation
 
 - Move the project overview from `docs/README.md` to the repository root `README.md`.

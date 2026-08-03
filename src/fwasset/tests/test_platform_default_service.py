@@ -21,7 +21,7 @@ def _silent(_msg: str) -> None:
 
 class TestSetDefaultVariant:
     def test_creates_config_when_missing(self, tmp_path: Path):
-        result = set_default_variant(str(tmp_path), "标准单机芯3D", "主板程序", "量产_默认", log_fn=_silent)
+        result = set_default_variant(str(tmp_path), "标准单机芯3D", "主板程序", "量产_默认", workspace_root=tmp_path, log_fn=_silent)
         assert result["ok"] is True
         assert result["code"] == "ok"
         assert result["payload"]["previous_variant"] == ""
@@ -47,7 +47,7 @@ class TestSetDefaultVariant:
             ),
             encoding="utf-8",
         )
-        result = set_default_variant(str(tmp_path), "标准单机芯3D", "主板程序", "防夹功能", log_fn=_silent)
+        result = set_default_variant(str(tmp_path), "标准单机芯3D", "主板程序", "防夹功能", workspace_root=tmp_path, log_fn=_silent)
         assert result["ok"] is True
         assert result["payload"]["previous_variant"] == "量产_默认"
 
@@ -63,30 +63,30 @@ class TestSetDefaultVariant:
             '[[platform]]\nname = "标准单机芯3D"\n[platform.defaults]\n"主板程序" = "量产_默认"\n',
             encoding="utf-8",
         )
-        result = set_default_variant(str(tmp_path), "新平台", "腿部程序", "", log_fn=_silent)
+        result = set_default_variant(str(tmp_path), "新平台", "腿部程序", "", workspace_root=tmp_path, log_fn=_silent)
         assert result["ok"] is True
         loaded = {p.platform_name: p for p in load_platform_config(tmp_path)}
         assert loaded["新平台"].defaults == {"腿部程序": ""}
         assert loaded["标准单机芯3D"].defaults == {"主板程序": "量产_默认"}
 
     def test_empty_variant_name_is_allowed(self, tmp_path: Path):
-        result = set_default_variant(str(tmp_path), "标准单机芯3D", "腿部程序", "", log_fn=_silent)
+        result = set_default_variant(str(tmp_path), "标准单机芯3D", "腿部程序", "", workspace_root=tmp_path, log_fn=_silent)
         assert result["ok"] is True
         loaded = load_platform_config(tmp_path)
         assert loaded[0].defaults["腿部程序"] == ""
 
     def test_rejects_empty_platform_or_module(self, tmp_path: Path):
-        result = set_default_variant(str(tmp_path), "", "主板程序", "x", log_fn=_silent)
+        result = set_default_variant(str(tmp_path), "", "主板程序", "x", workspace_root=tmp_path, log_fn=_silent)
         assert result["ok"] is False
         assert result["code"] == "invalid_args"
 
-        result = set_default_variant(str(tmp_path), "平台", "", "x", log_fn=_silent)
+        result = set_default_variant(str(tmp_path), "平台", "", "x", workspace_root=tmp_path, log_fn=_silent)
         assert result["ok"] is False
         assert result["code"] == "invalid_args"
 
     def test_rejects_missing_root_dir(self, tmp_path: Path):
         missing = tmp_path / "不存在的目录"
-        result = set_default_variant(str(missing), "平台", "主板程序", "x", log_fn=_silent)
+        result = set_default_variant(str(missing), "平台", "主板程序", "x", workspace_root=tmp_path, log_fn=_silent)
         assert result["ok"] is False
         assert result["code"] == "invalid_args"
         assert "不存在" in result["message"]
@@ -117,7 +117,7 @@ class TestSetModuleDefaultForModel:
             str(tmp_path),
             "蓝牙程序",
             "中文-通用_默认",
-            log_fn=_silent,
+            workspace_root=tmp_path, log_fn=_silent,
             model_name="L36",
         )
         assert result["ok"] is True
@@ -131,7 +131,7 @@ class TestSetModuleDefaultForModel:
     def test_creates_placeholder_block_when_config_missing(self, tmp_path: Path):
         """无方案/无 platform 时才建内部块「默认」。"""
         result = set_module_default_for_model(
-            str(tmp_path), "主板程序", "量产_默认", log_fn=_silent, model_name="L36"
+            str(tmp_path), "主板程序", "量产_默认", workspace_root=tmp_path, log_fn=_silent, model_name="L36"
         )
         assert result["ok"] is True
         loaded = load_platform_config(tmp_path)
@@ -164,7 +164,7 @@ class TestSetModuleDefaultForModel:
             str(tmp_path),
             "主板程序",
             "量产_默认",
-            log_fn=_silent,
+            workspace_root=tmp_path, log_fn=_silent,
             model_name="L36",
         )
         assert result["ok"] is True
@@ -191,7 +191,7 @@ class TestSetModuleDefaultForModel:
             encoding="utf-8",
         )
         result = set_module_default_for_model(
-            str(tmp_path), "蓝牙程序", "中文", log_fn=_silent, model_name="L36"
+            str(tmp_path), "蓝牙程序", "中文", workspace_root=tmp_path, log_fn=_silent, model_name="L36"
         )
         assert result["ok"] is True
         loaded = {p.platform_name: p for p in load_platform_config(tmp_path)}
@@ -222,7 +222,7 @@ class TestSetModuleDefaultForModel:
             str(tmp_path),
             "3D机芯板程序",
             "YJ_ZD_3D",
-            log_fn=_silent,
+            workspace_root=tmp_path, log_fn=_silent,
             model_name="L36",
         )
         assert result["ok"] is True
@@ -254,12 +254,38 @@ def _assert_write_safety_common(result: dict, path: Path, original: bytes) -> No
 
 
 class TestWriteSafetyDamagedConfig:
+    def test_out_of_workspace_refused(self, tmp_path: Path):
+        """R5：目标型号根在工作区外 → out_of_workspace 且不落盘。"""
+        outside = tmp_path.parent / f"{tmp_path.name}_外部"
+        outside.mkdir(exist_ok=True)
+        outside_toml = outside / "平台配置.toml"
+        r1 = set_default_variant(
+            str(outside), "标准单机芯3D", "主板程序", "x",
+            workspace_root=tmp_path, log_fn=_silent,
+        )
+        r2 = set_module_default_for_model(
+            str(outside), "主板程序", "x",
+            workspace_root=tmp_path, log_fn=_silent,
+        )
+        assert r1["code"] == "out_of_workspace"
+        assert r2["code"] == "out_of_workspace"
+        assert not outside_toml.exists()
+
+    def test_dotdot_target_refused(self, tmp_path: Path):
+        """R5：目标路径含 .. 词法段 → out_of_workspace。"""
+        (tmp_path / "L36程序").mkdir()
+        bad = str(tmp_path / "L36程序" / ".." / "L50程序")
+        r1 = set_default_variant(
+            bad, "标准", "主板程序", "x", workspace_root=tmp_path, log_fn=_silent
+        )
+        assert r1["code"] == "out_of_workspace"
+
     def test_set_default_variant_refuses_damaged_toml(self, tmp_path: Path):
         path = tmp_path / "平台配置.toml"
         path.write_text(_DAMAGED, encoding="utf-8")
         original = path.read_bytes()
         result = set_default_variant(
-            str(tmp_path), "标准单机芯3D", "主板程序", "量产_默认", log_fn=_silent
+            str(tmp_path), "标准单机芯3D", "主板程序", "量产_默认", workspace_root=tmp_path, log_fn=_silent
         )
         _assert_write_safety_common(result, path, original)
 
@@ -268,7 +294,7 @@ class TestWriteSafetyDamagedConfig:
         path.write_text(_DAMAGED, encoding="utf-8")
         original = path.read_bytes()
         result = set_module_default_for_model(
-            str(tmp_path), "主板程序", "量产_默认", log_fn=_silent, model_name="L36"
+            str(tmp_path), "主板程序", "量产_默认", workspace_root=tmp_path, log_fn=_silent, model_name="L36"
         )
         _assert_write_safety_common(result, path, original)
 
@@ -284,10 +310,10 @@ class TestWriteSafetyDamagedConfig:
         monkeypatch.setattr(pds, "ensure_platform_blocks", boom)
         monkeypatch.setattr(pds, "_apply_module_default", boom)
         r1 = set_default_variant(
-            str(tmp_path), "标准", "主板程序", "x", log_fn=_silent
+            str(tmp_path), "标准", "主板程序", "x", workspace_root=tmp_path, log_fn=_silent
         )
         r2 = set_module_default_for_model(
-            str(tmp_path), "主板程序", "x", log_fn=_silent
+            str(tmp_path), "主板程序", "x", workspace_root=tmp_path, log_fn=_silent
         )
         assert r1["code"] == "config_parse_error"
         assert r2["code"] == "config_parse_error"
@@ -303,7 +329,7 @@ class TestWriteSafetyDamagedConfig:
         original = path.read_bytes()
         monkeypatch.setattr(platform_config_mod, "tomllib", None)
         result = set_module_default_for_model(
-            str(tmp_path), "主板程序", "量产", log_fn=_silent
+            str(tmp_path), "主板程序", "量产", workspace_root=tmp_path, log_fn=_silent
         )
         assert result["ok"] is False
         assert result["code"] == "parser_missing"
@@ -325,7 +351,7 @@ class TestWriteSafetyDamagedConfig:
 
         monkeypatch.setattr(config_io.os, "replace", boom)
         result = set_module_default_for_model(
-            str(tmp_path), "主板程序", "新", log_fn=_silent
+            str(tmp_path), "主板程序", "新", workspace_root=tmp_path, log_fn=_silent
         )
         assert result["ok"] is False
         assert result["code"] == "write_failed"
@@ -347,7 +373,7 @@ class TestWriteSafetyDamagedConfig:
 
         monkeypatch.setattr(config_io.os, "fsync", boom)
         result = set_module_default_for_model(
-            str(tmp_path), "主板程序", "新", log_fn=_silent
+            str(tmp_path), "主板程序", "新", workspace_root=tmp_path, log_fn=_silent
         )
         assert result["ok"] is False
         assert result["code"] == "write_failed"
@@ -357,7 +383,7 @@ class TestWriteSafetyDamagedConfig:
     def test_empty_comment_only_file_still_bootstraps(self, tmp_path: Path):
         (tmp_path / "平台配置.toml").write_text("# empty\n", encoding="utf-8")
         result = set_module_default_for_model(
-            str(tmp_path), "主板程序", "量产_默认", log_fn=_silent, model_name="L36"
+            str(tmp_path), "主板程序", "量产_默认", workspace_root=tmp_path, log_fn=_silent, model_name="L36"
         )
         assert result["ok"] is True
         loaded = load_platform_config(tmp_path)

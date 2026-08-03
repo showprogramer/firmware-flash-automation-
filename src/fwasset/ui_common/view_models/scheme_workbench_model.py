@@ -373,6 +373,13 @@ class SchemeWorkbenchModel:
         log_fn=print,
     ) -> dict:
         """取消登记：删除目标模块的共享引用条目（只删 toml 不删文件，B4b）。"""
+        if self.root_dir is None:
+            return {
+                "ok": False,
+                "code": "invalid_args",
+                "message": "取消共享失败：工作区未绑定",
+                "payload": {},
+            }
         target_root = self._model_root_path_for_name(target_model_name)
         if target_root is None:
             return {
@@ -381,7 +388,9 @@ class SchemeWorkbenchModel:
                 "message": f"取消共享失败：目标型号不存在 ({target_model_name})",
                 "payload": {},
             }
-        return _clear_shared_module_core(target_root, module_key, log_fn=log_fn)
+        return _clear_shared_module_core(
+            target_root, module_key, workspace_root=self.root_dir, log_fn=log_fn
+        )
 
     # 与 query_assets / _filter_assets 共用的跨字段分词搜索字段
     _KEYWORD_FIELDS = (
@@ -685,6 +694,13 @@ class SchemeWorkbenchModel:
                 "message": "设置默认失败：该程序不在通用区，无法设为模块默认版本",
                 "payload": {},
             }
+        if self.root_dir is None:
+            return {
+                "ok": False,
+                "code": "invalid_args",
+                "message": "设置默认失败：工作区未绑定",
+                "payload": {},
+            }
         # 规范模块名：优先 catalog label（板），否则路径段归一「版」→「板」
         label = str(asset.get("firmware_label", "")).strip()
         module_dir = canonical_module_dir(label or module_dir)
@@ -692,6 +708,7 @@ class SchemeWorkbenchModel:
             self._platform_config_root(model_name),
             module_dir,
             variant_name,
+            workspace_root=self.root_dir,
             log_fn=log_fn,
             model_name=model_name,
         )

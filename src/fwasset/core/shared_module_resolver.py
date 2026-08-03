@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Literal
 
 from fwasset.core.model_config import SharedModuleRef, load_model_config
+from fwasset.core.path_guard import PathGuardError, assert_within_workspace
 from fwasset.core.platform_config import PlatformDefaults, canonical_module_dir, load_platform_config_with_status
 from fwasset.core.scheme_config import _is_excluded_dir
 
@@ -21,10 +22,11 @@ class SharedModuleResolution:
 
 
 def _is_under_workspace(path: Path, workspace_root: Path) -> bool:
+    """复用统一守卫：目标在根之下（允许相等）。"""
     try:
-        path.resolve().relative_to(workspace_root.resolve())
+        assert_within_workspace(path, workspace_root)
         return True
-    except ValueError:
+    except PathGuardError:
         return False
 
 

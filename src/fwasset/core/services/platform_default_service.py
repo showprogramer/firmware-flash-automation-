@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from fwasset.core.path_guard import PathGuardError, assert_within_workspace
 from fwasset.core.platform_config import (
     PlatformDefaults,
     canonical_module_dir,
@@ -133,6 +134,7 @@ def set_default_variant(
     platform_name: str,
     module_dir: str,
     variant_name: str,
+    workspace_root: str | Path,
     log_fn=print,
 ) -> dict:
     """把某 [[platform]] 条目下某模块的默认变体写入 `平台配置.toml`。
@@ -151,7 +153,18 @@ def set_default_variant(
             "payload": {},
         }
 
-    root_path = Path(root)
+    # 目标写入路径守卫（R5）
+    try:
+        root_path = assert_within_workspace(root, workspace_root)
+    except PathGuardError as exc:
+        message = f"设置默认失败：{exc}"
+        log_fn(message)
+        return {
+            "ok": False,
+            "code": "out_of_workspace",
+            "message": message,
+            "payload": {},
+        }
     if not root_path.is_dir():
         return {
             "ok": False,
@@ -198,6 +211,7 @@ def set_module_default_for_model(
     model_root: str,
     module_dir: str,
     variant_name: str,
+    workspace_root: str | Path,
     log_fn=print,
     *,
     model_name: str = "",
@@ -217,7 +231,18 @@ def set_module_default_for_model(
             "payload": {},
         }
 
-    root_path = Path(root)
+    # 目标写入路径守卫（R5）
+    try:
+        root_path = assert_within_workspace(root, workspace_root)
+    except PathGuardError as exc:
+        message = f"设置默认失败：{exc}"
+        log_fn(message)
+        return {
+            "ok": False,
+            "code": "out_of_workspace",
+            "message": message,
+            "payload": {},
+        }
     if not root_path.is_dir():
         return {
             "ok": False,
