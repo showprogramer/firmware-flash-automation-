@@ -95,6 +95,28 @@ def test_follow_default_auto_detect_platform(tmp_path: Path):
     assert res.resolved_path == (src / "通用" / "手控UI" / "v3.0").resolve()
 
 
+def test_follow_default_prefers_canonical_shortcut_key(tmp_path: Path):
+    """快捷键短键与规范键并存时，自动更新采用规范键的默认变体。"""
+    ws = tmp_path / "ws"
+    src = _make_source_root(ws, "L50S程序", "l50s")
+    module_dir = src / "通用" / "快捷键"
+    _make_variant(module_dir, "量产_默认")
+    _make_variant(module_dir, "贝乐")
+    save_platform_config(src, [
+        PlatformDefaults("标准单机芯", {"快捷键": "量产_默认", "快捷键程序": "贝乐"}),
+    ])
+
+    ref = _make_ref(
+        source_root_dir="L50S程序",
+        module_rel="通用/快捷键",
+        source_module="快捷键程序",
+        source_platform="标准单机芯",
+    )
+    res = resolve_shared_module(ref, ws)
+    assert res.status == "hit"
+    assert res.resolved_path == (module_dir / "贝乐").resolve()
+
+
 # ---------------------------------------------------------------------------
 # 3. follow_default — defaults[module] = ""（唯一变体），resolved = 模块目录本身
 # ---------------------------------------------------------------------------

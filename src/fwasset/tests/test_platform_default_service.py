@@ -234,12 +234,42 @@ class TestSetModuleDefaultForModel:
             assert block.defaults["3D机芯板程序"] == "YJ_ZD_3D"
             assert "3D机芯版程序" not in block.defaults
 
+    def test_rewrites_shortcut_alias_to_catalog_key(self, tmp_path: Path):
+        """快捷键目录短名与 catalog 标签只能保留一条默认键。"""
+        (tmp_path / "平台配置.toml").write_text(
+            "\n".join(
+                [
+                    "[[platform]]",
+                    'name = "标准单机芯3D"',
+                    "[platform.defaults]",
+                    '"快捷键" = "量产_默认"',
+                    '"快捷键程序" = "贝乐"',
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        result = set_module_default_for_model(
+            str(tmp_path),
+            "快捷键程序",
+            "越南",
+            workspace_root=tmp_path,
+            log_fn=_silent,
+            model_name="L36",
+        )
+
+        assert result["ok"] is True
+        defaults = load_platform_config(tmp_path)[0].defaults
+        assert defaults["快捷键程序"] == "越南"
+        assert "快捷键" not in defaults
+
     def test_canonical_module_dir_normalizes_typo(self):
         from fwasset.core.platform_config import canonical_module_dir
 
         assert canonical_module_dir("3D机芯版程序") == "3D机芯板程序"
         assert canonical_module_dir("2D机芯板程序") == "2D机芯板程序"
         assert canonical_module_dir("  3D机芯版程序  ") == "3D机芯板程序"
+        assert canonical_module_dir("快捷键") == "快捷键程序"
 
 
 _DAMAGED = "[[platform\nnot valid"

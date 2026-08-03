@@ -7,7 +7,6 @@ import threading
 from pathlib import Path
 
 from PySide6.QtCore import QItemSelectionModel, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QApplication,
     QCompleter,
@@ -17,13 +16,13 @@ from PySide6.QtWidgets import (
     QLabel,
     QListWidget,
     QListWidgetItem,
-    QMenu,
     QMessageBox,
     QVBoxLayout,
     QWidget,
 )
 
 from qfluentwidgets import (
+    Action,
     BodyLabel,
     CaptionLabel,
     ComboBox,
@@ -33,6 +32,7 @@ from qfluentwidgets import (
     ListWidget,
     PrimaryPushButton,
     PushButton,
+    RoundMenu,
     SearchLineEdit,
     StrongBodyLabel,
     SubtitleLabel,
@@ -63,6 +63,7 @@ from fwasset.ui_common.workbench_helpers import (
     shared_conflict_prompt_message,
     shared_register_action_label,
     shared_register_dialog_title,
+    shared_replace_action_label,
     shared_source_picker_caption,
     shared_unregister_action_label,
     shared_unregister_confirm_message,
@@ -753,52 +754,49 @@ class WorkbenchInterface(QWidget):
 
     # ------------------------------------------------------------------ 右键菜单（设为「型号」模块默认版本 + 共享登记 B2）
     def _on_grid_right_click(self, variant: ModuleVariant, global_pos) -> None:
-        menu = QMenu(self)
+        menu = RoundMenu(parent=self)
 
         asset = variant.asset
         model_name = self.current_selection.model_name
         module = module_label_from_asset(asset)
         module_key = canonical_module_dir(module)
         is_common = variant.source_kind == "common" and str(asset.get("category", "")) == "common"
+        is_default = is_common and self.workbench_model.is_model_module_default(asset)
         if is_common:
-            # 无 toml 也可设默认（软件自动创建配置）；已是默认则灰掉
-            if self.workbench_model.is_model_module_default(asset):
-                action = QAction(
-                    set_default_action_label(model_name, module, is_current=True),
-                    menu,
-                )
-                action.setEnabled(False)
-                menu.addAction(action)
-            else:
-                action = QAction(set_default_action_label(model_name, module), menu)
+            # 默认状态已在表格的 ★默认 徽章表达，菜单只保留可执行操作。
+            if not is_default:
+                action = Action(FluentIcon.EDIT, set_default_action_label(model_name, module), menu)
                 action.triggered.connect(lambda _c=False: self._set_default_variant(variant))
                 menu.addAction(action)
-            menu.addSeparator()
 
         # --- 共享登记（B2）：右键目标型号的模块行 → 登记/取消共享来源 ---
         if module_key:
             shared_res = self.workbench_model.resolve_shared_module(model_name, module_key)
+            if is_common and not is_default:
+                menu.addSeparator()
             if shared_res is not None:
-                unreg_action = QAction(
-                    shared_unregister_action_label(module), menu
+                reg_action = Action(FluentIcon.SYNC, shared_replace_action_label(module), menu)
+                reg_action.triggered.connect(
+                    lambda _c=False: self._register_shared_source(variant)
                 )
+                menu.addAction(reg_action)
+                unreg_action = Action(FluentIcon.CANCEL, shared_unregister_action_label(module), menu)
                 unreg_action.triggered.connect(
                     lambda _c=False: self._unregister_shared(variant)
                 )
                 menu.addAction(unreg_action)
-            reg_action = QAction(
-                shared_register_action_label(module), menu
-            )
-            reg_action.triggered.connect(
-                lambda _c=False: self._register_shared_source(variant)
-            )
-            menu.addAction(reg_action)
+            else:
+                reg_action = Action(FluentIcon.LINK, shared_register_action_label(module), menu)
+                reg_action.triggered.connect(
+                    lambda _c=False: self._register_shared_source(variant)
+                )
+                menu.addAction(reg_action)
             menu.addSeparator()
 
-        open_action = QAction("打开目录", menu)
+        open_action = Action(FluentIcon.FOLDER, "打开所在目录", menu)
         open_action.triggered.connect(lambda: self._open_asset_dir(variant))
         menu.addAction(open_action)
-        copy_action = QAction("复制目录路径", menu)
+        copy_action = Action(FluentIcon.COPY, "复制目录路径", menu)
         copy_action.triggered.connect(lambda: self._copy_to_clipboard(str(variant.asset.get("path", ""))))
         menu.addAction(copy_action)
 

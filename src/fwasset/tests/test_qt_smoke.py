@@ -14,6 +14,7 @@ import pytest
 pytest.importorskip("PySide6")
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PySide6.QtGui import QAction  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from fwasset.ui_common.view_models.scheme_workbench_model import (  # noqa: E402
@@ -58,6 +59,109 @@ def test_import_workbench_window_module(qapp) -> None:
 
     assert hasattr(module, "QtWorkbenchWindow")
     assert hasattr(module, "main")
+
+
+def _capture_workbench_context_menu(
+    qapp,
+    monkeypatch,
+    *,
+    is_default: bool,
+    shared: bool,
+) -> tuple[list[QAction], int]:
+    """构建工作台资产右键菜单，并返回其中的动作列表。"""
+    from PySide6.QtCore import QPoint
+    from qfluentwidgets import RoundMenu
+
+    from fwasset.ui_qt.workbench_window import WorkbenchInterface
+
+    workbench = WorkbenchInterface()
+    workbench.current_selection.model_name = "L36"
+    monkeypatch.setattr(workbench.workbench_model, "is_model_module_default", lambda _asset: is_default)
+    monkeypatch.setattr(
+        workbench.workbench_model,
+        "resolve_shared_module",
+        lambda _model, _module: {"source": "L50S"} if shared else None,
+    )
+    captured: dict[str, RoundMenu] = {}
+    separator_count = 0
+    original_add_separator = RoundMenu.addSeparator
+
+    def _add_separator(menu: RoundMenu) -> None:
+        nonlocal separator_count
+        separator_count += 1
+        original_add_separator(menu)
+
+    monkeypatch.setattr(RoundMenu, "addSeparator", _add_separator)
+    monkeypatch.setattr(RoundMenu, "exec", lambda menu, _pos: captured.setdefault("menu", menu))
+    variant = ModuleVariant(
+        asset={
+            "category": "common",
+            "firmware_label": "快捷键程序",
+            "path": "D:/L36/通用/快捷键/量产_默认",
+        },
+        name="量产_默认",
+        version="V1.12",
+        source_kind="common",
+        source_label="通用",
+    )
+
+    workbench._on_grid_right_click(variant, QPoint(0, 0))
+    return captured["menu"].actions(), separator_count
+
+
+def test_context_menu_hides_default_status_and_uses_replace_actions(qapp, monkeypatch) -> None:
+    """默认状态由表格徽章表达；已共享时菜单只给更换与取消操作。"""
+    from qfluentwidgets import FluentIcon
+
+    actions, separator_count = _capture_workbench_context_menu(
+        qapp,
+        monkeypatch,
+        is_default=True,
+        shared=True,
+    )
+    visible = [action for action in actions if not action.isSeparator()]
+
+    assert [action.text() for action in visible] == [
+        "更换「快捷键程序」的共享来源…",
+        "取消「快捷键程序」的共享来源",
+        "打开所在目录",
+        "复制目录路径",
+    ]
+    assert [action.fluentIcon for action in visible] == [
+        FluentIcon.SYNC,
+        FluentIcon.CANCEL,
+        FluentIcon.FOLDER,
+        FluentIcon.COPY,
+    ]
+    assert all("已是" not in action.text() for action in visible)
+    assert separator_count == 1
+
+
+def test_context_menu_groups_default_register_and_directory_actions(qapp, monkeypatch) -> None:
+    """未设默认且未登记共享时，三个操作区按顺序由分隔线隔开。"""
+    from qfluentwidgets import FluentIcon
+
+    actions, separator_count = _capture_workbench_context_menu(
+        qapp,
+        monkeypatch,
+        is_default=False,
+        shared=False,
+    )
+    visible = [action for action in actions if not action.isSeparator()]
+
+    assert [action.text() for action in visible] == [
+        "设为「L36」快捷键程序默认版本",
+        "为「快捷键程序」登记共享来源…",
+        "打开所在目录",
+        "复制目录路径",
+    ]
+    assert [action.fluentIcon for action in visible] == [
+        FluentIcon.EDIT,
+        FluentIcon.LINK,
+        FluentIcon.FOLDER,
+        FluentIcon.COPY,
+    ]
+    assert separator_count == 2
 
 
 def test_shared_source_picker_excludes_other_modules(qapp, monkeypatch) -> None:

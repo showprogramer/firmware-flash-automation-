@@ -86,6 +86,12 @@ def shared_register_action_label(module: str) -> str:
     return f"为「{mod}」登记共享来源…"
 
 
+def shared_replace_action_label(module: str) -> str:
+    """右键项：替换目标模块已经登记的共享来源。"""
+    mod = (module or "").strip() or "该模块"
+    return f"更换「{mod}」的共享来源…"
+
+
 def shared_unregister_action_label(module: str) -> str:
     """右键项：取消目标模块的共享来源登记。"""
     mod = (module or "").strip() or "该模块"

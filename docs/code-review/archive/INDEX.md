@@ -5,6 +5,7 @@
 
 | 文件 | 日期 | 主题 | 处置 |
 |------|------|------|------|
+| [REVIEW-20260803-default-module-key-canonicalization.md](./REVIEW-20260803-default-module-key-canonicalization.md) | 2026-08-03 | 默认模块键一致性 | 人工验证通过；快捷键短键与规范键归一、默认键合并已闭环 |
 | [REVIEW-20260803-shared-source-contract.md](./REVIEW-20260803-shared-source-contract.md) | 2026-08-03 | 共享来源模块一致性与登记对话框 | 人工验证通过；同模块约束、候选收敛和对话框优化已闭环 |
 | [REVIEW-20260724-b4-shared-scheme-boundary.md](./REVIEW-20260724-b4-shared-scheme-boundary.md) | 2026-07-24 | B4 共享 / 方案边界硬化 | 回源不跳共享；本地副本覆盖；缺失不回落本地；Qt 人验 4/6/7/8 通过 |
 | [REVIEW-20260724-b3-shared-display.md](./REVIEW-20260724-b3-shared-display.md) | 2026-07-24 | B3 共享模块展示与烧录候选 | Qt 角标 / 可烧 / 缺失禁用 / 列表只显共享来源；2026-07-24 人验通过 |

@@ -588,6 +588,19 @@ class SchemeWorkbenchModel:
                     return True
         return False
 
+    @staticmethod
+    def _preferred_default_items(defaults: dict[str, str]) -> list[tuple[str, str]]:
+        """按规范模块键去重 defaults，规范键优先于同义历史键。"""
+        selected: dict[str, tuple[str, str]] = {}
+        for key, value in defaults.items():
+            canon = canonical_module_dir(key)
+            if not canon:
+                continue
+            current = selected.get(canon)
+            if current is None or key == canon:
+                selected[canon] = (key, value)
+        return list(selected.values())
+
     def default_platforms_for(self, asset: FirmwareAsset) -> list[str]:
         """返回把该通用变体配置为默认程序的平台名列表（只看资产所属型号的配置）。
 
@@ -609,7 +622,7 @@ class SchemeWorkbenchModel:
         platforms = self._platforms_for(model_name)
         names: list[str] = []
         for p in platforms:
-            for module_key, variant_name in p.defaults.items():
+            for module_key, variant_name in self._preferred_default_items(p.defaults):
                 if not _module_matches(asset, module_key):
                     continue
                 configured = str(variant_name or "").strip()
@@ -1048,7 +1061,7 @@ class SchemeWorkbenchModel:
                 return None
 
             for p in relevant_platforms:
-                for module_key, default_dir in p.defaults.items():
+                for module_key, default_dir in self._preferred_default_items(p.defaults):
                     if _module_is_shared(module_key):
                         continue
                     if any(_module_matches(a, module_key) for a in covered_assets):

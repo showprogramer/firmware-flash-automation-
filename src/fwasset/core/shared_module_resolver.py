@@ -142,6 +142,8 @@ def _find_default_key(block: PlatformDefaults, module: str) -> str:
     返回匹配到的原始 key，未找到返回空串。
     """
     want = canonical_module_dir(module)
+    if want in block.defaults:
+        return want
     want_short = want[:-2] if want.endswith("程序") else want
     for key in block.defaults:
         k = canonical_module_dir(key)

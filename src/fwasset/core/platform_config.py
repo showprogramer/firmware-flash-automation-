@@ -22,13 +22,20 @@ PlatformConfigStatus = Literal[
     "parser_missing",
 ]
 
+_MODULE_KEY_ALIASES = {
+    "快捷键": "快捷键程序",
+    "快捷按键": "快捷键程序",
+    "快捷键-旋钮": "快捷键程序",
+}
+
 
 def canonical_module_dir(name: str) -> str:
     """模块目录/配置键规范名。
 
-    磁盘与历史 toml 曾误写「机芯版」；规范统一为 catalog 的「机芯板」。
+    磁盘与历史 TOML 中的目录短名、别名与「机芯版」笔误均归一到 catalog 标签。
     """
-    return str(name or "").strip().replace("机芯版", "机芯板")
+    normalized = str(name or "").strip().replace("机芯版", "机芯板")
+    return _MODULE_KEY_ALIASES.get(normalized, normalized)
 
 
 @dataclass

@@ -533,6 +533,39 @@ def test_default_badge_marks_configured_variant(l36_tree: Path, tmp_path: Path) 
     assert badges["防夹功能"] == ""
 
 
+def test_shortcut_alias_duplicate_prefers_catalog_key_for_badge_and_fallback(
+    l36_tree: Path,
+    tmp_path: Path,
+) -> None:
+    """历史短键与规范键并存时，徽章和方案补齐都以规范键为准。"""
+    _write(
+        l36_tree / "平台配置.toml",
+        "\n".join(
+            [
+                "[[platform]]",
+                'name = "标准单机芯3D"',
+                "[platform.defaults]",
+                '"快捷键" = "量产_默认"',
+                '"快捷键程序" = "贝乐"',
+            ]
+        ),
+    )
+    _write(l36_tree / "通用" / "快捷键" / "量产_默认" / "mass.hex")
+    _write(l36_tree / "通用" / "快捷键" / "贝乐" / "belle.hex")
+
+    model = _bind_model(l36_tree, tmp_path)
+    shortcuts = model.get_common_modules("L36", "快捷键程序")
+    badges = {card.asset["directory_name"]: card.default_badge for card in shortcuts}
+    assert badges == {"量产_默认": "", "贝乐": "★默认"}
+
+    fallback = next(
+        card
+        for card in model.get_scheme_modules("L36", "西班牙")
+        if card.is_fallback and card.asset["firmware_label"] == "快捷键程序"
+    )
+    assert fallback.asset["directory_name"] == "贝乐"
+
+
 def test_common_module_parts_resolves_variant_and_single_level(l36_tree: Path, tmp_path: Path) -> None:
     model = _bind_model(l36_tree, tmp_path)
     cards = model.get_common_modules("L36", "主板程序")
