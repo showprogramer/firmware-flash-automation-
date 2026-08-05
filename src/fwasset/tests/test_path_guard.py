@@ -1,7 +1,6 @@
 """REVIEW R5：统一工作区路径守卫测试。"""
-from __future__ import annotations
 
-import ntpath
+from __future__ import annotations
 
 import pytest
 
@@ -72,9 +71,10 @@ def test_accepts_harmless_dot(tmp_path):
     target = tmp_path / "L36程序" / "." / "蓝牙程序"
     target.mkdir(parents=True)
     # Path 构造会折叠 "."，行为等价于无 "." 路径
-    assert assert_within_workspace(target, tmp_path) == (
-        tmp_path / "L36程序" / "蓝牙程序"
-    ).resolve()
+    assert (
+        assert_within_workspace(target, tmp_path)
+        == (tmp_path / "L36程序" / "蓝牙程序").resolve()
+    )
 
 
 def test_accepts_missing_target_still_checked(tmp_path):
@@ -94,11 +94,11 @@ def test_return_value_is_resolved_path(tmp_path):
 def _fake_win_normcase(s: str) -> str:
     """模拟 Windows nt._path_normcase（C 实现）：lower 且把 '/' 规范化为 '\\\\'。
 
-    Python 的 ntpath.normcase 是纯 Python 版（只 lower 不碰分隔符），
-    而 Windows 上 os.path.normcase 走 C 实现会把分隔符一并规范化，
-    2026-08-03 回归的根因就在这里。
+    不能调用 ntpath.normcase：Windows 上 os.path 即 ntpath，monkeypatch
+    会改写 ntpath.normcase 全局名，此处再调用即无限递归（coverage 的
+    路径规范化同样会触发），WSL 上 os.path 是 posixpath 才未暴露。
     """
-    return ntpath.normcase(s).replace("/", "\\")
+    return s.lower().replace("/", "\\")
 
 
 def test_accepts_direct_child_with_windows_normalization(tmp_path, monkeypatch):
@@ -120,10 +120,7 @@ def test_normalize_for_compare_order_regression(monkeypatch):
 
     from pathlib import Path
 
-    assert (
-        path_guard._normalize_for_compare(Path("D:/按摩器程序"))
-        == "d:/按摩器程序"
-    )
+    assert path_guard._normalize_for_compare(Path("D:/按摩器程序")) == "d:/按摩器程序"
     assert (
         path_guard._normalize_for_compare(Path("D:/按摩器程序/L36双机芯-上3D-下2D程序"))
         == "d:/按摩器程序/l36双机芯-上3d-下2d程序"

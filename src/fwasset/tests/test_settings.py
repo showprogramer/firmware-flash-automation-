@@ -1,9 +1,14 @@
+import sys
 from pathlib import Path
 
 import pytest
 
 import fwasset.core.settings as settings
-from fwasset.core.settings import _resolve_runtime_dir, ensure_runtime_dir, load_toml_config
+from fwasset.core.settings import (
+    _resolve_runtime_dir,
+    ensure_runtime_dir,
+    load_toml_config,
+)
 
 
 def test_load_toml_config_missing_file(tmp_path: Path):
@@ -11,7 +16,6 @@ def test_load_toml_config_missing_file(tmp_path: Path):
     assert cfg == {}
     assert status == "missing"
     assert err == ""
-
 
 
 def test_load_toml_config_ok(tmp_path: Path):
@@ -25,7 +29,6 @@ def test_load_toml_config_ok(tmp_path: Path):
     assert cfg["paths"]["root_dir"] == "D:/x"
 
 
-
 def test_load_toml_config_parse_error(tmp_path: Path):
     p = tmp_path / "bad.toml"
     p.write_text("[paths\nroot_dir='x'", encoding="utf-8")
@@ -37,8 +40,9 @@ def test_load_toml_config_parse_error(tmp_path: Path):
     assert err
 
 
-
-def test_load_toml_config_parser_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_load_toml_config_parser_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     p = tmp_path / "ok.toml"
     p.write_text("[paths]\nroot_dir='D:/x'\n", encoding="utf-8")
 
@@ -70,13 +74,20 @@ def test_scan_defaults_are_available():
     assert settings.SCAN_PATH_MODEL_PATTERNS
 
 
-
+@pytest.mark.skipif(
+    sys.platform != "win32",
+    reason="验证 Windows 路径拼接语义，POSIX 下 D:/ 被视为相对路径",
+)
 def test_runtime_dir_defaults_to_project_runtime():
     runtime_dir = _resolve_runtime_dir(Path("D:/app"), env_value="")
 
     assert runtime_dir == Path("D:/app/.runtime")
 
 
+@pytest.mark.skipif(
+    sys.platform != "win32",
+    reason="验证 Windows 路径拼接语义，POSIX 下 D:/ 被视为相对路径",
+)
 def test_runtime_dir_env_override_resolves_relative_to_app_root():
     runtime_dir = _resolve_runtime_dir(Path("D:/app"), env_value="local-runtime")
 

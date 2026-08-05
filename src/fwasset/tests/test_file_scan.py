@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 
 import pytest
@@ -56,7 +57,14 @@ def test_guess_model_from_path(dirpath: str, expected: str):
 @pytest.mark.parametrize(
     ("dirpath", "expected"),
     [
-        (r"D:\\workspace\\NOLLLOG_V17.3.2\\pkg", "V17.3.2"),
+        pytest.param(
+            r"D:\\workspace\\NOLLLOG_V17.3.2\\pkg",
+            "V17.3.2",
+            marks=pytest.mark.skipif(
+                sys.platform != "win32",
+                reason="依赖 Windows 路径分段（段尾反斜杠边界），POSIX 下单段无法匹配",
+            ),
+        ),
         (r"D:\\workspace\\release\\38.3.1_003\\pkg", "V38.3.1_003"),
         (r"D:\\workspace\\foo\\bar", ""),
     ],
@@ -76,7 +84,6 @@ def test_guess_version_from_path(dirpath: str, expected: str):
 )
 def test_guess_series_from_model_or_path(model: str, dirpath: str, expected: str):
     assert guess_series_from_model_or_path(model, dirpath) == expected
-
 
 
 def test_find_handcontrol_folders_filters_and_sorts(tmp_path: Path):
@@ -122,8 +129,9 @@ def test_find_handcontrol_folders_filters_and_sorts(tmp_path: Path):
     assert "B_folder" in second["label"]
 
 
-
-def test_find_handcontrol_folders_falls_back_to_path_for_model_and_version(tmp_path: Path):
+def test_find_handcontrol_folders_falls_back_to_path_for_model_and_version(
+    tmp_path: Path,
+):
     target = tmp_path / "L35A手控UI" / "NOLLLOG_V17.3.2"
     target.mkdir(parents=True)
     (target / "ITE_NOR.ROM").write_text("rom", encoding="utf-8")
@@ -136,7 +144,6 @@ def test_find_handcontrol_folders_falls_back_to_path_for_model_and_version(tmp_p
     assert results[0]["version"] == "V17.3.2"
 
 
-
 def test_parse_rom_filename_uses_configurable_patterns(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(file_scan, "SCAN_MODEL_PATTERNS", [r"MODEL-(X\d+)"])
     monkeypatch.setattr(file_scan, "SCAN_VERSION_PATTERNS", [r"REV-(\d+\.\d+)"])
@@ -147,22 +154,32 @@ def test_parse_rom_filename_uses_configurable_patterns(monkeypatch: pytest.Monke
     assert version == "V2.5"
 
 
-
-def test_guess_model_from_path_uses_configurable_patterns(monkeypatch: pytest.MonkeyPatch):
+def test_guess_model_from_path_uses_configurable_patterns(
+    monkeypatch: pytest.MonkeyPatch,
+):
     monkeypatch.setattr(file_scan, "SCAN_PATH_MODEL_PATTERNS", [r"(HC\d{2})"])
 
-    assert file_scan.guess_model_from_path(r"D:\\workspace\\release\\HC88\\pkg") == "HC88"
+    assert (
+        file_scan.guess_model_from_path(r"D:\\workspace\\release\\HC88\\pkg") == "HC88"
+    )
 
 
+def test_guess_version_from_path_uses_configurable_patterns(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(
+        file_scan, "SCAN_PATH_VERSION_PATTERNS", [r"REL-(\d+\.\d+_\d+)"]
+    )
 
-def test_guess_version_from_path_uses_configurable_patterns(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(file_scan, "SCAN_PATH_VERSION_PATTERNS", [r"REL-(\d+\.\d+_\d+)"])
+    assert (
+        file_scan.guess_version_from_path(r"D:\\workspace\\REL-9.8_007\\pkg")
+        == "V9.8_007"
+    )
 
-    assert file_scan.guess_version_from_path(r"D:\\workspace\\REL-9.8_007\\pkg") == "V9.8_007"
 
-
-
-def test_find_handcontrol_folders_uses_configurable_extensions_and_excludes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_find_handcontrol_folders_uses_configurable_extensions_and_excludes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     monkeypatch.setattr(file_scan, "SCAN_ROM_EXTENSIONS", [".bin"])
     monkeypatch.setattr(file_scan, "SCAN_PKG_EXTENSIONS", [".pack"])
     monkeypatch.setattr(file_scan, "SCAN_EXCLUDE_DIR_KEYWORDS", ["ignore_me"])
@@ -211,7 +228,9 @@ def test_scan_firmware_assets_uses_catalog_types(tmp_path: Path):
     assert "tool_dir" in assets[1]
 
 
-def test_scan_firmware_assets_uses_expanded_catalog_keywords_and_excludes(tmp_path: Path):
+def test_scan_firmware_assets_uses_expanded_catalog_keywords_and_excludes(
+    tmp_path: Path,
+):
     mainboard_dir = tmp_path / "L36配置" / "L36主板"
     mainboard_dir.mkdir(parents=True)
     (mainboard_dir / "main_v1.0.0.bin").write_text("main", encoding="utf-8")
@@ -261,15 +280,21 @@ def test_scan_uses_nearest_model_directory_inside_mixed_parent(tmp_path: Path):
     assert bundle.name not in {item["model_directory_name"] for item in assets}
 
 
-def test_handcontrol_scan_prefers_model_from_handcontrol_directory_when_rom_differs(tmp_path: Path):
+def test_handcontrol_scan_prefers_model_from_handcontrol_directory_when_rom_differs(
+    tmp_path: Path,
+):
     bundle = tmp_path / "L26Amax-L50S-portugal"
     l26_dir = bundle / "L26A-handcontrol-portuguese"
     l50_dir = bundle / "L50S-handcontrol-portuguese"
     l26_dir.mkdir(parents=True)
     l50_dir.mkdir(parents=True)
-    (l26_dir / "ITE_NOR_yj_Smassage_2d_L39_v111.3.5.ROM").write_text("rom", encoding="utf-8")
+    (l26_dir / "ITE_NOR_yj_Smassage_2d_L39_v111.3.5.ROM").write_text(
+        "rom", encoding="utf-8"
+    )
     (l26_dir / "ITEPKG03.PKG").write_text("pkg", encoding="utf-8")
-    (l50_dir / "ITE_NOR_yj_Smassage_L50_4d_music_108.3.3.ROM").write_text("rom", encoding="utf-8")
+    (l50_dir / "ITE_NOR_yj_Smassage_L50_4d_music_108.3.3.ROM").write_text(
+        "rom", encoding="utf-8"
+    )
     (l50_dir / "ITEPKG03.PKG").write_text("pkg", encoding="utf-8")
 
     assets, errors = scan_firmware_assets(str(tmp_path))
@@ -293,20 +318,26 @@ def test_segmented_screen_before_handcontrol_ui_in_catalog(tmp_path: Path):
 
     assert errors == []
     assert len(assets) == 1
-    assert assets[0]["firmware_type"] == "segmented_screen", f"Expected segmented_screen, got {assets[0]['firmware_type']}"
+    assert assets[0]["firmware_type"] == "segmented_screen", (
+        f"Expected segmented_screen, got {assets[0]['firmware_type']}"
+    )
 
 
 def test_music_bt_detects_mot_files(tmp_path: Path):
     """P0-2: Bluetooth directories with .mot files should be detected as music_bt."""
     bt_dir = tmp_path / "L36" / "蓝牙板"
     bt_dir.mkdir(parents=True)
-    (bt_dir / "YJ_Bt_Eng_Massage_R5F104BC_Pro_V15.mot").write_text("bt", encoding="utf-8")
+    (bt_dir / "YJ_Bt_Eng_Massage_R5F104BC_Pro_V15.mot").write_text(
+        "bt", encoding="utf-8"
+    )
 
     assets, errors = scan_firmware_assets(str(tmp_path))
 
     assert errors == []
     assert len(assets) == 1
-    assert assets[0]["firmware_type"] == "music_bt", f"Expected music_bt, got {assets[0]['firmware_type']}"
+    assert assets[0]["firmware_type"] == "music_bt", (
+        f"Expected music_bt, got {assets[0]['firmware_type']}"
+    )
     assert assets[0]["flash_mode"] == "tool_launch"
     assert assets[0]["usb_flow"] == ""
 
@@ -335,7 +366,9 @@ def test_movement_3d_detects_mot_files(tmp_path: Path):
 
     assert errors == []
     assert len(assets) == 1
-    assert assets[0]["firmware_type"] == "movement_3d", f"Expected movement_3d, got {assets[0]['firmware_type']}"
+    assert assets[0]["firmware_type"] == "movement_3d", (
+        f"Expected movement_3d, got {assets[0]['firmware_type']}"
+    )
 
 
 def test_version_extracted_from_space_separated_rom(tmp_path: Path):
@@ -350,7 +383,9 @@ def test_version_extracted_from_space_separated_rom(tmp_path: Path):
     assert errors == []
     assert len(assets) == 1
     assert assets[0]["model"] == "L36"
-    assert assets[0]["version"] == "V120.3.1", f"Expected V120.3.1, got '{assets[0]['version']}'"
+    assert assets[0]["version"] == "V120.3.1", (
+        f"Expected V120.3.1, got '{assets[0]['version']}'"
+    )
 
 
 def test_scan_with_cancel_event(tmp_path: Path):
@@ -361,6 +396,7 @@ def test_scan_with_cancel_event(tmp_path: Path):
     (hand_dir / "ITEPKG03.PKG").write_text("pkg", encoding="utf-8")
 
     import threading
+
     cancel_event = threading.Event()
     cancel_event.set()
 
@@ -377,13 +413,16 @@ def test_scan_with_last_scan_at_skips_unchanged(tmp_path: Path):
     (model_dir / "main.bin").write_text("firmware", encoding="utf-8")
 
     import time
+
     future_time = time.time() + 10000
 
     assets, errors = scan_firmware_assets(str(tmp_path), last_scan_at=future_time)
     assert len(assets) == 0
 
     past_time = time.time() - 10000
-    assets_past, errors_past = scan_firmware_assets(str(tmp_path), last_scan_at=past_time)
+    assets_past, errors_past = scan_firmware_assets(
+        str(tmp_path), last_scan_at=past_time
+    )
     assert len(assets_past) == 1
 
 
