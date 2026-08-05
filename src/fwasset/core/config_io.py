@@ -1,4 +1,5 @@
 """配置文件原子写盘助手（同目录临时文件 + os.replace）。"""
+
 from __future__ import annotations
 
 import os

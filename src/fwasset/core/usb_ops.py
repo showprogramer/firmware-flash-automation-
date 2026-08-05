@@ -1,10 +1,10 @@
 import shutil
 import subprocess
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 import psutil
-
 
 _PERMISSION_HINTS = [
     "access is denied",
@@ -37,12 +37,18 @@ def get_usb_drives() -> list[str]:
     """Return removable USB drive mountpoints, e.g. ['E:\\', 'F:\\']."""
     drives = []
     for part in psutil.disk_partitions(all=False):
-        if "removable" in part.opts.lower() or part.fstype.upper() in ("FAT32", "FAT", "EXFAT"):
+        if "removable" in part.opts.lower() or part.fstype.upper() in (
+            "FAT32",
+            "FAT",
+            "EXFAT",
+        ):
             drives.append(part.mountpoint)
     return drives
 
 
-def copy_to_usb(rom_path: str, pkg_path: str, drive: str, log_fn=print) -> bool:
+def copy_to_usb(
+    rom_path: str, pkg_path: str, drive: str, log_fn: Callable[..., None] = print
+) -> bool:
     """Copy ROM and PKG to USB root, replacing existing ROM/PKG files first."""
     drive_root = Path(drive)
     try:
@@ -61,7 +67,9 @@ def copy_to_usb(rom_path: str, pkg_path: str, drive: str, log_fn=print) -> bool:
         return False
 
 
-def copy_directory_to_usb(source_dir: str, drive: str, log_fn=print) -> bool:
+def copy_directory_to_usb(
+    source_dir: str, drive: str, log_fn: Callable[..., None] = print
+) -> bool:
     """Copy one directory to USB root. If target exists, replace it."""
     src = Path(source_dir)
     root = Path(drive)
@@ -85,7 +93,7 @@ def copy_directory_to_usb(source_dir: str, drive: str, log_fn=print) -> bool:
         return False
 
 
-def eject_usb(drive: str, log_fn=print) -> bool:
+def eject_usb(drive: str, log_fn: Callable[..., None] = print) -> bool:
     """Safely eject USB using PowerShell."""
     letter = drive.rstrip("\\").rstrip("/")
     script = f"""
@@ -111,7 +119,7 @@ $vol.Put()
         return False
 
 
-def format_usb(drive: str, log_fn=print) -> bool:
+def format_usb(drive: str, log_fn: Callable[..., None] = print) -> bool:
     """Format USB to FAT32 using PowerShell Format-Volume.
 
     Requires explicit user confirmation before calling.

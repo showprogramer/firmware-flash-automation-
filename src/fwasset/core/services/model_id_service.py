@@ -1,6 +1,8 @@
 """型号持久 id：ensure_model_ids（先读全量已有 id，再为无 id 者生成）。"""
+
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from fwasset.core.model_config import (
@@ -22,8 +24,8 @@ def _allocate_id(base: str, occupied: set[str]) -> str:
 
 
 def ensure_model_ids(
-    workspace_roots: list[str | Path],
-    log_fn=print,
+    workspace_roots: Sequence[str | Path],
+    log_fn: Callable[..., None] = print,
 ) -> dict:
     """为各型号根确保 ``型号配置.toml`` 中有 model_id。
 

@@ -4,6 +4,7 @@
 ★默认徽章 / 归属文案）、LogPanel 折叠行为。用 offscreen 平台跑，
 无显示器也能执行，但仍标 ui（依赖 PySide6，qt extra 未装时自动跳过）。
 """
+
 from __future__ import annotations
 
 import os
@@ -34,7 +35,9 @@ def qapp():
     yield app
 
 
-def _asset(path: str = "D:/x/主板程序/量产_默认", files: list[str] | None = None) -> dict:
+def _asset(
+    path: str = "D:/x/主板程序/量产_默认", files: list[str] | None = None
+) -> dict:
     return {"path": path, "files": files or ["fw_V40.bin"], "category": "common"}
 
 
@@ -76,7 +79,9 @@ def _capture_workbench_context_menu(
 
     workbench = WorkbenchInterface()
     workbench.current_selection.model_name = "L36"
-    monkeypatch.setattr(workbench.workbench_model, "is_model_module_default", lambda _asset: is_default)
+    monkeypatch.setattr(
+        workbench.workbench_model, "is_model_module_default", lambda _asset: is_default
+    )
     monkeypatch.setattr(
         workbench.workbench_model,
         "resolve_shared_module",
@@ -92,7 +97,9 @@ def _capture_workbench_context_menu(
         original_add_separator(menu)
 
     monkeypatch.setattr(RoundMenu, "addSeparator", _add_separator)
-    monkeypatch.setattr(RoundMenu, "exec", lambda menu, _pos: captured.setdefault("menu", menu))
+    monkeypatch.setattr(
+        RoundMenu, "exec", lambda menu, _pos: captured.setdefault("menu", menu)
+    )
     variant = ModuleVariant(
         asset={
             "category": "common",
@@ -109,7 +116,9 @@ def _capture_workbench_context_menu(
     return captured["menu"].actions(), separator_count
 
 
-def test_context_menu_hides_default_status_and_uses_replace_actions(qapp, monkeypatch) -> None:
+def test_context_menu_hides_default_status_and_uses_replace_actions(
+    qapp, monkeypatch
+) -> None:
     """默认状态由表格徽章表达；已共享时菜单只给更换与取消操作。"""
     from qfluentwidgets import FluentIcon
 
@@ -137,7 +146,9 @@ def test_context_menu_hides_default_status_and_uses_replace_actions(qapp, monkey
     assert separator_count == 1
 
 
-def test_context_menu_groups_default_register_and_directory_actions(qapp, monkeypatch) -> None:
+def test_context_menu_groups_default_register_and_directory_actions(
+    qapp, monkeypatch
+) -> None:
     """未设默认且未登记共享时，三个操作区按顺序由分隔线隔开。"""
     from qfluentwidgets import FluentIcon
 
@@ -203,7 +214,6 @@ def test_shared_source_picker_excludes_other_modules(qapp, monkeypatch) -> None:
 def test_shared_source_picker_requires_explicit_selection(qapp, monkeypatch) -> None:
     """登记对话框没有来源选择时禁用确认，且不提供跨模块切换。"""
     from PySide6.QtWidgets import QDialog, QListWidget, QPushButton
-
     from qfluentwidgets import PrimaryPushButton
 
     from fwasset.ui_qt.workbench_window import WorkbenchInterface
@@ -220,7 +230,13 @@ def test_shared_source_picker_requires_explicit_selection(qapp, monkeypatch) -> 
         "目标型号",
         "快捷键程序",
         "快捷键程序",
-        [{"model": "L36", "directory_name": "量产_默认", "path": "D:/L36/快捷键/量产_默认"}],
+        [
+            {
+                "model": "L36",
+                "directory_name": "量产_默认",
+                "path": "D:/L36/快捷键/量产_默认",
+            }
+        ],
     )
 
     dialog = captured["dialog"]
@@ -234,7 +250,9 @@ def test_shared_source_picker_requires_explicit_selection(qapp, monkeypatch) -> 
         if button.text() == "确认登记"
     )
     assert confirm_button.isEnabled() is False
-    assert all("看全部" not in button.text() for button in dialog.findChildren(QPushButton))
+    assert all(
+        "看全部" not in button.text() for button in dialog.findChildren(QPushButton)
+    )
 
     list_widget.setCurrentRow(0)
     qapp.processEvents()
@@ -251,7 +269,9 @@ def test_setup_wizard_prefills_validates_and_writes_config(qapp, tmp_path) -> No
     assert wizard.validate_paths() == ""
     assert wizard.windowTitle() == "初始配置"
 
-    settings_wizard = SetupWizard(root_dir=str(tmp_path), tool_root="", allow_skip=False)
+    settings_wizard = SetupWizard(
+        root_dir=str(tmp_path), tool_root="", allow_skip=False
+    )
     assert settings_wizard.windowTitle() == "程序文件夹设置"
 
     config_path = tmp_path / "config.toml"
@@ -345,9 +365,13 @@ def test_workbench_configuration_notice_visibility(qapp) -> None:
     workbench.set_configuration_required(False)
     assert workbench.configuration_notice.isHidden()
 
-def test_settings_completion_reloads_and_reads_new_root(qapp, tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
-    import fwasset.core.settings as settings
+
+def test_settings_completion_reloads_and_reads_new_root(
+    qapp, tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from PySide6.QtWidgets import QDialog
+
+    import fwasset.core.settings as settings
     from fwasset.ui_qt import workbench_window as window_module
     from fwasset.ui_qt.setup_wizard import SetupWizard
 
@@ -376,7 +400,10 @@ def test_settings_completion_reloads_and_reads_new_root(qapp, tmp_path, monkeypa
     assert window.workbench.root_dir == str(tmp_path)
     assert scanned_roots == [str(tmp_path)]
 
-def test_re_read_uses_configured_root_without_folder_picker(qapp, tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+
+def test_re_read_uses_configured_root_without_folder_picker(
+    qapp, tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from fwasset.ui_qt import workbench_window as window_module
 
     monkeypatch.setattr(window_module, "DEFAULT_ROOT", str(tmp_path))
@@ -387,7 +414,12 @@ def test_re_read_uses_configured_root_without_folder_picker(qapp, tmp_path, monk
 
     def build_result(root: str, **_kwargs) -> dict:
         roots.append(root)
-        return {"ok": True, "code": "ok", "message": "", "payload": {"assets": [], "errors": []}}
+        return {
+            "ok": True,
+            "code": "ok",
+            "message": "",
+            "payload": {"assets": [], "errors": []},
+        }
 
     class InlineThread:
         def __init__(self, *, target, daemon: bool) -> None:
@@ -404,7 +436,9 @@ def test_re_read_uses_configured_root_without_folder_picker(qapp, tmp_path, monk
     assert workbench.root_dir == str(tmp_path)
 
 
-def test_re_read_without_config_opens_settings(qapp, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_re_read_without_config_opens_settings(
+    qapp, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from fwasset.ui_qt import workbench_window as window_module
 
     monkeypatch.setattr(window_module, "DEFAULT_ROOT", "")
@@ -417,6 +451,7 @@ def test_re_read_without_config_opens_settings(qapp, monkeypatch: pytest.MonkeyP
     workbench._start_scan()
 
     assert requested == [True]
+
 
 def test_populate_tree_empty_is_noop(qapp) -> None:
     grid = DataGrid(lambda _m: None)
@@ -459,7 +494,10 @@ def test_multi_variant_grouped_under_parent_row(qapp) -> None:
         label="手控UI",
         source_kind="custom",
         source_label="定制专属",
-        variants=[_variant("以色列", kind="custom"), _variant("以色列-塞尔维亚", kind="custom")],
+        variants=[
+            _variant("以色列", kind="custom"),
+            _variant("以色列-塞尔维亚", kind="custom"),
+        ],
     )
     grid = DataGrid(lambda _m: None)
     grid.populate_tree([row])
@@ -476,7 +514,12 @@ def test_populate_cards_groups_by_label(qapp) -> None:
     """populate 兼容路径：同 label 卡片归为一个模块行。"""
     cards = [
         ModuleCardData(
-            asset={**_asset(), "firmware_label": "主板程序", "directory_name": "量产_默认", "version": "V40"},
+            asset={
+                **_asset(),
+                "firmware_label": "主板程序",
+                "directory_name": "量产_默认",
+                "version": "V40",
+            },
             source_type="common_default",
             source_label="通用/量产_默认 (默认)",
             is_fallback=False,
@@ -484,7 +527,12 @@ def test_populate_cards_groups_by_label(qapp) -> None:
             default_badge="★默认",
         ),
         ModuleCardData(
-            asset={**_asset(), "firmware_label": "主板程序", "directory_name": "防夹功能", "version": "V24"},
+            asset={
+                **_asset(),
+                "firmware_label": "主板程序",
+                "directory_name": "防夹功能",
+                "version": "V24",
+            },
             source_type="common_variant",
             source_label="通用/防夹功能",
             is_fallback=False,
@@ -504,7 +552,9 @@ def test_populate_cards_groups_by_label(qapp) -> None:
 
 def test_log_panel_write_and_toggle(qapp) -> None:
     panel = LogPanel()
-    assert not panel.log_text.isVisible() or panel.log_text.isHidden() or True  # offscreen 下可见性弱断言
+    assert (
+        not panel.log_text.isVisible() or panel.log_text.isHidden() or True
+    )  # offscreen 下可见性弱断言
     panel.write("第一条日志")
     panel.write("第二条日志\n")
     text = panel.log_text.toPlainText()
@@ -606,7 +656,10 @@ def test_sidebar_rebuild_clears_stale_pressed_and_hover_rows(qapp) -> None:
     assert w.nav.delegate.pressedRow == -1
     assert w.nav.delegate.hoverRow == -1
 
-def test_click_filtered_scheme_reselects_its_new_row_after_sidebar_rebuild(qapp) -> None:
+
+def test_click_filtered_scheme_reselects_its_new_row_after_sidebar_rebuild(
+    qapp,
+) -> None:
     """真实鼠标点击返回后，delegate 选中集合必须跟随方案的新行号。"""
     from PySide6.QtCore import Qt
     from PySide6.QtTest import QTest
@@ -632,7 +685,8 @@ def test_click_filtered_scheme_reselects_its_new_row_after_sidebar_rebuild(qapp)
     qapp.processEvents()
 
     old_row = next(
-        i for i, entry in enumerate(w._nav_entries)
+        i
+        for i, entry in enumerate(w._nav_entries)
         if entry == ("custom_scheme", "马来西亚")
     )
     old_item = w.nav.item(old_row)
@@ -647,7 +701,8 @@ def test_click_filtered_scheme_reselects_its_new_row_after_sidebar_rebuild(qapp)
     qapp.processEvents()
 
     target_row = next(
-        i for i, entry in enumerate(w._nav_entries)
+        i
+        for i, entry in enumerate(w._nav_entries)
         if entry == ("custom_scheme", "马来西亚")
     )
     selected_rows = {index.row() for index in w.nav.selectedIndexes()}
@@ -723,7 +778,9 @@ def test_auto_usb_panel_paired_files_shows_one_click(qapp) -> None:
 
     from fwasset.ui_qt.operation_panels import get_panel
 
-    panel = get_panel("auto_usb")(asset=_op_asset(), log_fn=lambda _m: None, panel_host=_FakeHost())
+    panel = get_panel("auto_usb")(
+        asset=_op_asset(), log_fn=lambda _m: None, panel_host=_FakeHost()
+    )
     panel.build()
     buttons = panel.findChildren(PrimaryPushButton)
     assert any(b.text() == "一键烧录" for b in buttons)
@@ -769,7 +826,9 @@ def test_tool_launch_panel_without_tool_disables_button(qapp) -> None:
         panel_host=_FakeHost(),
     )
     panel.build()
-    launch = [b for b in panel.findChildren(PrimaryPushButton) if b.text() == "打开烧录工具"]
+    launch = [
+        b for b in panel.findChildren(PrimaryPushButton) if b.text() == "打开烧录工具"
+    ]
     assert launch and not launch[0].isEnabled()
 
 
@@ -785,7 +844,9 @@ def test_disabled_and_manual_panels_have_handoff_actions(qapp) -> None:
         )
         panel.build()
         texts = {b.text() for b in panel.findChildren(PushButton)}
-        assert {"打开程序目录", "复制目录路径", "复制主文件路径"} <= texts, f"{mode} 缺交接按钮"
+        assert {"打开程序目录", "复制目录路径", "复制主文件路径"} <= texts, (
+            f"{mode} 缺交接按钮"
+        )
 
 
 def test_run_task_busy_guard_and_completion(qapp) -> None:
@@ -799,7 +860,11 @@ def test_run_task_busy_guard_and_completion(qapp) -> None:
     w.log_message.connect(logs.append)
 
     done = []
-    w._run_task("测试任务", lambda log_fn: (log_fn("working"), "ok")[-1], lambda r: done.append(r))
+    w._run_task(
+        "测试任务",
+        lambda log_fn: (log_fn("working"), "ok")[-1],
+        lambda r: done.append(r),
+    )
     # 忙态下第二个任务应被拒绝
     w._run_task("第二任务", lambda log_fn: "no")
     deadline = _time.time() + 5
@@ -812,6 +877,7 @@ def test_run_task_busy_guard_and_completion(qapp) -> None:
     assert done == ["ok"], "on_done 回调应收到任务结果"
     assert any("已有任务执行中" in m for m in logs)
     assert any("测试任务完成" in m for m in logs)
+
 
 def test_shared_badges_render_on_existing_variant_row() -> None:
     hit = _variant("快捷键", kind="common")

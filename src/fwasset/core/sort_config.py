@@ -1,9 +1,11 @@
 import re
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 
+from fwasset.core.types import FirmwareAsset
 
-class SortKey(str, Enum):
+
+class SortKey(StrEnum):
     PATH = "path"
     MODEL = "model"
     VERSION = "version"
@@ -27,17 +29,17 @@ def _version_sort_value(version: str) -> tuple[int, tuple[int, ...], str]:
     return (0, parts, text)
 
 
-def _path_sort_value(folder: dict) -> str:
+def _path_sort_value(folder: FirmwareAsset) -> tuple[object, ...]:
     path = Path(str(folder.get("path", "") or ""))
     parts = [str(part) for part in path.parts]
     return tuple(_natural_text_sort_value(part) for part in parts)
 
 
-def _folder_name_sort_value(folder: dict) -> str:
+def _folder_name_sort_value(folder: FirmwareAsset) -> tuple[object, ...]:
     return _natural_text_sort_value(Path(str(folder.get("path", "") or "")).name)
 
 
-def _natural_text_sort_value(text: str) -> tuple:
+def _natural_text_sort_value(text: str) -> tuple[object, ...]:
     parts = re.split(r"(\d+)", str(text or "").strip().lower())
     normalized = []
     for part in parts:
@@ -48,11 +50,11 @@ def _natural_text_sort_value(text: str) -> tuple:
 
 
 def apply_sort(
-    folders: list[dict],
+    folders: list[FirmwareAsset],
     sort_key: SortKey,
     ascending: bool = True,
-) -> list[dict]:
-    def _sort_value(folder: dict):
+) -> list[FirmwareAsset]:
+    def _sort_value(folder: FirmwareAsset) -> tuple[object, ...]:
         model = str(folder.get("model", ""))
         version = str(folder.get("version", ""))
         if sort_key == SortKey.MODEL:

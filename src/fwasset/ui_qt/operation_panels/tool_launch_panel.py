@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from PySide6.QtWidgets import QHBoxLayout, QMessageBox
-
 from qfluentwidgets import BodyLabel, CaptionLabel, PrimaryPushButton, StrongBodyLabel
 
 from fwasset.core.firmware_catalog import load_firmware_catalog
@@ -47,14 +46,19 @@ class ToolLaunchPanel(BaseOperationPanel):
         self.launch_btn.clicked.connect(self._launch_current_tool)
         row.addWidget(self.launch_btn)
 
-        self.tool_path_label = CaptionLabel(tool_path if tool_path else "未配置工具路径", self)
+        self.tool_path_label = CaptionLabel(
+            tool_path if tool_path else "未配置工具路径", self
+        )
         row.addWidget(self.tool_path_label)
         row.addStretch(1)
         self.body.addLayout(row)
 
         if not tool_path:
             self.body.addWidget(
-                BodyLabel("提示: 将烧录工具放在程序同目录的 tools 文件夹中，程序会自动发现。", self)
+                BodyLabel(
+                    "提示: 将烧录工具放在程序同目录的 tools 文件夹中，程序会自动发现。",
+                    self,
+                )
             )
 
     def _launch_current_tool(self):

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from PySide6.QtWidgets import QHBoxLayout
-
 from qfluentwidgets import BodyLabel, PushButton
 
 from fwasset.ui_qt.operation_panels.base import BaseOperationPanel
@@ -16,7 +15,10 @@ class DisabledPanel(BaseOperationPanel):
     def build(self):
         row = QHBoxLayout()
         row.addWidget(
-            BodyLabel(f"{self.asset.get('firmware_label', '该类型')}当前不可自动化操作。", self)
+            BodyLabel(
+                f"{self.asset.get('firmware_label', '该类型')}当前不可自动化操作。",
+                self,
+            )
         )
         stub = PushButton("暂不可操作", self)
         stub.setEnabled(False)

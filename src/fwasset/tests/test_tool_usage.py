@@ -31,7 +31,10 @@ def test_toggle_favorite_tool_adds_and_removes():
 
 
 def test_record_recent_tool_moves_latest_to_front_and_limits():
-    usage = {"favorites": [], "recent": [f"type_{idx}" for idx in range(MAX_RECENT_TOOLS)]}
+    usage = {
+        "favorites": [],
+        "recent": [f"type_{idx}" for idx in range(MAX_RECENT_TOOLS)],
+    }
 
     usage = record_recent_tool("type_3", usage)
     assert usage["recent"][0] == "type_3"

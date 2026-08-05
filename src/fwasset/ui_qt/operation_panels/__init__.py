@@ -1,9 +1,5 @@
 """Qt 版 flash_mode 操作面板注册表与基类（语义对齐 ui/operation_panels）。"""
 
-from fwasset.ui_qt.operation_panels.base import BaseOperationPanel
-from fwasset.ui_qt.operation_panels.host_types import PanelHost
-from fwasset.ui_qt.operation_panels.registry import get_panel, register
-
 # 提前加载各面板子模块，确保 @register 装饰器执行
 from fwasset.ui_qt.operation_panels import (  # noqa: F401
     auto_usb_panel,
@@ -11,5 +7,8 @@ from fwasset.ui_qt.operation_panels import (  # noqa: F401
     manual_doc_panel,
     tool_launch_panel,
 )
+from fwasset.ui_qt.operation_panels.base import BaseOperationPanel
+from fwasset.ui_qt.operation_panels.host_types import PanelHost
+from fwasset.ui_qt.operation_panels.registry import get_panel, register
 
 __all__ = ["BaseOperationPanel", "PanelHost", "register", "get_panel"]

@@ -1,4 +1,5 @@
 """C0：SharedModuleRef schema 扩展——mode / source_platform 可选字段兼容读写。"""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -12,10 +13,10 @@ from fwasset.core.model_config import (
     save_shared_module,
 )
 
-
 # ---------------------------------------------------------------------------
 # 辅助：直接落盘一份 Phase B 格式的 toml（无 mode / source_platform 键）
 # ---------------------------------------------------------------------------
+
 
 def _write_phase_b_toml(model_root: Path, key: str, entry: dict) -> None:
     model_root.mkdir(parents=True, exist_ok=True)
@@ -35,6 +36,7 @@ _PHASE_B_ENTRY = {
 # 1. Phase B toml 无 mode 键 → 读出 mode="static", source_platform=""
 # ---------------------------------------------------------------------------
 
+
 def test_phase_b_toml_reads_as_static(tmp_path: Path):
     root = tmp_path / "model"
     _write_phase_b_toml(root, "手控UI", _PHASE_B_ENTRY)
@@ -48,6 +50,7 @@ def test_phase_b_toml_reads_as_static(tmp_path: Path):
 # ---------------------------------------------------------------------------
 # 2. follow_default + source_platform round-trip
 # ---------------------------------------------------------------------------
+
 
 def test_follow_default_round_trip(tmp_path: Path):
     root = tmp_path / "model"
@@ -75,6 +78,7 @@ def test_follow_default_round_trip(tmp_path: Path):
 # 3. toml 中遗留 mode="pinned" → 容错回退为 "static"
 # ---------------------------------------------------------------------------
 
+
 def test_legacy_pinned_falls_back_to_static(tmp_path: Path):
     root = tmp_path / "model"
     entry = {**_PHASE_B_ENTRY, "mode": "pinned"}
@@ -88,6 +92,7 @@ def test_legacy_pinned_falls_back_to_static(tmp_path: Path):
 # ---------------------------------------------------------------------------
 # 4. mode="static" 写入时 toml 不含 mode 键（Phase B 格式兼容）
 # ---------------------------------------------------------------------------
+
 
 def test_static_mode_not_written_to_toml(tmp_path: Path):
     root = tmp_path / "model"
@@ -111,6 +116,7 @@ def test_static_mode_not_written_to_toml(tmp_path: Path):
 # 5. source_platform 为空时不写入 toml
 # ---------------------------------------------------------------------------
 
+
 def test_empty_source_platform_not_written(tmp_path: Path):
     root = tmp_path / "model"
     root.mkdir()
@@ -133,6 +139,7 @@ def test_empty_source_platform_not_written(tmp_path: Path):
 # 6. toml 中 mode 为无效值 → 容错回退为 "static"
 # ---------------------------------------------------------------------------
 
+
 def test_invalid_mode_falls_back_to_static(tmp_path: Path):
     root = tmp_path / "model"
     entry = {**_PHASE_B_ENTRY, "mode": "unknown_future_mode"}
@@ -146,6 +153,7 @@ def test_invalid_mode_falls_back_to_static(tmp_path: Path):
 # ---------------------------------------------------------------------------
 # 7. follow_default 不带 source_platform（空串）round-trip
 # ---------------------------------------------------------------------------
+
 
 def test_follow_default_without_source_platform(tmp_path: Path):
     root = tmp_path / "model"
@@ -170,6 +178,7 @@ def test_follow_default_without_source_platform(tmp_path: Path):
 # ---------------------------------------------------------------------------
 # 8. 同一 toml 混合 Phase B 与 Phase C 引用
 # ---------------------------------------------------------------------------
+
 
 def test_mixed_phase_b_and_phase_c_refs(tmp_path: Path):
     root = tmp_path / "model"

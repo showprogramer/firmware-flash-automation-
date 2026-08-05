@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from datetime import datetime
 import json
-from pathlib import Path
 import platform
 import sys
 import zipfile
+from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 from fwasset.core.settings import load_toml_config
-
 
 _PATH_KEYS = {
     "config_path",
@@ -29,7 +29,7 @@ def _mask_path(value: str) -> str:
     return "<redacted>"
 
 
-def sanitize_snapshot(value, key: str | None = None):
+def sanitize_snapshot(value: object, key: str | None = None) -> Any:
     if isinstance(value, Path):
         value = str(value)
 
@@ -46,7 +46,13 @@ def sanitize_snapshot(value, key: str | None = None):
     return value
 
 
-def build_diagnostic_bundle(output_path: str | Path, *, app_state: dict, config_path: str | Path, log_path: str | Path) -> dict:
+def build_diagnostic_bundle(
+    output_path: str | Path,
+    *,
+    app_state: dict,
+    config_path: str | Path,
+    log_path: str | Path,
+) -> dict:
     output = Path(output_path)
     config_file = Path(config_path)
     log_file = Path(log_path)
@@ -67,7 +73,8 @@ def build_diagnostic_bundle(output_path: str | Path, *, app_state: dict, config_
 
     entries: list[str] = []
     with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        def _write_json(name: str, payload) -> None:
+
+        def _write_json(name: str, payload: object) -> None:
             zf.writestr(name, json.dumps(payload, ensure_ascii=False, indent=2))
             entries.append(name)
 

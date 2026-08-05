@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from PySide6.QtWidgets import QHBoxLayout
-
 from qfluentwidgets import PushButton
 
 if TYPE_CHECKING:
@@ -12,7 +11,7 @@ if TYPE_CHECKING:
 
 
 def build_handoff_actions(
-    panel: "BaseOperationPanel", panel_host: "PanelHost", include_tool_combo: bool = False
+    panel: BaseOperationPanel, panel_host: PanelHost, include_tool_combo: bool = False
 ) -> None:
     """通用交接操作按钮组（打开目录、复制路径等）。
 
@@ -25,7 +24,9 @@ def build_handoff_actions(
         ("复制主文件路径", panel_host._copy_primary_file_path),
     ]
     if include_tool_combo:
-        actions.append(("打开工具 + 打开程序目录", panel_host._launch_tool_and_open_asset_dir))
+        actions.append(
+            ("打开工具 + 打开程序目录", panel_host._launch_tool_and_open_asset_dir)
+        )
     for title, command in actions:
         btn = PushButton(title, panel)
         btn.clicked.connect(command)

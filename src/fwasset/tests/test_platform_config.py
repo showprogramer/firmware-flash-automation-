@@ -1,11 +1,10 @@
 """Tests for platform_config.py — load_platform_config and default_variant_for."""
+
 from __future__ import annotations
 
 from pathlib import Path
 
 import pytest
-
-import os
 
 from fwasset.core import config_io
 from fwasset.core import platform_config as platform_config_mod
@@ -97,7 +96,7 @@ class TestLoadPlatformConfigWithStatus:
             tmp_path,
             "[[platform]]\n[platform.defaults]\n"
             '"主板程序" = "量产_默认"\n'
-            "[[platform]]\nname = \"\"\n[platform.defaults]\n"
+            '[[platform]]\nname = ""\n[platform.defaults]\n'
             '"腿部程序" = ""\n',
         )
         platforms, status, error = load_platform_config_with_status(tmp_path)
@@ -151,30 +150,40 @@ class TestSavePlatformConfig:
     def test_round_trip(self, tmp_path: Path):
         platforms = [
             PlatformDefaults("标准单机芯3D", {"主板程序": "量产_默认", "腿部程序": ""}),
-            PlatformDefaults("双机芯-上3D-下2D", {"主板程序": "量产_默认", "快捷键": "贝乐"}),
+            PlatformDefaults(
+                "双机芯-上3D-下2D", {"主板程序": "量产_默认", "快捷键": "贝乐"}
+            ),
         ]
         save_platform_config(tmp_path, platforms)
         loaded = load_platform_config(tmp_path)
         assert len(loaded) == 2
         by_name = {p.platform_name: p for p in loaded}
-        assert by_name["标准单机芯3D"].defaults == {"主板程序": "量产_默认", "腿部程序": ""}
-        assert by_name["双机芯-上3D-下2D"].defaults == {"主板程序": "量产_默认", "快捷键": "贝乐"}
+        assert by_name["标准单机芯3D"].defaults == {
+            "主板程序": "量产_默认",
+            "腿部程序": "",
+        }
+        assert by_name["双机芯-上3D-下2D"].defaults == {
+            "主板程序": "量产_默认",
+            "快捷键": "贝乐",
+        }
 
     def test_overwrites_existing_file(self, tmp_path: Path):
         make_platform_toml(
             tmp_path,
             '[[platform]]\nname = "旧平台"\n[platform.defaults]\n"主板程序" = "旧默认"\n',
         )
-        save_platform_config(tmp_path, [PlatformDefaults("新平台", {"主板程序": "新默认"})])
+        save_platform_config(
+            tmp_path, [PlatformDefaults("新平台", {"主板程序": "新默认"})]
+        )
         loaded = load_platform_config(tmp_path)
         assert [p.platform_name for p in loaded] == ["新平台"]
 
     def test_escapes_quotes_and_backslashes(self, tmp_path: Path):
-        platforms = [PlatformDefaults('平台"A"', {'模块\\x': '变体"y"'})]
+        platforms = [PlatformDefaults('平台"A"', {"模块\\x": '变体"y"'})]
         save_platform_config(tmp_path, platforms)
         loaded = load_platform_config(tmp_path)
         assert loaded[0].platform_name == '平台"A"'
-        assert loaded[0].defaults == {'模块\\x': '变体"y"'}
+        assert loaded[0].defaults == {"模块\\x": '变体"y"'}
 
     def test_replace_failure_keeps_existing_file(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -200,8 +209,12 @@ class TestSavePlatformConfig:
 class TestDefaultVariantFor:
     def _platforms(self) -> list[PlatformDefaults]:
         return [
-            PlatformDefaults("标准单机芯3D", {"主板程序": "量产_默认", "手控UI": "量产中性_默认"}),
-            PlatformDefaults("双机芯-上3D-下2D", {"主板程序": "量产_默认", "快捷键": "贝乐"}),
+            PlatformDefaults(
+                "标准单机芯3D", {"主板程序": "量产_默认", "手控UI": "量产中性_默认"}
+            ),
+            PlatformDefaults(
+                "双机芯-上3D-下2D", {"主板程序": "量产_默认", "快捷键": "贝乐"}
+            ),
         ]
 
     def test_finds_existing_variant(self):

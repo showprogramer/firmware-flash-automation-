@@ -42,7 +42,10 @@ def test_asset_usb_flow_returns_configured_flow():
 
 
 def test_asset_usb_flow_infer_paired_files_from_type():
-    assert asset_usb_flow(_asset(firmware_type="handcontrol_ui", usb_flow="")) == "paired_files"
+    assert (
+        asset_usb_flow(_asset(firmware_type="handcontrol_ui", usb_flow=""))
+        == "paired_files"
+    )
 
 
 def test_asset_usb_flow_segmented_screen_is_not_usb():
@@ -52,20 +55,37 @@ def test_asset_usb_flow_segmented_screen_is_not_usb():
 
 def test_asset_flash_mode_forces_segmented_screen_to_tool_launch():
     """断码屏即便残留 auto_usb 配置，也强制走烧录工具。"""
-    assert asset_flash_mode(_asset(firmware_type="segmented_screen", flash_mode="auto_usb")) == "tool_launch"
+    assert (
+        asset_flash_mode(
+            _asset(firmware_type="segmented_screen", flash_mode="auto_usb")
+        )
+        == "tool_launch"
+    )
 
 
 def test_asset_usb_flow_infer_directory_copy_from_music():
-    assert asset_usb_flow(_asset(firmware_type="music_files", usb_flow="")) == "directory_copy"
+    assert (
+        asset_usb_flow(_asset(firmware_type="music_files", usb_flow=""))
+        == "directory_copy"
+    )
 
 
 def test_asset_usb_flow_never_uses_directory_copy_for_bluetooth():
-    assert asset_usb_flow(_asset(firmware_type="music_bt", usb_flow="directory_copy")) == ""
+    assert (
+        asset_usb_flow(_asset(firmware_type="music_bt", usb_flow="directory_copy"))
+        == ""
+    )
 
 
 def test_asset_flash_mode_forces_bluetooth_to_tool_launch():
-    assert asset_flash_mode(_asset(firmware_type="music_bt", flash_mode="auto_usb")) == "tool_launch"
-    assert asset_flash_mode(_asset(firmware_type="music_files", flash_mode="auto_usb")) == "auto_usb"
+    assert (
+        asset_flash_mode(_asset(firmware_type="music_bt", flash_mode="auto_usb"))
+        == "tool_launch"
+    )
+    assert (
+        asset_flash_mode(_asset(firmware_type="music_files", flash_mode="auto_usb"))
+        == "auto_usb"
+    )
 
 
 def test_asset_usb_flow_returns_empty_for_unknown():
@@ -125,7 +145,9 @@ def test_asset_primary_file_path_uses_dir_when_no_files():
 
 
 def test_asset_primary_file_name_returns_filename_only():
-    asset = _asset(path="D:/root/L36/主板/V1.0", files=["readme.txt", "YJ_3DMain_L36_V40.bin"])
+    asset = _asset(
+        path="D:/root/L36/主板/V1.0", files=["readme.txt", "YJ_3DMain_L36_V40.bin"]
+    )
     assert asset_primary_file_name(asset) == "YJ_3DMain_L36_V40.bin"
 
 
@@ -149,8 +171,18 @@ def test_open_path_in_explorer_rejects_missing_path():
 
 def test_open_path_in_explorer_opens_existing_dir(tmp_path, monkeypatch):
     opened: list[str] = []
-    monkeypatch.setattr(asset_helpers_module.os, "startfile", lambda p: opened.append(str(p)), raising=False)
-    monkeypatch.setattr(asset_helpers_module.subprocess, "run", lambda *a, **k: opened.append(str(a[0])), raising=False)
+    monkeypatch.setattr(
+        asset_helpers_module.os,
+        "startfile",
+        lambda p: opened.append(str(p)),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        asset_helpers_module.subprocess,
+        "run",
+        lambda *a, **k: opened.append(str(a[0])),
+        raising=False,
+    )
     assert open_path_in_explorer(str(tmp_path), lambda _m: None) is True
     assert opened, "should invoke the platform opener"
 

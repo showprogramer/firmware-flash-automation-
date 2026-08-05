@@ -21,7 +21,11 @@ def test_apply_sort_by_default_path_order_uses_natural_segment_sort():
 
     result = apply_sort(folders, sort_key=SortKey.PATH, ascending=True)
 
-    assert [item["path"] for item in result] == ["D:/root/L3", "D:/root/L20", "D:/root/L100"]
+    assert [item["path"] for item in result] == [
+        "D:/root/L3",
+        "D:/root/L20",
+        "D:/root/L100",
+    ]
 
 
 def test_apply_sort_by_model_natural_order():

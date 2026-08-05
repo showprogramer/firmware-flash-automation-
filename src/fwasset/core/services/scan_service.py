@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 import threading
+from collections.abc import Callable
 
 from fwasset.core.asset_index import count_assets, load_scan_meta, save_assets
 from fwasset.core.file_scan import handcontrol_folders_from_assets, scan_firmware_assets
+from fwasset.core.types import ServiceResult
 
 
 def build_scan_result(
     root: str,
-    log_fn=print,
+    log_fn: Callable[..., None] = print,
     cancel_event: threading.Event | None = None,
-) -> dict:
+) -> ServiceResult:
     try:
         log_fn(f"扫描中: {root}")
         assets, errors = scan_firmware_assets(
@@ -55,7 +57,7 @@ def build_scan_result(
         }
 
 
-def build_cached_scan_result(log_fn=print) -> dict:
+def build_cached_scan_result(log_fn: Callable[..., None] = print) -> ServiceResult:
     """读取本地索引状态；任何索引/DB 异常都映射为 ServiceResult，禁止裸抛。"""
     try:
         asset_count = count_assets()

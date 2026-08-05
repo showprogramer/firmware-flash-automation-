@@ -1,5 +1,8 @@
 """工作台纯函数助手（不依赖具体 UI 框架）。"""
+
 from __future__ import annotations
+
+from fwasset.core.types import FirmwareAsset
 
 MODEL_CHIP_LIMIT = 4
 
@@ -33,7 +36,7 @@ def flash_mode_label(mode: str) -> str:
     return labels.get(mode, mode or "-")
 
 
-def module_label_from_asset(asset: dict) -> str:
+def module_label_from_asset(asset: FirmwareAsset) -> str:
     """资产的模块显示名（如 蓝牙程序、主板程序）。"""
     return (
         str(asset.get("firmware_label", "")).strip()
@@ -70,10 +73,7 @@ def set_default_confirm_message(
     mod = (module or "").strip() or "程序"
     shown = (variant_name or "").strip() or "-"
     target = f"「{model}」{mod}默认版本"
-    return (
-        f"将「{shown}」设为{target}？\n\n"
-        "定制方案缺少该模块时，将使用此程序补齐。"
-    )
+    return f"将「{shown}」设为{target}？\n\n定制方案缺少该模块时，将使用此程序补齐。"
 
 
 # --- 共享登记入口文案（Phase B2） ---

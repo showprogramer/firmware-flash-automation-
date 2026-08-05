@@ -1,4 +1,5 @@
 """Tests for shared_module_service — set/clear shared module registration (Phase B2)."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -25,7 +26,11 @@ def make_asset(
 ) -> FirmwareAsset:
     asset_dir.mkdir(parents=True, exist_ok=True)
     (asset_dir / "firmware.bin").write_bytes(b"BIN")
-    model_dir = asset_dir.parents[1] if "通用" in asset_dir.parts or "定制" in asset_dir.parts else asset_dir.parent
+    model_dir = (
+        asset_dir.parents[1]
+        if "通用" in asset_dir.parts or "定制" in asset_dir.parts
+        else asset_dir.parent
+    )
     return {
         "series": model,
         "firmware_type": firmware_type,  # type: ignore[typeddict-item]
@@ -51,7 +56,9 @@ def make_asset(
     }
 
 
-def _setup_multi_model_workspace(tmp_path: Path) -> tuple[Path, Path, Path, FirmwareAsset]:
+def _setup_multi_model_workspace(
+    tmp_path: Path,
+) -> tuple[Path, Path, Path, FirmwareAsset]:
     """Multi-model root: ws / L36程序/通用/快捷键/贝乐  +  ws / 双机芯程序/."""
     ws = tmp_path / "ws"
     src_root = ws / "L36程序"
@@ -171,7 +178,9 @@ def test_module_key_canonicalization(tmp_path: Path):
     tgt_root.mkdir(parents=True, exist_ok=True)
     (src_mod / "a.hex").write_bytes(b"X")
     save_model_id(src_root, "l36")
-    asset = make_asset(src_mod, firmware_type="movement_3d", firmware_label="机芯版", model="L36")
+    asset = make_asset(
+        src_mod, firmware_type="movement_3d", firmware_label="机芯版", model="L36"
+    )
     result = set_shared_module(tgt_root, asset, ws, module_key="机芯版")
     assert result["ok"] is True
     refs = load_shared_modules(tgt_root)

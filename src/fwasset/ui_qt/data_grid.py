@@ -3,7 +3,6 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QMenu, QTreeWidgetItem, QVBoxLayout, QWidget
-
 from qfluentwidgets import TreeWidget
 
 from fwasset.core.asset_helpers import asset_primary_file_name, open_path_in_explorer
@@ -25,7 +24,7 @@ class DataGrid(QWidget):
     选中变体子节点才发 ModuleVariant；选中多变体父行发 None（等用户展开）。
     """
 
-    selection_changed = Signal(object)          # ModuleVariant | None
+    selection_changed = Signal(object)  # ModuleVariant | None
     variant_right_clicked = Signal(object, object)  # (ModuleVariant, QPoint global)
 
     def __init__(self, on_log, parent=None):
@@ -37,7 +36,9 @@ class DataGrid(QWidget):
 
         self.tree = TreeWidget(self)
         self.tree.setColumnCount(5)
-        self.tree.setHeaderLabels(["程序类型", "程序名称", "程序归属", "版本", "程序文件"])
+        self.tree.setHeaderLabels(
+            ["程序类型", "程序名称", "程序归属", "版本", "程序文件"]
+        )
         header = self.tree.header()
         for col, width in enumerate(GRID_COL_WIDTHS):
             self.tree.setColumnWidth(col, width)
@@ -45,7 +46,9 @@ class DataGrid(QWidget):
             if col == 2:
                 header.setMinimumSectionSize(160)
         header.setStretchLastSection(True)
-        header.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        header.setDefaultAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
         self.tree.setAlternatingRowColors(True)
         self.tree.setBorderVisible(True)
         self.tree.setBorderRadius(GRID_BORDER_RADIUS)
@@ -91,7 +94,9 @@ class DataGrid(QWidget):
                         [
                             row.label,
                             self._variant_text(variant, row.label),
-                            self._source_text(variant.source_label, variant.source_kind),
+                            self._source_text(
+                                variant.source_label, variant.source_kind
+                            ),
                             variant.version or "-",
                             asset_primary_file_name(variant.asset),
                         ]
@@ -100,7 +105,15 @@ class DataGrid(QWidget):
                     self.tree.addTopLevelItem(item)
                     continue
 
-                parent = QTreeWidgetItem([row.label, "", self._source_text(row.source_label, row.source_kind), "", ""])
+                parent = QTreeWidgetItem(
+                    [
+                        row.label,
+                        "",
+                        self._source_text(row.source_label, row.source_kind),
+                        "",
+                        "",
+                    ]
+                )
                 self.tree.addTopLevelItem(parent)
                 for variant in row.variants:
                     name = (variant.name or "默认") + (
@@ -110,7 +123,9 @@ class DataGrid(QWidget):
                         [
                             "",
                             name,
-                            self._source_text(variant.source_label, variant.source_kind),
+                            self._source_text(
+                                variant.source_label, variant.source_kind
+                            ),
                             variant.version or "-",
                             asset_primary_file_name(variant.asset),
                         ]
@@ -126,8 +141,14 @@ class DataGrid(QWidget):
         grouped: dict[str, list[ModuleVariant]] = {}
         for data in data_list:
             asset = data.asset
-            label = str(asset.get("firmware_label", "")) or str(asset.get("firmware_type", ""))
-            kind = data.source_kind if data.source_kind else ("common" if data.is_fallback else "custom")
+            label = str(asset.get("firmware_label", "")) or str(
+                asset.get("firmware_type", "")
+            )
+            kind = (
+                data.source_kind
+                if data.source_kind
+                else ("common" if data.is_fallback else "custom")
+            )
             raw = (data.source_label or "").strip()
             if raw and "回源" not in raw:
                 source_label = self._source_text(raw, kind)
@@ -149,7 +170,11 @@ class DataGrid(QWidget):
 
         rows: list[ModuleRow] = []
         for label, variants in grouped.items():
-            row_kind = "custom" if any(v.source_kind == "custom" for v in variants) else "common"
+            row_kind = (
+                "custom"
+                if any(v.source_kind == "custom" for v in variants)
+                else "common"
+            )
             rows.append(
                 ModuleRow(
                     label=label,
@@ -205,7 +230,9 @@ class DataGrid(QWidget):
         self.tree.setCurrentItem(item)
         variant = item.data(0, _VARIANT_ROLE)
         if variant is not None:
-            self.variant_right_clicked.emit(variant, self.tree.viewport().mapToGlobal(pos))
+            self.variant_right_clicked.emit(
+                variant, self.tree.viewport().mapToGlobal(pos)
+            )
             return
         # 多变体父行：右键给「展开/收起」轻量菜单，避免用户觉得右键无响应
         menu = QMenu(self)

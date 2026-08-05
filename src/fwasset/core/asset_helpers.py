@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import os
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 
 from fwasset.core.types import FirmwareAsset
 
 
-def open_path_in_explorer(path: str, log_fn=print) -> bool:
+def open_path_in_explorer(path: str, log_fn: Callable[..., None] = print) -> bool:
     """在系统文件管理器中打开目录/文件；失败记录日志并返回 False。
 
     UI 双击行 / 右键「打开目录」共用此入口，避免多处复制 startfile 逻辑。
@@ -17,7 +18,7 @@ def open_path_in_explorer(path: str, log_fn=print) -> bool:
         return False
     try:
         if os.name == "nt":
-            os.startfile(path)  # noqa: S606
+            os.startfile(path)  # type: ignore[attr-defined]  # noqa: S606
         elif os.name == "posix":
             subprocess.run(["xdg-open", path], check=False)
         return True
@@ -50,8 +51,12 @@ def asset_usb_flow(asset: FirmwareAsset) -> str:
 
 
 def asset_rom_pkg_files(asset: FirmwareAsset) -> tuple[str, str]:
-    rom_file = next((name for name in asset.get("files", []) if name.lower().endswith(".rom")), "")
-    pkg_file = next((name for name in asset.get("files", []) if name.lower().endswith(".pkg")), "")
+    rom_file = next(
+        (name for name in asset.get("files", []) if name.lower().endswith(".rom")), ""
+    )
+    pkg_file = next(
+        (name for name in asset.get("files", []) if name.lower().endswith(".pkg")), ""
+    )
     return rom_file, pkg_file
 
 
@@ -71,7 +76,9 @@ def asset_primary_file_name(asset: FirmwareAsset) -> str:
     if rom:
         return rom
     preferred_exts = (".bin", ".hex", ".pkg", ".zip")
-    primary = next((name for name in files if name.lower().endswith(preferred_exts)), "")
+    primary = next(
+        (name for name in files if name.lower().endswith(preferred_exts)), ""
+    )
     if not primary and files:
         primary = files[0]
     return primary

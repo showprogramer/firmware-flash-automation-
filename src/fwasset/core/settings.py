@@ -29,6 +29,7 @@ def _find_app_root(start: Path | None = None) -> Path:
 APP_ROOT = _find_app_root()
 """应用程序根目录。配置文件和可执行文件同目录。"""
 
+
 def _config_path() -> Path:
     """配置文件路径。
 
@@ -53,7 +54,9 @@ def _default_runtime_dir(app_root: Path | None = None) -> Path:
     return root / ".runtime"
 
 
-def _resolve_runtime_dir(app_root: Path | None = None, env_value: str | None = None) -> Path:
+def _resolve_runtime_dir(
+    app_root: Path | None = None, env_value: str | None = None
+) -> Path:
     root = Path(app_root or APP_ROOT)
     raw = os.environ.get("FWASSET_RUNTIME_DIR") if env_value is None else env_value
     if raw and str(raw).strip():
@@ -101,7 +104,11 @@ def load_toml_config(path: Path) -> tuple[dict, str, str]:
 
             toml_loader = tomllib
         except ModuleNotFoundError:
-            return {}, "parser_missing", "Python<3.11 需要安装 tomli 才能读取 config.toml"
+            return (
+                {},
+                "parser_missing",
+                "Python<3.11 需要安装 tomli 才能读取 config.toml",
+            )
 
     try:
         with open(path, "rb") as file_obj:
@@ -113,14 +120,14 @@ def load_toml_config(path: Path) -> tuple[dict, str, str]:
         return {}, "parse_error", str(exc)
 
 
-def _cfg_get(cfg: dict, section: str, key: str, default):
+def _cfg_get(cfg: dict, section: str, key: str, default: object) -> object:
     node = cfg.get(section, {})
     if not isinstance(node, dict):
         return default
     return node.get(key, default)
 
 
-def _resolve_path(value, default: str = "") -> str:
+def _resolve_path(value: object, default: str = "") -> str:
     text = str(value or "").strip()
     if not text:
         return str(default or "")
@@ -142,7 +149,13 @@ TOOL_ROOT = _resolve_path(
 # USB 扫描常量（硬编码，不再从用户配置读取）
 SCAN_ROM_EXTENSIONS: list[str] = [".rom"]
 SCAN_PKG_EXTENSIONS: list[str] = [".pkg"]
-SCAN_EXCLUDE_DIR_KEYWORDS: list[str] = ["CH341SER", "接线图", "旧", "新建文件夹", "照片"]
+SCAN_EXCLUDE_DIR_KEYWORDS: list[str] = [
+    "CH341SER",
+    "接线图",
+    "旧",
+    "新建文件夹",
+    "照片",
+]
 SCAN_MODEL_PATTERNS: list[str] = [r"(?:^|[_\-])((L\d+[A-Za-z]*))(?![A-Za-z0-9])"]
 SCAN_VERSION_PATTERNS: list[str] = [
     r"[Vv](\d+\.\d+(?:\.\d+)?(?:_\d+)?)",

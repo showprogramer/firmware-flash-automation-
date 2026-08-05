@@ -23,7 +23,9 @@ def test_get_usb_drives_filters_expected_partitions(monkeypatch: pytest.MonkeyPa
         SimpleNamespace(opts="rw", fstype="FAT32", mountpoint="F:\\"),
         SimpleNamespace(opts="rw", fstype="NTFS", mountpoint="C:\\"),
     ]
-    monkeypatch.setattr("fwasset.core.usb_ops.psutil.disk_partitions", lambda all=False: parts)
+    monkeypatch.setattr(
+        "fwasset.core.usb_ops.psutil.disk_partitions", lambda all=False: parts
+    )
 
     drives = get_usb_drives()
 
@@ -140,7 +142,9 @@ def test_format_usb_success_failure_and_exception(monkeypatch: pytest.MonkeyPatc
 
     monkeypatch.setattr("fwasset.core.usb_ops.subprocess.run", run_success)
     monkeypatch.setattr("fwasset.core.usb_ops.time.sleep", lambda s: None)
-    monkeypatch.setattr("fwasset.core.usb_ops.Path.is_dir", lambda self: True)  # 驱动器就绪
+    monkeypatch.setattr(
+        "fwasset.core.usb_ops.Path.is_dir", lambda self: True
+    )  # 驱动器就绪
     ok1 = format_usb("E:\\", log_fn=log_fn1)
     assert ok1 is True
     cmd = calls[0][0][0]
@@ -154,7 +158,9 @@ def test_format_usb_success_failure_and_exception(monkeypatch: pytest.MonkeyPatc
     logs2, log_fn2 = _logs()
     monkeypatch.setattr(
         "fwasset.core.usb_ops.subprocess.run",
-        lambda *args, **kwargs: SimpleNamespace(returncode=1, stderr="failed", stdout=""),
+        lambda *args, **kwargs: SimpleNamespace(
+            returncode=1, stderr="failed", stdout=""
+        ),
     )
     ok2 = format_usb("E:\\", log_fn=log_fn2)
     assert ok2 is False
@@ -219,7 +225,10 @@ def test_format_usb_invalid_drive_letter(monkeypatch: pytest.MonkeyPatch):
     subprocess_called = [False]
     monkeypatch.setattr(
         "fwasset.core.usb_ops.subprocess.run",
-        lambda *args, **kwargs: (subprocess_called.__setitem__(0, True) or SimpleNamespace(returncode=0, stdout="", stderr="")),
+        lambda *args, **kwargs: (
+            subprocess_called.__setitem__(0, True)
+            or SimpleNamespace(returncode=0, stdout="", stderr="")
+        ),
     )
 
     # 无效盘符：空串、数字开头、符号开头、非 ASCII 字母

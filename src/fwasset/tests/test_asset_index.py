@@ -106,7 +106,11 @@ def test_save_and_load_assets_roundtrip(tmp_path: Path):
     assert loaded == [asset]
     assert count_assets(db_path) == 1
     assert load_scan_meta(db_path) == [
-        {"root_dir": str(tmp_path), "last_scan_at": 1000.0, "schema_version": SCHEMA_VERSION}
+        {
+            "root_dir": str(tmp_path),
+            "last_scan_at": 1000.0,
+            "schema_version": SCHEMA_VERSION,
+        }
     ]
     assert active_workspace_root(db_path) == str(tmp_path)
 
@@ -125,7 +129,11 @@ def test_save_assets_replaces_index_when_workspace_root_changes(tmp_path: Path):
     save_assets([asset_a], str(root_a), db_path, scanned_at=1000.0)
     assert [item["model"] for item in load_assets(db_path)] == ["LA"]
     assert load_scan_meta(db_path) == [
-        {"root_dir": str(root_a), "last_scan_at": 1000.0, "schema_version": SCHEMA_VERSION}
+        {
+            "root_dir": str(root_a),
+            "last_scan_at": 1000.0,
+            "schema_version": SCHEMA_VERSION,
+        }
     ]
 
     # 切换工作区：B 覆盖 A（intentional，非多根合并）
@@ -135,7 +143,11 @@ def test_save_assets_replaces_index_when_workspace_root_changes(tmp_path: Path):
     assert [item["model"] for item in loaded] == ["LB"]
     assert asset_a["path"] not in {item["path"] for item in loaded}
     assert load_scan_meta(db_path) == [
-        {"root_dir": str(root_b), "last_scan_at": 2000.0, "schema_version": SCHEMA_VERSION}
+        {
+            "root_dir": str(root_b),
+            "last_scan_at": 2000.0,
+            "schema_version": SCHEMA_VERSION,
+        }
     ]
     assert active_workspace_root(db_path) == str(root_b)
 
@@ -168,7 +180,9 @@ def test_save_assets_clears_stale_scan_meta_rows(tmp_path: Path):
 
 def test_query_assets_by_keyword_and_type(tmp_path: Path):
     db_path = tmp_path / "fwasset.db"
-    mainboard = make_asset(tmp_path, firmware_type="mainboard", model="L36", directory_name="mainboard_v1")
+    mainboard = make_asset(
+        tmp_path, firmware_type="mainboard", model="L36", directory_name="mainboard_v1"
+    )
     handcontrol = make_asset(
         tmp_path,
         firmware_type="handcontrol_ui",
@@ -178,7 +192,10 @@ def test_query_assets_by_keyword_and_type(tmp_path: Path):
     save_assets([mainboard, handcontrol], str(tmp_path), db_path)
 
     assert [item["model"] for item in query_assets("L39", path=db_path)] == ["L39"]
-    assert [item["firmware_type"] for item in query_assets(firmware_types=["mainboard"], path=db_path)] == ["mainboard"]
+    assert [
+        item["firmware_type"]
+        for item in query_assets(firmware_types=["mainboard"], path=db_path)
+    ] == ["mainboard"]
     assert query_assets("no-match", firmware_types=["mainboard"], path=db_path) == []
 
 
@@ -189,13 +206,19 @@ def test_query_assets_keyword_is_space_tokenized_AND(tmp_path: Path):
     """
     db_path = tmp_path / "fwasset.db"
     # 同型号下两个手控变体，版本不同
-    hc_v12 = make_asset(tmp_path, firmware_type="handcontrol_ui", model="L36", directory_name="手控UI-A")
+    hc_v12 = make_asset(
+        tmp_path, firmware_type="handcontrol_ui", model="L36", directory_name="手控UI-A"
+    )
     hc_v12["version"] = "V12"
     hc_v12["firmware_label"] = "手控UI"
-    hc_v13 = make_asset(tmp_path, firmware_type="handcontrol_ui", model="L36", directory_name="手控UI-B")
+    hc_v13 = make_asset(
+        tmp_path, firmware_type="handcontrol_ui", model="L36", directory_name="手控UI-B"
+    )
     hc_v13["version"] = "V13"
     hc_v13["firmware_label"] = "手控UI"
-    mainboard = make_asset(tmp_path, firmware_type="mainboard", model="L36", directory_name="主板程序")
+    mainboard = make_asset(
+        tmp_path, firmware_type="mainboard", model="L36", directory_name="主板程序"
+    )
     mainboard["version"] = "V13"  # 同样含 V13，但不是手控
     save_assets([hc_v12, hc_v13, mainboard], str(tmp_path), db_path)
 
@@ -208,10 +231,15 @@ def test_query_assets_keyword_is_space_tokenized_AND(tmp_path: Path):
     assert [a["directory_name"] for a in got2] == ["手控UI-B"]
 
     # 单词仍跨字段模糊匹配（向后兼容）
-    assert {a["directory_name"] for a in query_assets("手控", path=db_path)} == {"手控UI-A", "手控UI-B"}
+    assert {a["directory_name"] for a in query_assets("手控", path=db_path)} == {
+        "手控UI-A",
+        "手控UI-B",
+    }
 
     # 多个空格 / 首尾空格不影响
-    assert [a["directory_name"] for a in query_assets("  手控   V13  ", path=db_path)] == ["手控UI-B"]
+    assert [
+        a["directory_name"] for a in query_assets("  手控   V13  ", path=db_path)
+    ] == ["手控UI-B"]
 
 
 def test_query_assets_supports_sort_key_and_direction(tmp_path: Path):
@@ -226,13 +254,20 @@ def test_query_assets_supports_sort_key_and_direction(tmp_path: Path):
     assets[2]["version"] = "V1.0.0"
     save_assets(assets, str(tmp_path), db_path)
 
-    assert [item["model"] for item in query_assets(path=db_path, sort_key=SortKey.MODEL)] == ["L3", "L20", "L100"]
-    assert [item["version"] for item in query_assets(path=db_path, sort_key=SortKey.VERSION)] == [
+    assert [
+        item["model"] for item in query_assets(path=db_path, sort_key=SortKey.MODEL)
+    ] == ["L3", "L20", "L100"]
+    assert [
+        item["version"] for item in query_assets(path=db_path, sort_key=SortKey.VERSION)
+    ] == [
         "V1.0.0",
         "V2.0.0",
         "V10.0.0",
     ]
-    assert [item["model"] for item in query_assets(path=db_path, sort_key=SortKey.MODEL, ascending=False)] == [
+    assert [
+        item["model"]
+        for item in query_assets(path=db_path, sort_key=SortKey.MODEL, ascending=False)
+    ] == [
         "L100",
         "L20",
         "L3",
@@ -258,8 +293,12 @@ def test_hidden_items_persist_and_can_be_pruned(tmp_path: Path):
     asset = make_asset(tmp_path)
     save_assets([asset], str(tmp_path), db_path)
 
-    hide_item(asset["model_directory_path"], "model_directory", db_path, created_at=100.0)
-    assert load_hidden_items(db_path) == {asset["model_directory_path"]: "model_directory"}
+    hide_item(
+        asset["model_directory_path"], "model_directory", db_path, created_at=100.0
+    )
+    assert load_hidden_items(db_path) == {
+        asset["model_directory_path"]: "model_directory"
+    }
 
     unhide_item(asset["model_directory_path"], db_path)
     assert load_hidden_items(db_path) == {}
@@ -277,7 +316,9 @@ def test_schema_version_mismatch_raises_chinese_recovery_message(tmp_path: Path)
         import sqlite3
 
         with sqlite3.connect(db_path) as conn:
-            conn.execute("UPDATE schema_meta SET value = '999' WHERE key = 'schema_version'")
+            conn.execute(
+                "UPDATE schema_meta SET value = '999' WHERE key = 'schema_version'"
+            )
         init_asset_index(db_path)
 
 
@@ -320,7 +361,9 @@ def test_schema_version_one_migrates_to_v3(tmp_path: Path):
 
     assert schema_version(db_path) == SCHEMA_VERSION
     with sqlite3.connect(db_path) as conn:
-        columns = [row[1] for row in conn.execute("PRAGMA table_info(assets)").fetchall()]
+        columns = [
+            row[1] for row in conn.execute("PRAGMA table_info(assets)").fetchall()
+        ]
     assert "usb_flow" in columns
     assert "category" in columns
     assert "platform" in columns
@@ -368,7 +411,9 @@ def test_schema_version_two_migrates_to_v3(tmp_path: Path):
 
     assert schema_version(db_path) == SCHEMA_VERSION
     with sqlite3.connect(db_path) as conn:
-        columns = [row[1] for row in conn.execute("PRAGMA table_info(assets)").fetchall()]
+        columns = [
+            row[1] for row in conn.execute("PRAGMA table_info(assets)").fetchall()
+        ]
     assert "category" in columns
     assert "platform" in columns
     assert "scheme_name" in columns
@@ -378,7 +423,9 @@ def test_schema_version_two_migrates_to_v3(tmp_path: Path):
 def test_query_assets_by_category_and_scheme(tmp_path: Path):
     """query_assets should support filtering by category, platform and scheme_name."""
     db_path = tmp_path / "fwasset.db"
-    common_asset = make_asset(tmp_path, model="L36", directory_name="common_main", category="common")
+    common_asset = make_asset(
+        tmp_path, model="L36", directory_name="common_main", category="common"
+    )
     custom_asset = make_asset(
         tmp_path,
         model="L36",

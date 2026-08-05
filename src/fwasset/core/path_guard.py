@@ -4,6 +4,7 @@
 ``assert_within_workspace`` 校验目标路径在工作区根之下，不允许自行实现
 第二套路径归属判断。
 """
+
 from __future__ import annotations
 
 import os
@@ -25,9 +26,7 @@ def _normalize_for_compare(p: Path) -> str:
     return value.replace("\\", "/").rstrip("/")
 
 
-def assert_within_workspace(
-    path: str | Path, workspace_root: str | Path
-) -> Path:
+def assert_within_workspace(path: str | Path, workspace_root: str | Path) -> Path:
     """断言 ``path`` 解析后位于 ``workspace_root`` 之下（允许相等），返回 resolve 后的 Path。
 
     最低契约（REVIEW R5）：

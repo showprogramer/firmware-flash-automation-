@@ -4,6 +4,7 @@
 选择固件根目录（必填）和工具根目录（可选）。用户也可跳过，
 待进入主界面后从“设置”完成配置。
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -16,7 +17,13 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from qfluentwidgets import BodyLabel, CaptionLabel, PrimaryPushButton, PushButton, SubtitleLabel
+from qfluentwidgets import (
+    BodyLabel,
+    CaptionLabel,
+    PrimaryPushButton,
+    PushButton,
+    SubtitleLabel,
+)
 
 
 class SetupWizard(QDialog):
@@ -67,10 +74,14 @@ class SetupWizard(QDialog):
 
         # 首次配置时固件根目录必填；修改场景留空表示保持原值（方案 A）。
         root_label = "固件根目录（必填）" if self._allow_skip else "固件根目录"
-        self._root_edit, root_row = self._make_path_row(root_label, self._initial_root_dir)
+        self._root_edit, root_row = self._make_path_row(
+            root_label, self._initial_root_dir
+        )
         layout.addWidget(root_row)
 
-        self._tool_edit, tool_row = self._make_path_row("工具根目录（可选）", self._initial_tool_root)
+        self._tool_edit, tool_row = self._make_path_row(
+            "工具根目录（可选）", self._initial_tool_root
+        )
         layout.addWidget(tool_row)
 
         self._error_label = CaptionLabel("", self)
@@ -92,7 +103,9 @@ class SetupWizard(QDialog):
         btn_row.addWidget(ok_btn)
         layout.addLayout(btn_row)
 
-    def _make_path_row(self, label_text: str, initial_value: str) -> tuple[QLineEdit, QWidget]:
+    def _make_path_row(
+        self, label_text: str, initial_value: str
+    ) -> tuple[QLineEdit, QWidget]:
         container = QWidget(self)
         layout = QVBoxLayout(container)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -138,11 +151,15 @@ class SetupWizard(QDialog):
 
     def resolved_root_dir(self) -> str:
         """实际写入配置的固件根目录：修改场景留空时保持原值。"""
-        return self.root_dir() or ("" if self._allow_skip else self._initial_root_dir.strip())
+        return self.root_dir() or (
+            "" if self._allow_skip else self._initial_root_dir.strip()
+        )
 
     def resolved_tool_root(self) -> str:
         """实际写入配置的工具根目录：修改场景留空时保持原值。"""
-        return self.tool_root() or ("" if self._allow_skip else self._initial_tool_root.strip())
+        return self.tool_root() or (
+            "" if self._allow_skip else self._initial_tool_root.strip()
+        )
 
     def validate_paths(self) -> str:
         """返回首个用户可见校验错误；空字符串表示可保存。
@@ -171,9 +188,5 @@ class SetupWizard(QDialog):
         config_path.parent.mkdir(parents=True, exist_ok=True)
         root = self.resolved_root_dir().replace("\\", "/")
         tool = self.resolved_tool_root().replace("\\", "/")
-        content = (
-            "[paths]\n"
-            f'root_dir = "{root}"\n'
-            f'tool_root = "{tool}"\n'
-        )
+        content = f'[paths]\nroot_dir = "{root}"\ntool_root = "{tool}"\n'
         config_path.write_text(content, encoding="utf-8")

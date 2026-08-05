@@ -10,7 +10,6 @@ from hypothesis import strategies as st
 
 from fwasset.core.settings import _find_app_root as _find_project_root
 
-
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SRC_ROOT = REPO_ROOT / "src"
 PACKAGE_ROOT = SRC_ROOT / "fwasset"
@@ -39,8 +38,8 @@ def test_pyproject_has_src_layout_settings():
     assert 'build-backend = "hatchling.build"' in content
     assert 'packages = ["src/fwasset"]' in content
     assert 'fwasset = "fwasset.app:main"' in content
-    assert '--cov=src/fwasset' in content
-    assert 'hypothesis>=6.0.0' in content
+    assert "--cov=src/fwasset" in content
+    assert "hypothesis>=6.0.0" in content
 
 
 def test_no_bare_core_or_app_imports_in_src_and_tests():
@@ -67,12 +66,20 @@ def test_no_bare_core_or_app_imports_in_src_and_tests():
     assert violations == []
 
 
-@given(parts=st.lists(st.text(alphabet=string.ascii_lowercase, min_size=1, max_size=8), min_size=0, max_size=4))
+@given(
+    parts=st.lists(
+        st.text(alphabet=string.ascii_lowercase, min_size=1, max_size=8),
+        min_size=0,
+        max_size=4,
+    )
+)
 def test_find_project_root_walks_up_to_pyproject(parts: list[str]):
     with TemporaryDirectory() as tmp_dir:
         repo_root = Path(tmp_dir) / "repo"
         repo_root.mkdir()
-        (repo_root / "pyproject.toml").write_text("[project]\nname=\"demo\"\n", encoding="utf-8")
+        (repo_root / "pyproject.toml").write_text(
+            '[project]\nname="demo"\n', encoding="utf-8"
+        )
 
         current = repo_root
         for part in parts:

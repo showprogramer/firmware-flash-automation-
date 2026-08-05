@@ -88,7 +88,9 @@ def _setup_dual_with_shared_shortcut(
     return model, target_root, source_root
 
 
-def _scheme_labels(model: SchemeWorkbenchModel, model_name: str, scheme: str) -> set[str]:
+def _scheme_labels(
+    model: SchemeWorkbenchModel, model_name: str, scheme: str
+) -> set[str]:
     tree = model.get_scheme_module_tree(model_name, scheme)
     labels = {row.label for row in tree}
     for row in tree:
@@ -99,17 +101,26 @@ def _scheme_labels(model: SchemeWorkbenchModel, model_name: str, scheme: str) ->
     return {x for x in labels if x}
 
 
-def test_scheme_skips_local_fallback_when_shared_hit_with_local_copy(tmp_path: Path) -> None:
+def test_scheme_skips_local_fallback_when_shared_hit_with_local_copy(
+    tmp_path: Path,
+) -> None:
     """B4b：有共享 + 有本地副本 + 方案无定制 → 方案树无该模块。"""
-    model, _target, _source = _setup_dual_with_shared_shortcut(tmp_path, with_local_copy=True)
+    model, _target, _source = _setup_dual_with_shared_shortcut(
+        tmp_path, with_local_copy=True
+    )
     labels = _scheme_labels(model, "L36双机芯-上3D-下2D", "方案A")
     assert not any("快捷键" in x for x in labels)
-    assert not any(c.shared_state != "local" for c in model.get_scheme_modules("L36双机芯-上3D-下2D", "方案A"))
+    assert not any(
+        c.shared_state != "local"
+        for c in model.get_scheme_modules("L36双机芯-上3D-下2D", "方案A")
+    )
 
 
 def test_scheme_skips_module_when_shared_without_local(tmp_path: Path) -> None:
     """有共享 + 无本地 + 方案无定制 → 方案树仍无该模块。"""
-    model, _target, _source = _setup_dual_with_shared_shortcut(tmp_path, with_local_copy=False)
+    model, _target, _source = _setup_dual_with_shared_shortcut(
+        tmp_path, with_local_copy=False
+    )
     labels = _scheme_labels(model, "L36双机芯-上3D-下2D", "方案A")
     assert not any("快捷键" in x for x in labels)
 
@@ -133,7 +144,9 @@ def test_shared_missing_does_not_fall_back_in_list_or_scheme(tmp_path: Path) -> 
         tmp_path, with_local_copy=True, with_source=False
     )
     cards = model.get_all_modules("L36双机芯-上3D-下2D")
-    shortcut = next(c for c in cards if "快捷键" in str(c.asset.get("firmware_label", "")))
+    shortcut = next(
+        c for c in cards if "快捷键" in str(c.asset.get("firmware_label", ""))
+    )
     assert shortcut.shared_state == "shared_missing"
     assert shortcut.effective_asset is None
 
@@ -143,7 +156,9 @@ def test_shared_missing_does_not_fall_back_in_list_or_scheme(tmp_path: Path) -> 
 
 def test_clear_shared_restores_scheme_fallback_and_local_list(tmp_path: Path) -> None:
     """取消共享后：列表恢复 local；方案可再回源本地通用。"""
-    model, target_root, _source = _setup_dual_with_shared_shortcut(tmp_path, with_local_copy=True)
+    model, target_root, _source = _setup_dual_with_shared_shortcut(
+        tmp_path, with_local_copy=True
+    )
     local_file = target_root / "通用" / "快捷键" / "本地变体" / "local.hex"
     assert local_file.exists()
 
@@ -152,12 +167,16 @@ def test_clear_shared_restores_scheme_fallback_and_local_list(tmp_path: Path) ->
     assert local_file.exists()
 
     cards = model.get_all_modules("L36双机芯-上3D-下2D")
-    shortcut = next(c for c in cards if "快捷键" in str(c.asset.get("firmware_label", "")))
+    shortcut = next(
+        c for c in cards if "快捷键" in str(c.asset.get("firmware_label", ""))
+    )
     assert shortcut.shared_state == "local"
     assert shortcut.effective_asset is None
 
     scheme_cards = model.get_scheme_modules("L36双机芯-上3D-下2D", "方案A")
-    scheme_shortcut = [c for c in scheme_cards if "快捷键" in str(c.asset.get("firmware_label", ""))]
+    scheme_shortcut = [
+        c for c in scheme_cards if "快捷键" in str(c.asset.get("firmware_label", ""))
+    ]
     assert len(scheme_shortcut) == 1
     assert scheme_shortcut[0].is_fallback is True
     assert scheme_shortcut[0].source_kind == "common"

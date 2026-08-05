@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from PySide6.QtWidgets import QHBoxLayout, QMessageBox
-
 from qfluentwidgets import BodyLabel, PushButton
 
 from fwasset.ui_qt.operation_panels.base import BaseOperationPanel

@@ -19,9 +19,9 @@ _SCHEME_CONFIG_FILENAME = "方案配置.toml"
 class SchemeConfig:
     """单个定制方案的元数据。"""
 
-    name: str       # 方案名，如 "以色列-Royal-Z9"
-    platform: str   # 所属平台，如 "标准单机芯3D"
-    path: Path      # 方案目录的绝对路径
+    name: str  # 方案名，如 "以色列-Royal-Z9"
+    platform: str  # 所属平台，如 "标准单机芯3D"
+    path: Path  # 方案目录的绝对路径
 
 
 def discover_schemes(model_root: Path) -> list[SchemeConfig]:
@@ -79,7 +79,10 @@ def discover_schemes(model_root: Path) -> list[SchemeConfig]:
                 try:
                     with open(toml_path, "rb") as f:
                         data = tomllib.load(f)
-                    name = str(data.get("name", scheme_dir.name)).strip() or scheme_dir.name
+                    name = (
+                        str(data.get("name", scheme_dir.name)).strip()
+                        or scheme_dir.name
+                    )
                     platform = str(data.get("platform", "")).strip()
                 except Exception:
                     pass
@@ -94,7 +97,9 @@ def _is_excluded_dir(name: str) -> bool:
     return any(kw in lower for kw in ("backup", "-back", "旧", "temp", "tmp"))
 
 
-def scheme_for_path(schemes: list[SchemeConfig], asset_path: Path) -> SchemeConfig | None:
+def scheme_for_path(
+    schemes: list[SchemeConfig], asset_path: Path
+) -> SchemeConfig | None:
     """根据资产路径找到所属定制方案（若有）。
 
     前缀匹配；多候选时取**路径最深**（最长前缀），避免嵌套/重叠方案绑错。

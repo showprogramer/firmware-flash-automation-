@@ -1,3 +1,5 @@
+from collections.abc import Callable
+
 from fwasset.core.usb_ops import copy_directory_to_usb, eject_usb, format_usb
 
 
@@ -7,7 +9,7 @@ def run_music_flash(
     *,
     format_first: bool = True,
     eject_after: bool = True,
-    log_fn=print,
+    log_fn: Callable[..., None] = print,
 ) -> dict:
     try:
         formatted = False

@@ -5,12 +5,14 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
-from fwasset.core.firmware_catalog import DEFAULT_FIRMWARE_CATALOG_PATH, load_firmware_catalog
+from fwasset.core.firmware_catalog import (
+    DEFAULT_FIRMWARE_CATALOG_PATH,
+    load_firmware_catalog,
+)
 from fwasset.core.settings import APP_ROOT, TOOL_ROOT
-
 
 TOOL_FILENAME_PATTERNS: dict[str, list[str]] = {
     "mainboard": ["*烧录*.exe", "*flash*.exe", "*ISP*.exe", "*主板*.exe", "*.exe"],
@@ -63,7 +65,9 @@ def _find_executable_in_dir(directory: Path, patterns: list[str]) -> Path | None
     if not directory.exists() or not directory.is_dir():
         return None
     for pattern in patterns:
-        for tool_file in sorted(directory.glob(pattern), key=lambda item: item.name.lower()):
+        for tool_file in sorted(
+            directory.glob(pattern), key=lambda item: item.name.lower()
+        ):
             if _valid_tool_file(tool_file):
                 return tool_file
     return None
@@ -78,7 +82,9 @@ def _find_explicit_tool(tool_path: str) -> Path | None:
     return path if _valid_tool_file(path) else None
 
 
-def _find_by_exact_tool_dir(tool_root: Path, tool_dir: str, patterns: list[str]) -> Path | None:
+def _find_by_exact_tool_dir(
+    tool_root: Path, tool_dir: str, patterns: list[str]
+) -> Path | None:
     if not tool_dir:
         return None
     candidate = Path(tool_dir)
@@ -87,10 +93,15 @@ def _find_by_exact_tool_dir(tool_root: Path, tool_dir: str, patterns: list[str])
     return _find_executable_in_dir(candidate, patterns)
 
 
-def _find_by_fuzzy_dir(tool_root: Path, patterns: list[str], keywords: list[str]) -> Path | None:
+def _find_by_fuzzy_dir(
+    tool_root: Path, patterns: list[str], keywords: list[str]
+) -> Path | None:
     if not tool_root.exists() or not tool_root.is_dir():
         return None
-    for directory in sorted((item for item in tool_root.rglob("*") if item.is_dir()), key=lambda item: str(item).lower()):
+    for directory in sorted(
+        (item for item in tool_root.rglob("*") if item.is_dir()),
+        key=lambda item: str(item).lower(),
+    ):
         lower_name = directory.name.lower()
         if any(keyword in lower_name for keyword in keywords):
             result = _find_executable_in_dir(directory, patterns)
@@ -125,7 +136,9 @@ def discover_tool_path(
         if exact:
             _DISCOVERY_CACHE[cache_key] = str(exact)
             return str(exact)
-        keywords = _normalize_keywords(tool_dir, tool_name, fw_type.split("_"), dir_keywords or [])
+        keywords = _normalize_keywords(
+            tool_dir, tool_name, fw_type.split("_"), dir_keywords or []
+        )
         fuzzy = _find_by_fuzzy_dir(tool_root, patterns, keywords)
         if fuzzy:
             _DISCOVERY_CACHE[cache_key] = str(fuzzy)
@@ -139,14 +152,18 @@ def discover_tool_path(
     fallback = _find_by_fuzzy_dir(
         fallback_root,
         patterns,
-        _normalize_keywords(tool_dir, tool_name, fw_type.split("_"), dir_keywords or []),
+        _normalize_keywords(
+            tool_dir, tool_name, fw_type.split("_"), dir_keywords or []
+        ),
     )
     result = str(fallback) if fallback else ""
     _DISCOVERY_CACHE[cache_key] = result
     return result
 
 
-def auto_discover_all_tools(progress_callback: Callable[[str, str], None] | None = None) -> dict[str, str]:
+def auto_discover_all_tools(
+    progress_callback: Callable[[str, str], None] | None = None,
+) -> dict[str, str]:
     catalog = load_firmware_catalog()
     discovered: dict[str, str] = {}
 
@@ -210,7 +227,7 @@ def launch_tool(tool_path: str) -> dict:
             [str(path_obj)],
             cwd=str(path_obj.parent),
             shell=False,
-            creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == "nt" else 0,
+            creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == "nt" else 0,  # type: ignore[attr-defined]  # noqa: E501
         )
         return {"ok": True, "message": f"已启动: {path_obj.name}"}
     except Exception as exc:

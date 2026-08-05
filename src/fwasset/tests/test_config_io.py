@@ -1,4 +1,5 @@
 """Tests for atomic_write_text — 失败时原文件不变、临时文件清理。"""
+
 from __future__ import annotations
 
 import os
@@ -26,7 +27,7 @@ def test_os_replace_failure_leaves_existing_bytes_and_no_tmp(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     target = tmp_path / "cfg.toml"
-    original = "preserve-me\n".encode("utf-8")
+    original = b"preserve-me\n"
     target.write_bytes(original)
 
     def boom(_src: str, _dst: str) -> None:
@@ -43,7 +44,7 @@ def test_os_fsync_failure_leaves_existing_bytes_and_no_tmp(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     target = tmp_path / "cfg.toml"
-    original = "still-here\n".encode("utf-8")
+    original = b"still-here\n"
     target.write_bytes(original)
 
     def boom(_fd: int) -> None:

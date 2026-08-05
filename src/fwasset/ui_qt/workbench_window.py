@@ -10,9 +10,9 @@ from PySide6.QtCore import QItemSelectionModel, QSize, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QApplication,
     QCompleter,
+    QDialog,
     QFrame,
     QHBoxLayout,
-    QDialog,
     QLabel,
     QListWidget,
     QListWidgetItem,
@@ -20,7 +20,6 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-
 from qfluentwidgets import (
     Action,
     BodyLabel,
@@ -36,16 +35,20 @@ from qfluentwidgets import (
     SearchLineEdit,
     StrongBodyLabel,
     SubtitleLabel,
+    Theme,
     TogglePushButton,
     setTheme,
-    Theme,
 )
 
 from fwasset.core.asset_helpers import open_path_in_explorer
 from fwasset.core.logging_utils import FileLogger
-from fwasset.core.services.scan_service import build_cached_scan_result, build_scan_result
+from fwasset.core.services.platform_default_service import canonical_module_dir
+from fwasset.core.services.scan_service import (
+    build_cached_scan_result,
+    build_scan_result,
+)
 from fwasset.core.settings import DEFAULT_ROOT
-from fwasset.core.types import ServiceResult
+from fwasset.core.types import FirmwareAsset, ServiceResult
 from fwasset.core.usb_ops import get_usb_drives
 from fwasset.ui_common.view_models.scan_state_model import ScanStateModel
 from fwasset.ui_common.view_models.scheme_workbench_model import (
@@ -68,15 +71,13 @@ from fwasset.ui_common.workbench_helpers import (
     shared_unregister_action_label,
     shared_unregister_confirm_message,
 )
-from fwasset.core.services.platform_default_service import canonical_module_dir
 from fwasset.ui_qt.data_grid import DataGrid
-from fwasset.ui_qt.operation_panels import get_panel
 from fwasset.ui_qt.design_tokens import (
     SEARCH_MIN_WIDTH,
-    SIDEBAR_WIDTH,
     SHARED_SOURCE_PICKER_DEFAULT_SIZE,
     SHARED_SOURCE_PICKER_ITEM_HEIGHT,
     SHARED_SOURCE_PICKER_MIN_WIDTH,
+    SIDEBAR_WIDTH,
     SPACE_LG,
     SPACE_MD,
     SPACE_SM,
@@ -85,8 +86,8 @@ from fwasset.ui_qt.design_tokens import (
     USB_COMBO_MIN_WIDTH,
 )
 from fwasset.ui_qt.log_panel import LogPanel
+from fwasset.ui_qt.operation_panels import get_panel
 from fwasset.ui_qt.settings_interface import SettingsInterface
-
 
 SEARCH_REFRESH_DEBOUNCE_MS = 180
 
@@ -101,7 +102,7 @@ def _reload_runtime_settings() -> tuple[str, str]:
     return DEFAULT_ROOT, settings.TOOL_ROOT
 
 
-def _format_source_item_qt(asset: dict) -> str:
+def _format_source_item_qt(asset: FirmwareAsset) -> str:
     """来源选择对话框的一项：型号/变体 + 完整路径。"""
     model = str(asset.get("model", "")) or "未知型号"
     variant = str(asset.get("directory_name", "")) or "-"
@@ -117,8 +118,8 @@ class WorkbenchInterface(QWidget):
     scan_result_ready = Signal(dict)
     # 后台任务结果回投
     # 传 (task_id, name, result)；on_done 按 id 在 UI 线程查找执行（不 marshal callable）
-    _task_done = Signal(int, str, object)      # task_id, name, result
-    _task_failed = Signal(int, str, str)       # task_id, name, error
+    _task_done = Signal(int, str, object)  # task_id, name, result
+    _task_failed = Signal(int, str, str)  # task_id, name, error
     # 日志跨线程回投：worker 线程里调用 _log 时不能直写 QPlainTextEdit
     log_message = Signal(str)
     settings_requested = Signal()
@@ -135,7 +136,9 @@ class WorkbenchInterface(QWidget):
         self.scan_state_model = ScanStateModel()
         self.current_selection = WorkbenchSelection()
         self._available_models: list[str] = []
-        self._nav_entries: list[tuple[str, str]] = []  # (kind, key)：all / common_type / custom_scheme
+        self._nav_entries: list[
+            tuple[str, str]
+        ] = []  # (kind, key)：all / common_type / custom_scheme
         self._file_logger = FileLogger()
         self._busy = False
         self.active_operation_panel = None
@@ -316,7 +319,7 @@ class WorkbenchInterface(QWidget):
         QMessageBox.critical(self, f"{name}失败", error)
 
     # ------------------------------------------------------------------ PanelHost 选中资产与交接动作
-    def _selected_asset(self) -> dict | None:
+    def _selected_asset(self) -> FirmwareAsset | None:
         data = self.grid_panel.get_selected_data()
         if not data or data.shared_state == "shared_missing":
             return None
@@ -325,12 +328,16 @@ class WorkbenchInterface(QWidget):
     def _open_current_asset_dir(self) -> None:
         data = self.grid_panel.get_selected_data()
         if data:
-            open_path_in_explorer(str((data.effective_asset or data.asset).get("path", "")), self._log)
+            open_path_in_explorer(
+                str((data.effective_asset or data.asset).get("path", "")), self._log
+            )
 
     def _copy_asset_dir_path(self) -> None:
         data = self.grid_panel.get_selected_data()
         if data:
-            self._copy_to_clipboard(str((data.effective_asset or data.asset).get("path", "")))
+            self._copy_to_clipboard(
+                str((data.effective_asset or data.asset).get("path", ""))
+            )
 
     def _copy_primary_file_path(self) -> None:
         data = self.grid_panel.get_selected_data()
@@ -416,7 +423,9 @@ class WorkbenchInterface(QWidget):
         self._log(f"开始读取程序文件夹: {directory}")
 
         def run_scan():
-            result = build_scan_result(directory, log_fn=self._log, cancel_event=cancel_event)
+            result = build_scan_result(
+                directory, log_fn=self._log, cancel_event=cancel_event
+            )
             # Signal 跨线程 emit 自动走 queued connection，回到 UI 线程处理
             self.scan_result_ready.emit(result)
 
@@ -467,7 +476,10 @@ class WorkbenchInterface(QWidget):
         self._refresh_model_selector(models)
 
         if models:
-            if not self.current_selection.model_name or self.current_selection.model_name not in models:
+            if (
+                not self.current_selection.model_name
+                or self.current_selection.model_name not in models
+            ):
                 self._on_model_changed(models[0])
             else:
                 self._refresh_model_selector()
@@ -491,15 +503,22 @@ class WorkbenchInterface(QWidget):
             self._available_models = models
         while self.chip_bar.count():
             item = self.chip_bar.takeAt(0)
-            if item.widget() is not None:
-                item.widget().deleteLater()
+            if item is None:
+                break
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
 
-        chips, _overflow = model_chip_values(self._available_models, self.current_selection.model_name)
+        chips, _overflow = model_chip_values(
+            self._available_models, self.current_selection.model_name
+        )
         self.model_hint.setVisible(not chips)
         for model in chips:
             btn = TogglePushButton(model, self)
             btn.setChecked(model == self.current_selection.model_name)
-            btn.clicked.connect(lambda _c=False, value=model: self._on_model_changed(value))
+            btn.clicked.connect(
+                lambda _c=False, value=model: self._on_model_changed(value)
+            )
             self.chip_bar.addWidget(btn)
 
         # 常驻可搜索型号下拉（含全部型号）：型号是作用域选择器，不走搜索框；
@@ -698,12 +717,16 @@ class WorkbenchInterface(QWidget):
             fw_label = self.current_selection.common_type
             self.header_title.setText(f"通用模块: {fw_label}")
             self.header_badge.setText("通用模块")
-            cards_data = self.workbench_model.get_common_modules(model_name, fw_label, search_kw)
+            cards_data = self.workbench_model.get_common_modules(
+                model_name, fw_label, search_kw
+            )
         elif node_type == "custom_scheme":
             scheme_name = self.current_selection.scheme_name
             self.header_title.setText(f"定制方案: {scheme_name}")
             self.header_badge.setText("整机模块")
-            rows = self.workbench_model.get_scheme_module_tree(model_name, scheme_name, search_kw)
+            rows = self.workbench_model.get_scheme_module_tree(
+                model_name, scheme_name, search_kw
+            )
             self.grid_panel.populate_tree(rows)
             self._on_grid_selection_changed(None)
             return
@@ -733,7 +756,9 @@ class WorkbenchInterface(QWidget):
 
         asset = variant.effective_asset or variant.asset
         mode = str(asset.get("flash_mode", "disabled")) or "disabled"
-        module = str(asset.get("firmware_label", "")) or str(asset.get("firmware_type", ""))
+        module = str(asset.get("firmware_label", "")) or str(
+            asset.get("firmware_type", "")
+        )
         version = variant.version or str(asset.get("version", "")) or "-"
         self.selection_summary.setText(
             f"已选：{module} / {variant.name or str(asset.get('directory_name', ''))}"
@@ -760,33 +785,48 @@ class WorkbenchInterface(QWidget):
         model_name = self.current_selection.model_name
         module = module_label_from_asset(asset)
         module_key = canonical_module_dir(module)
-        is_common = variant.source_kind == "common" and str(asset.get("category", "")) == "common"
+        is_common = (
+            variant.source_kind == "common"
+            and str(asset.get("category", "")) == "common"
+        )
         is_default = is_common and self.workbench_model.is_model_module_default(asset)
         if is_common:
             # 默认状态已在表格的 ★默认 徽章表达，菜单只保留可执行操作。
             if not is_default:
-                action = Action(FluentIcon.EDIT, set_default_action_label(model_name, module), menu)
-                action.triggered.connect(lambda _c=False: self._set_default_variant(variant))
+                action = Action(
+                    FluentIcon.EDIT, set_default_action_label(model_name, module), menu
+                )
+                action.triggered.connect(
+                    lambda _c=False: self._set_default_variant(variant)
+                )
                 menu.addAction(action)
 
         # --- 共享登记（B2）：右键目标型号的模块行 → 登记/取消共享来源 ---
         if module_key:
-            shared_res = self.workbench_model.resolve_shared_module(model_name, module_key)
+            shared_res = self.workbench_model.resolve_shared_module(
+                model_name, module_key
+            )
             if is_common and not is_default:
                 menu.addSeparator()
             if shared_res is not None:
-                reg_action = Action(FluentIcon.SYNC, shared_replace_action_label(module), menu)
+                reg_action = Action(
+                    FluentIcon.SYNC, shared_replace_action_label(module), menu
+                )
                 reg_action.triggered.connect(
                     lambda _c=False: self._register_shared_source(variant)
                 )
                 menu.addAction(reg_action)
-                unreg_action = Action(FluentIcon.CANCEL, shared_unregister_action_label(module), menu)
+                unreg_action = Action(
+                    FluentIcon.CANCEL, shared_unregister_action_label(module), menu
+                )
                 unreg_action.triggered.connect(
                     lambda _c=False: self._unregister_shared(variant)
                 )
                 menu.addAction(unreg_action)
             else:
-                reg_action = Action(FluentIcon.LINK, shared_register_action_label(module), menu)
+                reg_action = Action(
+                    FluentIcon.LINK, shared_register_action_label(module), menu
+                )
                 reg_action.triggered.connect(
                     lambda _c=False: self._register_shared_source(variant)
                 )
@@ -797,7 +837,9 @@ class WorkbenchInterface(QWidget):
         open_action.triggered.connect(lambda: self._open_asset_dir(variant))
         menu.addAction(open_action)
         copy_action = Action(FluentIcon.COPY, "复制目录路径", menu)
-        copy_action.triggered.connect(lambda: self._copy_to_clipboard(str(variant.asset.get("path", ""))))
+        copy_action.triggered.connect(
+            lambda: self._copy_to_clipboard(str(variant.asset.get("path", "")))
+        )
         menu.addAction(copy_action)
 
         menu.exec(global_pos)
@@ -831,7 +873,7 @@ class WorkbenchInterface(QWidget):
             return
         module = module_label_from_asset(variant.asset)
         module_key = canonical_module_dir(module)
-        candidates: list[dict] = []
+        candidates: list[FirmwareAsset] = []
         for a in self.workbench_model._all_assets:
             try:
                 if self.workbench_model._model_of_asset(a) == target_model:
@@ -848,7 +890,7 @@ class WorkbenchInterface(QWidget):
         target_model: str,
         module_key: str,
         module_label: str,
-        candidates: list[dict],
+        candidates: list[FirmwareAsset],
     ) -> None:
         from PySide6.QtWidgets import QComboBox
 
@@ -870,7 +912,7 @@ class WorkbenchInterface(QWidget):
         list_widget.setWordWrap(True)
         layout.addWidget(list_widget, stretch=1)
 
-        def _fill(items: list[dict]) -> None:
+        def _fill(items: list[FirmwareAsset]) -> None:
             list_widget.clear()
             if not items:
                 empty_item = QListWidgetItem(
@@ -960,8 +1002,12 @@ class WorkbenchInterface(QWidget):
             )
             dlg.accept()
             self._do_register_shared(
-                target_model, module_key, module_label,
-                source_asset, chosen_mode, chosen_platform,
+                target_model,
+                module_key,
+                module_label,
+                source_asset,
+                chosen_mode,
+                chosen_platform,
             )
 
         confirm_btn.clicked.connect(_confirm)
@@ -973,13 +1019,17 @@ class WorkbenchInterface(QWidget):
         target_model: str,
         module_key: str,
         module_label: str,
-        source_asset: dict,
+        source_asset: FirmwareAsset,
         mode: str = "static",
         source_platform: str = "",
     ) -> None:
         result = self.workbench_model.register_shared_module(
-            target_model, source_asset, module_key=module_key, overwrite=False,
-            mode=mode, source_platform=source_platform,
+            target_model,
+            source_asset,
+            module_key=module_key,
+            overwrite=False,
+            mode=mode,
+            source_platform=source_platform,
         )
         if not result["ok"]:
             if result["code"] == "conflict":
@@ -991,8 +1041,12 @@ class WorkbenchInterface(QWidget):
                 if answer != QMessageBox.StandardButton.Yes:
                     return
                 result = self.workbench_model.register_shared_module(
-                    target_model, source_asset, module_key=module_key, overwrite=True,
-                    mode=mode, source_platform=source_platform,
+                    target_model,
+                    source_asset,
+                    module_key=module_key,
+                    overwrite=True,
+                    mode=mode,
+                    source_platform=source_platform,
                 )
             if not result["ok"]:
                 QMessageBox.critical(self, "登记失败", result["message"])
@@ -1032,7 +1086,9 @@ class WorkbenchInterface(QWidget):
 class QtWorkbenchWindow(FluentWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("按摩椅程序资产管理系统 | Massage Chair Firmware Asset Manager")
+        self.setWindowTitle(
+            "按摩椅程序资产管理系统 | Massage Chair Firmware Asset Manager"
+        )
         self.resize(1400, 850)
 
         self.workbench = WorkbenchInterface(self)
@@ -1048,7 +1104,9 @@ class QtWorkbenchWindow(FluentWindow):
         import fwasset.core.settings as settings
 
         self.settings_interface.set_paths(settings.DEFAULT_ROOT, settings.TOOL_ROOT)
-        self.workbench.set_configuration_required(not bool(settings.DEFAULT_ROOT.strip()))
+        self.workbench.set_configuration_required(
+            not bool(settings.DEFAULT_ROOT.strip())
+        )
 
     def _open_settings(self) -> None:
         self._refresh_settings_interface()
@@ -1070,7 +1128,9 @@ class QtWorkbenchWindow(FluentWindow):
 
         # 留空表示保持原值（方案 A），故用 resolved_* 而非原始输入框内容。
         next_root = wizard.resolved_root_dir()
-        if previous_root and os.path.normcase(previous_root) != os.path.normcase(next_root):
+        if previous_root and os.path.normcase(previous_root) != os.path.normcase(
+            next_root
+        ):
             answer = QMessageBox.question(
                 self,
                 "切换程序文件夹",
@@ -1114,14 +1174,19 @@ def main() -> int:
 
     # 向导完成后自动扫描配置的根目录
     if wizard_completed and DEFAULT_ROOT:
-        QTimer.singleShot(300, lambda: window._auto_scan(DEFAULT_ROOT))
+        QTimer.singleShot(300, lambda: window.workbench._auto_scan(DEFAULT_ROOT))
 
     # 自动化验证钩子（截图 / 自动选行 / 定时退出），供开发与 Phase 4 回归用
     if os.environ.get("FWASSET_QT_AUTOSELECT", ""):
-        QTimer.singleShot(1000, lambda: window.workbench.grid_panel.select_first_variant())
+        QTimer.singleShot(
+            1000, lambda: window.workbench.grid_panel.select_first_variant()
+        )
     shot = os.environ.get("FWASSET_QT_SCREENSHOT", "")
     if shot:
-        QTimer.singleShot(1500, lambda: (window.grab().save(shot), print(f"SCREENSHOT={shot}", flush=True)))
+        QTimer.singleShot(
+            1500,
+            lambda: (window.grab().save(shot), print(f"SCREENSHOT={shot}", flush=True)),
+        )
     quit_ms = int(os.environ.get("FWASSET_QT_QUIT_MS", "0") or "0")
     if quit_ms > 0:
         QTimer.singleShot(quit_ms, app.quit)

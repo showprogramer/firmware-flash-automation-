@@ -16,7 +16,9 @@ def test_discover_tool_path_prefers_explicit_path(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(tool_discovery, "TOOL_ROOT", str(root))
     tool_discovery.clear_tool_discovery_cache()
 
-    found = tool_discovery.discover_tool_path("mainboard", "主板烧录工具", tool_path=str(explicit))
+    found = tool_discovery.discover_tool_path(
+        "mainboard", "主板烧录工具", tool_path=str(explicit)
+    )
 
     assert found == str(explicit)
 
@@ -27,7 +29,9 @@ def test_discover_tool_path_uses_tool_root_and_tool_dir(tmp_path: Path, monkeypa
     monkeypatch.setattr(tool_discovery, "TOOL_ROOT", str(root))
     tool_discovery.clear_tool_discovery_cache()
 
-    found = tool_discovery.discover_tool_path("mainboard", "主板烧录工具", tool_dir="刷主板程序工具")
+    found = tool_discovery.discover_tool_path(
+        "mainboard", "主板烧录工具", tool_dir="刷主板程序工具"
+    )
 
     assert found == str(expected)
 
@@ -38,7 +42,9 @@ def test_discover_tool_path_fuzzy_searches_tool_root(tmp_path: Path, monkeypatch
     monkeypatch.setattr(tool_discovery, "TOOL_ROOT", str(root))
     tool_discovery.clear_tool_discovery_cache()
 
-    found = tool_discovery.discover_tool_path("voice", "语音烧录工具", dir_keywords=["语音"])
+    found = tool_discovery.discover_tool_path(
+        "voice", "语音烧录工具", dir_keywords=["语音"]
+    )
 
     assert found == str(expected)
 
@@ -50,7 +56,9 @@ def test_discover_tool_path_falls_back_to_app_tools(tmp_path: Path, monkeypatch)
     monkeypatch.setattr(tool_discovery, "APP_ROOT", app_root)
     tool_discovery.clear_tool_discovery_cache()
 
-    found = tool_discovery.discover_tool_path("shortcut_key", "快捷键烧录工具", tool_dir="快捷键程序")
+    found = tool_discovery.discover_tool_path(
+        "shortcut_key", "快捷键烧录工具", tool_dir="快捷键程序"
+    )
 
     assert found == str(expected)
 
@@ -61,8 +69,12 @@ def test_discover_tool_path_caches_result(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(tool_discovery, "TOOL_ROOT", str(root))
     tool_discovery.clear_tool_discovery_cache()
 
-    first = tool_discovery.discover_tool_path("mainboard", "主板烧录工具", tool_dir="主板程序")
+    first = tool_discovery.discover_tool_path(
+        "mainboard", "主板烧录工具", tool_dir="主板程序"
+    )
     expected.unlink()
-    second = tool_discovery.discover_tool_path("mainboard", "主板烧录工具", tool_dir="主板程序")
+    second = tool_discovery.discover_tool_path(
+        "mainboard", "主板烧录工具", tool_dir="主板程序"
+    )
 
     assert first == second

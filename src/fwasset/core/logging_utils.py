@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import threading
 from datetime import datetime
 from pathlib import Path
-import threading
 
 from fwasset.core.settings import APP_LOG_PATH
 

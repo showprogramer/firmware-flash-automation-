@@ -2,6 +2,7 @@
 
 读用 tomllib；写用 dict 合并 + tomli-w + atomic_write_text。
 """
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -214,9 +215,9 @@ def save_shared_module(model_root: Path, ref: SharedModuleRef) -> Path:
     key = canonical_module_dir(ref.module_key)
     if not key:
         raise ValueError("module_key 不能为空")
-    source_module = canonical_module_dir(ref.source_module) or str(
-        ref.source_module or ""
-    ).strip()
+    source_module = (
+        canonical_module_dir(ref.source_module) or str(ref.source_module or "").strip()
+    )
     entry: dict[str, Any] = {
         "source_model_id": str(ref.source_model_id or "").strip(),
         "source_group": str(ref.source_group or "").strip(),

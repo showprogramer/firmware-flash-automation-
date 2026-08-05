@@ -10,8 +10,6 @@ from __future__ import annotations
 
 import inspect
 
-import pytest
-
 
 class TestPanelHostProtocol:
     def test_panel_host_is_runtime_checkable(self) -> None:

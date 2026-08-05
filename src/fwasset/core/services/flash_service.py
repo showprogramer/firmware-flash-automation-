@@ -1,3 +1,5 @@
+from collections.abc import Callable
+
 from fwasset.core.usb_ops import copy_to_usb, eject_usb, format_usb
 
 
@@ -7,7 +9,7 @@ def run_one_click(
     version: str,
     rom_path: str,
     pkg_path: str,
-    log_fn=print,
+    log_fn: Callable[..., None] = print,
 ) -> dict:
     try:
         log_fn("=" * 50)

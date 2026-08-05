@@ -69,14 +69,18 @@ def _bind_model(root: Path, tmp_path: Path) -> SchemeWorkbenchModel:
     return model
 
 
-def test_platform_config_is_loaded_from_scan_root(l36_tree: Path, tmp_path: Path) -> None:
+def test_platform_config_is_loaded_from_scan_root(
+    l36_tree: Path, tmp_path: Path
+) -> None:
     model = _bind_model(l36_tree, tmp_path)
     assert model._platforms, "平台配置.toml should be loaded from the scan root"
     names = {p.platform_name for p in model._platforms}
     assert "标准单机芯3D" in names
 
 
-def test_scheme_includes_custom_exclusive_module(l36_tree: Path, tmp_path: Path) -> None:
+def test_scheme_includes_custom_exclusive_module(
+    l36_tree: Path, tmp_path: Path
+) -> None:
     model = _bind_model(l36_tree, tmp_path)
     cards = model.get_scheme_modules("L36", "西班牙")
     exclusive = [c for c in cards if c.source_type == "custom_exclusive"]
@@ -84,7 +88,9 @@ def test_scheme_includes_custom_exclusive_module(l36_tree: Path, tmp_path: Path)
     assert "主板程序" in labels
 
 
-def test_scheme_falls_back_to_common_default_variant(l36_tree: Path, tmp_path: Path) -> None:
+def test_scheme_falls_back_to_common_default_variant(
+    l36_tree: Path, tmp_path: Path
+) -> None:
     """主板 is custom, but the scheme has no 3D机芯/腿部 → fall back to 通用."""
     model = _bind_model(l36_tree, tmp_path)
     cards = model.get_scheme_modules("L36", "西班牙")
@@ -105,7 +111,10 @@ def test_load_all_models_filters_filename_noise(tmp_path: Path) -> None:
     per-file parsed models.
     """
     root = tmp_path / "L36程序"
-    _write(root / "平台配置.toml", '[[platform]]\nname = "标准单机芯3D"\n[platform.defaults]\n')
+    _write(
+        root / "平台配置.toml",
+        '[[platform]]\nname = "标准单机芯3D"\n[platform.defaults]\n',
+    )
     # 通用 mainboard whose filename mentions L50S → would parse model as L50S
     _write(root / "通用" / "主板程序" / "量产_默认" / "YJ_3DMain_L36_V40.bin")
     _write(root / "通用" / "主板程序" / "同L50S" / "YJ_3DMain_L50S_V9.bin")
@@ -118,7 +127,10 @@ def test_load_all_models_filters_filename_noise(tmp_path: Path) -> None:
 def test_scheme_module_tree_groups_variants_under_one_row(tmp_path: Path) -> None:
     """手控UI 有多个变体时，应收成 ONE module row with children, not铺平."""
     root = tmp_path / "L36程序"
-    _write(root / "平台配置.toml", '[[platform]]\nname = "标准单机芯3D"\n[platform.defaults]\n')
+    _write(
+        root / "平台配置.toml",
+        '[[platform]]\nname = "标准单机芯3D"\n[platform.defaults]\n',
+    )
     # scheme with 3 手控UI variants + 1 主板
     scheme = root / "定制" / "马来" / "方案配置.toml"
     _write(scheme, 'name = "马来"\nplatform = "标准单机芯3D"\n')
@@ -143,7 +155,9 @@ def test_scheme_module_tree_groups_variants_under_one_row(tmp_path: Path) -> Non
     assert len(by_label["手控UI"].variants) == 3
 
 
-def test_scheme_module_tree_marks_custom_vs_common(l36_tree: Path, tmp_path: Path) -> None:
+def test_scheme_module_tree_marks_custom_vs_common(
+    l36_tree: Path, tmp_path: Path
+) -> None:
     """每个模块行应标明是 定制专属 还是 通用默认（不含'回源'字样）。"""
     model = _bind_model(l36_tree, tmp_path)
     tree = model.get_scheme_module_tree("L36", "西班牙")
@@ -159,7 +173,9 @@ def test_scheme_module_tree_marks_custom_vs_common(l36_tree: Path, tmp_path: Pat
             assert "回源" not in v.source_label
 
 
-def test_covered_module_is_not_duplicated_by_fallback(l36_tree: Path, tmp_path: Path) -> None:
+def test_covered_module_is_not_duplicated_by_fallback(
+    l36_tree: Path, tmp_path: Path
+) -> None:
     """主板程序 is shipped by the scheme → it must NOT also appear as a fallback."""
     model = _bind_model(l36_tree, tmp_path)
     cards = model.get_scheme_modules("L36", "西班牙")
@@ -200,12 +216,16 @@ def multi_model_tree(tmp_path: Path) -> Path:
     return parent
 
 
-def test_multi_model_root_lists_both_models(multi_model_tree: Path, tmp_path: Path) -> None:
+def test_multi_model_root_lists_both_models(
+    multi_model_tree: Path, tmp_path: Path
+) -> None:
     model = _bind_model(multi_model_tree, tmp_path)
     assert model.load_all_models() == ["L36", "L36双机芯-上3D-下2D"]
 
 
-def test_multi_model_persistent_id_mapping(multi_model_tree: Path, tmp_path: Path) -> None:
+def test_multi_model_persistent_id_mapping(
+    multi_model_tree: Path, tmp_path: Path
+) -> None:
     """B0：display / dir 解析到同一 id；型号配置落在型号根而非 通用/。"""
     model = _bind_model(multi_model_tree, tmp_path)
     id_l36 = model.resolve_model_id("L36")
@@ -231,9 +251,10 @@ def test_single_model_root_gets_model_id(l36_tree: Path, tmp_path: Path) -> None
     assert mid
     assert (l36_tree / "型号配置.toml").is_file()
     assert not (l36_tree / "通用" / "型号配置.toml").exists()
-    assert model.model_root_for_id(mid) == l36_tree.resolve() or model.model_root_for_id(
-        mid
-    ) == l36_tree
+    assert (
+        model.model_root_for_id(mid) == l36_tree.resolve()
+        or model.model_root_for_id(mid) == l36_tree
+    )
 
 
 def test_bind_damaged_model_config_does_not_crash(tmp_path: Path) -> None:
@@ -249,7 +270,11 @@ def test_bind_damaged_model_config_does_not_crash(tmp_path: Path) -> None:
 
 def test_get_and_resolve_shared_modules_hit(tmp_path: Path) -> None:
     """B1：工作台读共享引用；源在同工作区则 hit。"""
-    from fwasset.core.model_config import SharedModuleRef, save_model_id, save_shared_module
+    from fwasset.core.model_config import (
+        SharedModuleRef,
+        save_model_id,
+        save_shared_module,
+    )
 
     parent = tmp_path / "按摩器程序"
     l36 = parent / "L36程序"
@@ -278,7 +303,11 @@ def test_get_and_resolve_shared_modules_hit(tmp_path: Path) -> None:
 
 
 def test_resolve_shared_source_not_imported(tmp_path: Path) -> None:
-    from fwasset.core.model_config import SharedModuleRef, save_model_id, save_shared_module
+    from fwasset.core.model_config import (
+        SharedModuleRef,
+        save_model_id,
+        save_shared_module,
+    )
 
     # 单型号根需含 通用/ 以便布局检测
     root = tmp_path / "L36双机芯-上3D-下2D程序"
@@ -303,7 +332,11 @@ def test_resolve_shared_source_not_imported(tmp_path: Path) -> None:
 
 def test_scheme_modules_ignore_shared_refs(tmp_path: Path) -> None:
     """B4：方案回源不吃 shared_modules。"""
-    from fwasset.core.model_config import SharedModuleRef, save_model_id, save_shared_module
+    from fwasset.core.model_config import (
+        SharedModuleRef,
+        save_model_id,
+        save_shared_module,
+    )
 
     root = tmp_path / "L36程序"
     _write(
@@ -337,7 +370,9 @@ def test_scheme_modules_ignore_shared_refs(tmp_path: Path) -> None:
 # ---------------- Phase B2: 共享登记入口 view-model API ----------------
 
 
-def _setup_multi_model_workspace_for_registration(tmp_path: Path) -> tuple[Path, SchemeWorkbenchModel, dict]:
+def _setup_multi_model_workspace_for_registration(
+    tmp_path: Path,
+) -> tuple[Path, SchemeWorkbenchModel, dict]:
     """双机芯目标 + L36 来源（含两个已扫描的快捷键变体）。"""
     from fwasset.core.model_config import save_model_id
 
@@ -358,20 +393,26 @@ def _setup_multi_model_workspace_for_registration(tmp_path: Path) -> tuple[Path,
     model = _bind_model(parent, tmp_path)
     # 取出已扫描的来源资产
     asset = next(
-        a for a in model._all_assets
+        a
+        for a in model._all_assets
         if str(a.get("path", "")) == str(src_variant.resolve())
     )
     other_asset = next(
-        a for a in model._all_assets
+        a
+        for a in model._all_assets
         if str(a.get("path", "")) == str(other_variant.resolve())
     )
-    return parent, model, {
-        "asset": asset,
-        "other_asset": other_asset,
-        "l36": l36,
-        "dual": dual,
-        "src_variant": src_variant,
-    }
+    return (
+        parent,
+        model,
+        {
+            "asset": asset,
+            "other_asset": other_asset,
+            "l36": l36,
+            "dual": dual,
+            "src_variant": src_variant,
+        },
+    )
 
 
 def test_register_shared_module_writes_ref(tmp_path: Path) -> None:
@@ -433,14 +474,16 @@ def test_register_does_not_break_scheme_isolation(tmp_path: Path) -> None:
     dual = parent / "L36双机芯-上3D-下2D程序"
     _write(l36 / "通用" / "快捷键" / "贝乐" / "k.hex")
     _write(dual / "通用" / "主板程序" / "main.bin")
-    _write(dual / "定制" / "方案A" / "方案配置.toml", 'name = "方案A"\nplatform = "标准单机芯3D"\n')
+    _write(
+        dual / "定制" / "方案A" / "方案配置.toml",
+        'name = "方案A"\nplatform = "标准单机芯3D"\n',
+    )
     _write(dual / "定制" / "方案A" / "主板程序" / "a.bin")
     save_model_id(l36, "l36")
     save_model_id(dual, "dual")
     model = _bind_model(parent, tmp_path)
     src_asset = next(
-        a for a in model._all_assets
-        if str(a.get("firmware_label", "")) == "快捷键程序"
+        a for a in model._all_assets if str(a.get("firmware_label", "")) == "快捷键程序"
     )
     model.register_shared_module("L36双机芯-上3D-下2D", src_asset)
     # 方案树 / 模块列表仍不含快捷键程序共享行
@@ -465,12 +508,16 @@ def test_register_target_root_not_in_common(tmp_path: Path) -> None:
     assert not (ctx["dual"] / "通用" / "型号配置.toml").exists()
 
 
-def test_multi_model_assets_do_not_leak_across_models(multi_model_tree: Path, tmp_path: Path) -> None:
+def test_multi_model_assets_do_not_leak_across_models(
+    multi_model_tree: Path, tmp_path: Path
+) -> None:
     """双机芯主板不出现在 L36 视图里，反之亦然（文件名噪声不参与归属）。"""
     model = _bind_model(multi_model_tree, tmp_path)
 
     l36_paths = {str(c.asset["path"]) for c in model.get_all_modules("L36")}
-    dual_paths = {str(c.asset["path"]) for c in model.get_all_modules("L36双机芯-上3D-下2D")}
+    dual_paths = {
+        str(c.asset["path"]) for c in model.get_all_modules("L36双机芯-上3D-下2D")
+    }
     assert l36_paths, "L36 should have assets"
     assert dual_paths, "dual-core model should have assets"
     assert not (l36_paths & dual_paths), "assets must not appear under both models"
@@ -478,14 +525,18 @@ def test_multi_model_assets_do_not_leak_across_models(multi_model_tree: Path, tm
     assert all("L36双机芯" in p for p in dual_paths)
 
 
-def test_multi_model_platforms_are_scoped_per_model(multi_model_tree: Path, tmp_path: Path) -> None:
+def test_multi_model_platforms_are_scoped_per_model(
+    multi_model_tree: Path, tmp_path: Path
+) -> None:
     """平台配置按型号隔离：L36 有标准单机芯3D，未整理的双机芯型号没有平台。"""
     model = _bind_model(multi_model_tree, tmp_path)
     assert model.platform_names("L36") == ["标准单机芯3D"]
     assert model.platform_names("L36双机芯-上3D-下2D") == []
 
 
-def test_multi_model_sidebar_and_fallback_work_per_model(multi_model_tree: Path, tmp_path: Path) -> None:
+def test_multi_model_sidebar_and_fallback_work_per_model(
+    multi_model_tree: Path, tmp_path: Path
+) -> None:
     model = _bind_model(multi_model_tree, tmp_path)
 
     tree = model.build_sidebar_tree("L36")
@@ -502,7 +553,9 @@ def test_multi_model_sidebar_and_fallback_work_per_model(multi_model_tree: Path,
     assert dual_tree == {"common": {}, "custom": []}
 
 
-def test_multi_model_set_default_writes_into_model_dir(multi_model_tree: Path, tmp_path: Path) -> None:
+def test_multi_model_set_default_writes_into_model_dir(
+    multi_model_tree: Path, tmp_path: Path
+) -> None:
     """多型号根下设默认要写进该型号自己的 平台配置.toml。"""
     model = _bind_model(multi_model_tree, tmp_path)
     cards = model.get_common_modules("L36", "主板程序")
@@ -566,7 +619,9 @@ def test_shortcut_alias_duplicate_prefers_catalog_key_for_badge_and_fallback(
     assert fallback.asset["directory_name"] == "贝乐"
 
 
-def test_common_module_parts_resolves_variant_and_single_level(l36_tree: Path, tmp_path: Path) -> None:
+def test_common_module_parts_resolves_variant_and_single_level(
+    l36_tree: Path, tmp_path: Path
+) -> None:
     model = _bind_model(l36_tree, tmp_path)
     cards = model.get_common_modules("L36", "主板程序")
     mainboard = next(c.asset for c in cards if c.asset["directory_name"] == "量产_默认")
@@ -578,7 +633,9 @@ def test_common_module_parts_resolves_variant_and_single_level(l36_tree: Path, t
     assert model._common_module_parts(leg_cards[0].asset) == ("腿部程序", "")
 
 
-def test_set_default_variant_writes_config_and_moves_badge(l36_tree: Path, tmp_path: Path) -> None:
+def test_set_default_variant_writes_config_and_moves_badge(
+    l36_tree: Path, tmp_path: Path
+) -> None:
     """设默认后：toml 落盘、平台配置就地重载、徽章移动，无需重新扫描。"""
     model = _bind_model(l36_tree, tmp_path)
     cards = model.get_common_modules("L36", "主板程序")
@@ -594,12 +651,17 @@ def test_set_default_variant_writes_config_and_moves_badge(l36_tree: Path, tmp_p
     assert loaded[0].defaults["主板程序"] == "防夹功能"
 
     # 徽章立即移动（平台已重载）
-    badges = {c.asset["directory_name"]: c.default_badge for c in model.get_common_modules("L36", "主板程序")}
+    badges = {
+        c.asset["directory_name"]: c.default_badge
+        for c in model.get_common_modules("L36", "主板程序")
+    }
     assert badges["防夹功能"] == "★默认"
     assert badges["量产_默认"] == ""
 
 
-def test_set_default_variant_changes_scheme_fallback(l36_tree: Path, tmp_path: Path) -> None:
+def test_set_default_variant_changes_scheme_fallback(
+    l36_tree: Path, tmp_path: Path
+) -> None:
     """回源跟随新默认：缺主板的方案设默认后应回源到新变体。"""
     # 增加一个不带主板的方案，让主板走回源
     scheme = l36_tree / "定制" / "葡萄牙"
@@ -610,7 +672,11 @@ def test_set_default_variant_changes_scheme_fallback(l36_tree: Path, tmp_path: P
 
     def _mainboard_fallback_dir() -> str:
         cards = model.get_scheme_modules("L36", "葡萄牙")
-        fb = [c for c in cards if c.is_fallback and c.asset["firmware_label"] == "主板程序"]
+        fb = [
+            c
+            for c in cards
+            if c.is_fallback and c.asset["firmware_label"] == "主板程序"
+        ]
         assert fb, "葡萄牙 lacks 主板程序 → must fall back to 通用"
         return str(fb[0].asset["directory_name"])
 
@@ -624,7 +690,9 @@ def test_set_default_variant_changes_scheme_fallback(l36_tree: Path, tmp_path: P
     assert _mainboard_fallback_dir() == "防夹功能"
 
 
-def test_set_default_variant_rewrites_typo_module_key_to_board(l36_tree: Path, tmp_path: Path) -> None:
+def test_set_default_variant_rewrites_typo_module_key_to_board(
+    l36_tree: Path, tmp_path: Path
+) -> None:
     """磁盘/历史 toml 的「机芯版」笔误：设默认后统一为 catalog 规范「机芯板」，不留双键。"""
     model = _bind_model(l36_tree, tmp_path)
     cards = model.get_all_modules("L36")
@@ -643,7 +711,9 @@ def test_set_default_variant_rewrites_typo_module_key_to_board(l36_tree: Path, t
     assert "3D机芯版程序" not in defaults
 
 
-def test_set_default_variant_rejects_custom_asset(l36_tree: Path, tmp_path: Path) -> None:
+def test_set_default_variant_rejects_custom_asset(
+    l36_tree: Path, tmp_path: Path
+) -> None:
     """定制区资产不能设为平台默认。"""
     model = _bind_model(l36_tree, tmp_path)
     cards = model.get_scheme_modules("L36", "西班牙")
@@ -731,7 +801,9 @@ def test_unique_common_module_inferred_as_fallback_without_defaults_key(
     model = _bind_model(root, tmp_path)
     cards = model.get_scheme_modules("L36", "西班牙")
     leg_fb = [
-        c for c in cards if c.is_fallback and c.asset.get("firmware_label") == "腿部程序"
+        c
+        for c in cards
+        if c.is_fallback and c.asset.get("firmware_label") == "腿部程序"
     ]
     assert leg_fb, "unique 腿部 should fall back without defaults key"
     assert leg_fb[0].asset["directory_name"] == "腿部程序" or "only" in str(
@@ -883,7 +955,17 @@ class _CountingQueryAssets:
                 continue
             if keyword:
                 hay = " ".join(
-                    str(a.get(k, "")) for k in ("label", "directory_name", "firmware_label", "firmware_type", "version", "model", "series", "path")
+                    str(a.get(k, ""))
+                    for k in (
+                        "label",
+                        "directory_name",
+                        "firmware_label",
+                        "firmware_type",
+                        "version",
+                        "model",
+                        "series",
+                        "path",
+                    )
                 ).lower()
                 if keyword not in hay:
                     continue
@@ -892,7 +974,9 @@ class _CountingQueryAssets:
 
 
 @pytest.fixture()
-def cached_model(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> tuple[SchemeWorkbenchModel, _CountingQueryAssets]:
+def cached_model(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> tuple[SchemeWorkbenchModel, _CountingQueryAssets]:
     """Build a SchemeWorkbenchModel whose query_assets is a counting fake.
 
     No real scan, no real SQLite — pure logic + cache discipline tests.
@@ -936,7 +1020,9 @@ def cached_model(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> tuple[Schem
     # Provide a minimal platform config so the 西班牙 fallback path still runs.
     from fwasset.core.platform_config import PlatformDefaults
 
-    platform = PlatformDefaults(platform_name="标准单机芯3D", defaults={"3D机芯版程序": ""})
+    platform = PlatformDefaults(
+        platform_name="标准单机芯3D", defaults={"3D机芯版程序": ""}
+    )
     monkeypatch.setattr(model_module, "load_platform_config", lambda _dir: [platform])
 
     model = SchemeWorkbenchModel()
@@ -1013,7 +1099,9 @@ def test_cache_keyword_supports_space_split_AND_with_OR_per_token(cached_model) 
     assert len(only_zhujiao) >= 1
 
 
-def test_cache_keyword_matches_across_fields_not_just_directory_name(cached_model) -> None:
+def test_cache_keyword_matches_across_fields_not_just_directory_name(
+    cached_model,
+) -> None:
     """A user search for a version string like V40 must hit assets whose
     'version' field contains V40 — not only those whose directory_name does.
     This is the '跨字段' half of the contract.
@@ -1091,7 +1179,9 @@ def test_scheme_module_tree_marks_common_assets_as_common_default(cached_model) 
         )
 
 
-def test_all_modules_ownership_label_includes_scheme_name(l36_tree: Path, tmp_path: Path) -> None:
+def test_all_modules_ownership_label_includes_scheme_name(
+    l36_tree: Path, tmp_path: Path
+) -> None:
     """全部视图归属为「通用」或「定制专属 · 方案名」。"""
     model = _bind_model(l36_tree, tmp_path)
     cards = model.get_all_modules("L36")
@@ -1108,7 +1198,9 @@ def test_all_modules_ownership_label_includes_scheme_name(l36_tree: Path, tmp_pa
                 assert c.source_label == "定制专属"
 
 
-def test_scheme_modules_never_expose_huanyuan_in_card_label(l36_tree: Path, tmp_path: Path) -> None:
+def test_scheme_modules_never_expose_huanyuan_in_card_label(
+    l36_tree: Path, tmp_path: Path
+) -> None:
     """Issue 6：get_scheme_modules 卡片层也不得出现「回源」。"""
     model = _bind_model(l36_tree, tmp_path)
     cards = model.get_scheme_modules("L36", "西班牙")
@@ -1229,21 +1321,22 @@ def test_empty_default_multi_variant_does_not_scheme_fallback(tmp_path: Path) ->
 
     model = _bind_model(root, tmp_path)
     cards = model.get_scheme_modules("L36", "西班牙")
-    voice_any = [
-        c for c in cards if c.asset.get("firmware_label") == "语音程序"
-    ]
+    voice_any = [c for c in cards if c.asset.get("firmware_label") == "语音程序"]
     assert voice_any == [], (
         "empty default with multiple voice variants must not scheme-fallback; "
         f"got {[c.asset.get('directory_name') for c in voice_any]}"
     )
     # 主板为定制专属，不因语音异常而整树失败
     assert any(
-        c.source_type == "custom_exclusive" and c.asset.get("firmware_label") == "主板程序"
+        c.source_type == "custom_exclusive"
+        and c.asset.get("firmware_label") == "主板程序"
         for c in cards
     )
 
 
-def test_scheme_modules_empty_keyword_returns_full_tree(l36_tree: Path, tmp_path: Path) -> None:
+def test_scheme_modules_empty_keyword_returns_full_tree(
+    l36_tree: Path, tmp_path: Path
+) -> None:
     """Issue 19-A：无 keyword 时方案满树（定制 + 回源），不因路径名关键字而缩水。"""
     model = _bind_model(l36_tree, tmp_path)
     full = model.get_scheme_modules("L36", "西班牙")
@@ -1279,11 +1372,15 @@ def test_scheme_keyword_does_not_fake_fallback_for_filtered_custom(
     # 用足够长的类型标签，避免路径里偶然出现的短 token「3D」
     cards = model.get_scheme_modules("L36", "西班牙", keyword="3D机芯板")
     mainboards = [c for c in cards if c.asset.get("firmware_label") == "主板程序"]
-    assert mainboards == [], "filtered-out custom mainboard must not reappear as fallback"
+    assert mainboards == [], (
+        "filtered-out custom mainboard must not reappear as fallback"
+    )
     assert any(c.asset.get("firmware_label") == "3D机芯板程序" for c in cards)
 
 
-def test_unbound_model_falls_back_to_query_assets(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_unbound_model_falls_back_to_query_assets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """If someone calls a view method before bind() (or with an empty cache),
     the model must still work by going to the DB. This protects against the
     'cache missed' regression where the view would silently return empty.
@@ -1308,7 +1405,9 @@ def test_unbound_model_falls_back_to_query_assets(monkeypatch: pytest.MonkeyPatc
     assert counter.calls, "unbound model must hit query_assets to stay correct"
 
 
-def test_cache_invalidates_on_rebind(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_cache_invalidates_on_rebind(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """Calling bind() again must reload the cache (e.g. after a rescan added
     new assets). A stale cache from a previous bind is a silent bug — a
     rescan would not show up in the UI.

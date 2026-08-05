@@ -1,5 +1,5 @@
-from pathlib import Path
 import zipfile
+from pathlib import Path
 
 from fwasset.core.diagnostics import build_diagnostic_bundle, sanitize_snapshot
 

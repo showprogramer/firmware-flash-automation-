@@ -43,7 +43,9 @@ class PlatformDefaults:
     """单个平台的默认模块变体声明。"""
 
     platform_name: str
-    defaults: dict[str, str] = field(default_factory=dict)  # module_dir_name -> variant_name
+    defaults: dict[str, str] = field(
+        default_factory=dict
+    )  # module_dir_name -> variant_name
 
 
 def load_platform_config_with_status(

@@ -68,7 +68,9 @@ class SettingsInterface(QWidget):
         group.addSettingCard(self.tool_card)
 
         layout.addWidget(group, alignment=Qt.AlignmentFlag.AlignLeft)
-        hint = CaptionLabel("配置完成后，软件会读取所选程序文件夹并更新程序列表。", self)
+        hint = CaptionLabel(
+            "配置完成后，软件会读取所选程序文件夹并更新程序列表。", self
+        )
         layout.addWidget(hint, alignment=Qt.AlignmentFlag.AlignLeft)
         layout.addStretch(1)
 

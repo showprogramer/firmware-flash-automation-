@@ -6,7 +6,6 @@ from typing import Any
 
 from fwasset.core.settings import APP_ROOT
 
-
 DEFAULT_TOOL_USAGE_PATH = APP_ROOT / "tool_usage.json"
 MAX_RECENT_TOOLS = 8
 
@@ -27,7 +26,9 @@ def load_tool_usage(path: str | Path | None = None) -> dict[str, list[str]]:
     }
 
 
-def save_tool_usage(usage: dict[str, list[str]], path: str | Path | None = None) -> bool:
+def save_tool_usage(
+    usage: dict[str, list[str]], path: str | Path | None = None
+) -> bool:
     usage_path = Path(path) if path is not None else DEFAULT_TOOL_USAGE_PATH
     payload = {
         "favorites": _clean_keys(usage.get("favorites", [])),
@@ -35,13 +36,17 @@ def save_tool_usage(usage: dict[str, list[str]], path: str | Path | None = None)
     }
     try:
         usage_path.parent.mkdir(parents=True, exist_ok=True)
-        usage_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        usage_path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         return True
     except Exception:
         return False
 
 
-def toggle_favorite_tool(fw_type: str, usage: dict[str, list[str]]) -> dict[str, list[str]]:
+def toggle_favorite_tool(
+    fw_type: str, usage: dict[str, list[str]]
+) -> dict[str, list[str]]:
     key = str(fw_type or "").strip()
     favorites = _clean_keys(usage.get("favorites", []))
     if not key:
@@ -53,7 +58,9 @@ def toggle_favorite_tool(fw_type: str, usage: dict[str, list[str]]) -> dict[str,
     return {**usage, "favorites": favorites}
 
 
-def record_recent_tool(fw_type: str, usage: dict[str, list[str]]) -> dict[str, list[str]]:
+def record_recent_tool(
+    fw_type: str, usage: dict[str, list[str]]
+) -> dict[str, list[str]]:
     key = str(fw_type or "").strip()
     recent = _clean_keys(usage.get("recent", []))
     if not key:

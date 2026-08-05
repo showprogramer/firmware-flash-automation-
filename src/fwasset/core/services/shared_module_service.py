@@ -7,6 +7,7 @@
 数据层落盘复用 B1 的 `save_shared_module` / `remove_shared_module`；冲突拦截在
 本服务层（先 `load_shared_modules` 查重），`save_shared_module` 自身是幂等覆盖写。
 """
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -232,7 +233,9 @@ def set_shared_module(
         # 显式 source_platform 需存在于源平台配置中
         clean_platform = str(source_platform or "").strip()
         if clean_platform and not _source_platform_exists(src_root, clean_platform):
-            message = f"登记共享来源失败：来源型号平台配置中不存在平台「{clean_platform}」"
+            message = (
+                f"登记共享来源失败：来源型号平台配置中不存在平台「{clean_platform}」"
+            )
             log_fn(message)
             return {
                 "ok": False,

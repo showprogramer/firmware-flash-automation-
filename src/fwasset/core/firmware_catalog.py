@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import Any, TypedDict, cast
 
 from fwasset.core.settings import APP_ROOT, load_toml_config
 from fwasset.core.types import FirmwareType, UsbFlow
-
 
 DEFAULT_FIRMWARE_CATALOG_PATH = APP_ROOT / "firmware_catalog.toml"
 
@@ -42,18 +41,24 @@ def _normalize_type(node: Any) -> FirmwareTypeConfig | None:
     key = str(node.get("key", "")).strip()
     if not key:
         return None
-    return {
-        "key": key,  # type: ignore[typeddict-item]
-        "label": str(node.get("label", key)).strip() or key,
-        "dir_keywords": _as_str_list(node.get("dir_keywords", [])),
-        "file_extensions": [item.lower() for item in _as_str_list(node.get("file_extensions", []))],
-        "flash_mode": str(node.get("flash_mode", "tool_launch")).strip() or "tool_launch",
-        "usb_flow": _normalize_usb_flow(node.get("usb_flow", "")),
-        "tool_name": str(node.get("tool_name", "")).strip(),
-        "tool_path": str(node.get("tool_path", "")).strip(),
-        "tool_dir": str(node.get("tool_dir", "")).strip(),
-        "enabled": bool(node.get("enabled", True)),
-    }
+    return cast(
+        FirmwareTypeConfig,
+        {
+            "key": key,
+            "label": str(node.get("label", key)).strip() or key,
+            "dir_keywords": _as_str_list(node.get("dir_keywords", [])),
+            "file_extensions": [
+                item.lower() for item in _as_str_list(node.get("file_extensions", []))
+            ],
+            "flash_mode": str(node.get("flash_mode", "tool_launch")).strip()
+            or "tool_launch",
+            "usb_flow": _normalize_usb_flow(node.get("usb_flow", "")),
+            "tool_name": str(node.get("tool_name", "")).strip(),
+            "tool_path": str(node.get("tool_path", "")).strip(),
+            "tool_dir": str(node.get("tool_dir", "")).strip(),
+            "enabled": bool(node.get("enabled", True)),
+        },
+    )
 
 
 def load_firmware_catalog(path: Path | None = None) -> dict[str, Any]:
@@ -78,4 +83,6 @@ def load_firmware_catalog(path: Path | None = None) -> dict[str, Any]:
 
 def enabled_firmware_types(path: Path | None = None) -> list[FirmwareTypeConfig]:
     catalog = load_firmware_catalog(path)
-    return [item for item in catalog.get("firmware_types", []) if item.get("enabled", True)]
+    return [
+        item for item in catalog.get("firmware_types", []) if item.get("enabled", True)
+    ]

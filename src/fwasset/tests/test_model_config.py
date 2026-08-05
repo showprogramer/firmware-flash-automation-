@@ -1,7 +1,7 @@
 """Tests for model_config — slug / 型号配置.toml load-save。"""
+
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pytest
@@ -30,9 +30,10 @@ class TestSlugifyModelId:
     def test_dangerous_chars_and_spaces(self):
         assert slugify_model_id("L36  程序") == "l36"
         assert ":" not in slugify_model_id("L36:坏名程序")
-        assert slugify_model_id("  --L36--程序  ").startswith("l36") or slugify_model_id(
-            "  --L36--程序  "
-        ) == "l36"
+        assert (
+            slugify_model_id("  --L36--程序  ").startswith("l36")
+            or slugify_model_id("  --L36--程序  ") == "l36"
+        )
 
     def test_empty_fallback(self):
         assert slugify_model_id("") == "model"
@@ -48,9 +49,7 @@ class TestLoadSaveModelConfig:
         assert err == ""
 
     def test_ok(self, tmp_path: Path):
-        (tmp_path / "型号配置.toml").write_text(
-            'model_id = "l36"\n', encoding="utf-8"
-        )
+        (tmp_path / "型号配置.toml").write_text('model_id = "l36"\n', encoding="utf-8")
         mid, status, err = load_model_config(tmp_path)
         assert mid == "l36"
         assert status == "ok"

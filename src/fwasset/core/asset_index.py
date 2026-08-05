@@ -3,13 +3,13 @@ from __future__ import annotations
 import json
 import sqlite3
 import time
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable, Literal
+from typing import Literal, cast
 
 from fwasset.core.settings import ASSET_INDEX_PATH
 from fwasset.core.sort_config import SortKey, apply_sort
 from fwasset.core.types import FirmwareAsset
-
 
 SCHEMA_VERSION = 3
 HiddenItemType = Literal["model_directory", "firmware_type", "asset"]
@@ -111,31 +111,55 @@ def init_asset_index(path: str | Path | None = None) -> None:
                 );
                 """
             )
-            current = conn.execute("SELECT value FROM schema_meta WHERE key = 'schema_version'").fetchone()
+            current = conn.execute(
+                "SELECT value FROM schema_meta WHERE key = 'schema_version'"
+            ).fetchone()
             if current is None:
                 conn.execute(
                     "INSERT INTO schema_meta(key, value) VALUES('schema_version', ?)",
                     (str(SCHEMA_VERSION),),
                 )
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_category ON assets(category)")
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_platform ON assets(platform)")
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_scheme ON assets(scheme_name)")
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_assets_category ON assets(category)"
+                )
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_assets_platform ON assets(platform)"
+                )
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_assets_scheme ON assets(scheme_name)"
+                )
                 return
             current_version = int(current["value"])
             if current_version == 1:
-                conn.execute("ALTER TABLE assets ADD COLUMN usb_flow TEXT NOT NULL DEFAULT ''")
+                conn.execute(
+                    "ALTER TABLE assets ADD COLUMN usb_flow TEXT NOT NULL DEFAULT ''"
+                )
                 current_version = 2
                 conn.execute(
                     "UPDATE schema_meta SET value = '2' WHERE key = 'schema_version'"
                 )
             if current_version == 2:
-                conn.execute("ALTER TABLE assets ADD COLUMN category TEXT NOT NULL DEFAULT ''")
-                conn.execute("ALTER TABLE assets ADD COLUMN platform TEXT NOT NULL DEFAULT ''")
-                conn.execute("ALTER TABLE assets ADD COLUMN scheme_name TEXT NOT NULL DEFAULT ''")
-                conn.execute("ALTER TABLE assets ADD COLUMN scheme_path TEXT NOT NULL DEFAULT ''")
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_category ON assets(category)")
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_platform ON assets(platform)")
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_scheme ON assets(scheme_name)")
+                conn.execute(
+                    "ALTER TABLE assets ADD COLUMN category TEXT NOT NULL DEFAULT ''"
+                )
+                conn.execute(
+                    "ALTER TABLE assets ADD COLUMN platform TEXT NOT NULL DEFAULT ''"
+                )
+                conn.execute(
+                    "ALTER TABLE assets ADD COLUMN scheme_name TEXT NOT NULL DEFAULT ''"
+                )
+                conn.execute(
+                    "ALTER TABLE assets ADD COLUMN scheme_path TEXT NOT NULL DEFAULT ''"
+                )
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_assets_category ON assets(category)"
+                )
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_assets_platform ON assets(platform)"
+                )
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_assets_scheme ON assets(scheme_name)"
+                )
                 current_version = 3
                 conn.execute(
                     "UPDATE schema_meta SET value = '3' WHERE key = 'schema_version'"
@@ -151,7 +175,9 @@ def init_asset_index(path: str | Path | None = None) -> None:
 def schema_version(path: str | Path | None = None) -> int:
     init_asset_index(path)
     with connect_asset_index(path) as conn:
-        row = conn.execute("SELECT value FROM schema_meta WHERE key = 'schema_version'").fetchone()
+        row = conn.execute(
+            "SELECT value FROM schema_meta WHERE key = 'schema_version'"
+        ).fetchone()
         return int(row["value"])
 
 
@@ -206,7 +232,9 @@ def save_assets(
 def load_assets(path: str | Path | None = None) -> list[FirmwareAsset]:
     init_asset_index(path)
     with connect_asset_index(path) as conn:
-        rows = conn.execute("SELECT * FROM assets ORDER BY path, firmware_type").fetchall()
+        rows = conn.execute(
+            "SELECT * FROM assets ORDER BY path, firmware_type"
+        ).fetchall()
         return [_row_to_asset(row) for row in rows]
 
 
@@ -277,7 +305,9 @@ def query_assets(
     return apply_sort(assets, sort_key=selected_sort_key, ascending=ascending)
 
 
-def delete_missing_assets(existing_paths: Iterable[str], path: str | Path | None = None) -> int:
+def delete_missing_assets(
+    existing_paths: Iterable[str], path: str | Path | None = None
+) -> int:
     init_asset_index(path)
     keep = {str(item) for item in existing_paths}
     with connect_asset_index(path) as conn:
@@ -323,7 +353,9 @@ def unhide_item(item_path: str, path: str | Path | None = None) -> None:
 def load_hidden_items(path: str | Path | None = None) -> dict[str, str]:
     init_asset_index(path)
     with connect_asset_index(path) as conn:
-        rows = conn.execute("SELECT path, hide_type FROM hidden_items ORDER BY path").fetchall()
+        rows = conn.execute(
+            "SELECT path, hide_type FROM hidden_items ORDER BY path"
+        ).fetchall()
         return {str(row["path"]): str(row["hide_type"]) for row in rows}
 
 
@@ -337,12 +369,19 @@ def prune_missing_hidden_items(
         conn = connect_asset_index(path)
         close_conn = True
     try:
-        asset_paths = {str(row["path"]) for row in conn.execute("SELECT path FROM assets").fetchall()}
+        asset_paths = {
+            str(row["path"])
+            for row in conn.execute("SELECT path FROM assets").fetchall()
+        }
         model_paths = {
             str(row["model_directory_path"])
-            for row in conn.execute("SELECT DISTINCT model_directory_path FROM assets").fetchall()
+            for row in conn.execute(
+                "SELECT DISTINCT model_directory_path FROM assets"
+            ).fetchall()
         }
-        hidden_rows = conn.execute("SELECT path, hide_type FROM hidden_items").fetchall()
+        hidden_rows = conn.execute(
+            "SELECT path, hide_type FROM hidden_items"
+        ).fetchall()
         removed = 0
         for row in hidden_rows:
             item_path = str(row["path"])
@@ -352,7 +391,9 @@ def prune_missing_hidden_items(
             elif hide_type == "model_directory":
                 exists = item_path in model_paths
             else:
-                exists = any(asset_path.startswith(item_path) for asset_path in asset_paths)
+                exists = any(
+                    asset_path.startswith(item_path) for asset_path in asset_paths
+                )
             if exists:
                 continue
             conn.execute("DELETE FROM hidden_items WHERE path = ?", (item_path,))
@@ -365,7 +406,9 @@ def prune_missing_hidden_items(
             conn.close()
 
 
-def load_scan_meta(path: str | Path | None = None) -> list[dict[str, float | int | str]]:
+def load_scan_meta(
+    path: str | Path | None = None,
+) -> list[dict[str, float | int | str]]:
     """返回工作区扫描元数据。
 
     正常经 :func:`save_assets` 写入后至多一行（当前工作区根）。
@@ -449,7 +492,10 @@ def _row_to_asset(row: sqlite3.Row) -> FirmwareAsset:
         "tool_path": str(row["tool_path"]),
         "tool_dir": str(row["tool_dir"]),
         "label": str(row["label"]),
-        "category": str(row["category"]) if "category" in keys else "",
+        "category": cast(
+            Literal["common", "custom", ""],
+            str(row["category"]) if "category" in keys else "",
+        ),
         "platform": str(row["platform"]) if "platform" in keys else "",
         "scheme_name": str(row["scheme_name"]) if "scheme_name" in keys else "",
         "scheme_path": str(row["scheme_path"]) if "scheme_path" in keys else "",

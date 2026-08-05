@@ -1,4 +1,5 @@
 """共享引用解析器：一套路径覆盖命中 / 缺失（Phase B1/C1）。"""
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -8,7 +9,11 @@ from typing import Literal
 
 from fwasset.core.model_config import SharedModuleRef, load_model_config
 from fwasset.core.path_guard import PathGuardError, assert_within_workspace
-from fwasset.core.platform_config import PlatformDefaults, canonical_module_dir, load_platform_config_with_status
+from fwasset.core.platform_config import (
+    PlatformDefaults,
+    canonical_module_dir,
+    load_platform_config_with_status,
+)
 from fwasset.core.scheme_config import _is_excluded_dir
 
 
@@ -96,9 +101,7 @@ def resolve_shared_module(
             ref=ref, status="missing", reason="source_not_imported"
         )
     if mid != want_id:
-        return SharedModuleResolution(
-            ref=ref, status="missing", reason="id_mismatch"
-        )
+        return SharedModuleResolution(ref=ref, status="missing", reason="id_mismatch")
 
     # 权威来源 = source_dir 磁盘上的 model_id（上面已校验）。
     # 不再与 bind 内存映射交叉比对：该映射可能滞后于盘上文件，或因大小写/
@@ -134,6 +137,7 @@ def resolve_shared_module(
 # ---------------------------------------------------------------------------
 # Phase C1 辅助：follow_default 解析
 # ---------------------------------------------------------------------------
+
 
 def _find_default_key(block: PlatformDefaults, module: str) -> str:
     """规范化匹配：在 platform 块的 defaults 中找模块键。
@@ -176,7 +180,9 @@ def _resolve_follow_default(
 
     if ref.source_platform:
         # 显式 platform：必须找到对应块
-        block = next((p for p in platforms if p.platform_name == ref.source_platform), None)
+        block = next(
+            (p for p in platforms if p.platform_name == ref.source_platform), None
+        )
         if block is None:
             return SharedModuleResolution(
                 ref=ref, status="missing", reason="no_source_platform"

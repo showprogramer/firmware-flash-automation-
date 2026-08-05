@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtWidgets import QHBoxLayout, QMessageBox
-
 from qfluentwidgets import BodyLabel, CheckBox, PrimaryPushButton
 
 from fwasset.core.asset_helpers import asset_rom_pkg_files, asset_usb_flow
@@ -37,7 +36,10 @@ class AutoUsbPanel(BaseOperationPanel):
             if not pkg_file:
                 missing.append("PKG")
             self.body.addWidget(
-                BodyLabel(f"当前手控资源缺少 {' / '.join(missing)} 文件，无法执行手控刷机。", self)
+                BodyLabel(
+                    f"当前手控资源缺少 {' / '.join(missing)} 文件，无法执行手控刷机。",
+                    self,
+                )
             )
             return
 
@@ -55,7 +57,9 @@ class AutoUsbPanel(BaseOperationPanel):
         run_btn = PrimaryPushButton("执行目录刷机流程", self)
         run_btn.clicked.connect(self._run_directory_flash)
         row.addWidget(run_btn)
-        row.addWidget(BodyLabel("该资源按目录复制到 U 盘，仅适用于音乐文件资源。", self))
+        row.addWidget(
+            BodyLabel("该资源按目录复制到 U 盘，仅适用于音乐文件资源。", self)
+        )
         row.addStretch(1)
         self.body.addLayout(row)
 
@@ -92,7 +96,12 @@ class AutoUsbPanel(BaseOperationPanel):
         self._panel_host._run_task(
             "一键执行",
             lambda log_fn: run_one_click(
-                drive, asset["model"], asset["version"], rom_path, pkg_path, log_fn=log_fn
+                drive,
+                asset["model"],
+                asset["version"],
+                rom_path,
+                pkg_path,
+                log_fn=log_fn,
             ),
         )
 
@@ -106,7 +115,11 @@ class AutoUsbPanel(BaseOperationPanel):
         self._panel_host._run_task(
             "目录刷机",
             lambda log_fn: run_music_flash(
-                asset["path"], drive, format_first=format_first, eject_after=eject_after, log_fn=log_fn
+                asset["path"],
+                drive,
+                format_first=format_first,
+                eject_after=eject_after,
+                log_fn=log_fn,
             ),
             lambda result: self._log(f"结果: {result.get('message')}"),
         )

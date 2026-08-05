@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Phase 0 spike: PySide6 + QFluentWidgets 渲染真实固件数据。
 
 验证点：观感、中文字体、高 DPI、交互（左侧导航切换右侧表格）、
@@ -8,6 +7,8 @@ PyInstaller 可打包性、启动时长。
     uv run python scripts/spike_pyside6.py --root "D:\\按摩器程序"
     uv run python scripts/spike_pyside6.py --screenshot spike.png --quit-after 3000
 """
+
+# ruff: noqa: E402  # sys.path 注入必须先于 fwasset/PySide6 导入，import 顺序为设计需要
 from __future__ import annotations
 
 import sys
@@ -24,22 +25,27 @@ _REPO_SRC = Path(__file__).resolve().parent.parent / "src"
 if _REPO_SRC.is_dir() and str(_REPO_SRC) not in sys.path:
     sys.path.insert(0, str(_REPO_SRC))
 
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtWidgets import QApplication, QHBoxLayout, QTreeWidgetItem, QVBoxLayout, QWidget
-
+from fwasset.ui.view_models.scheme_workbench_model import SchemeWorkbenchModel
+from PySide6.QtCore import QTimer
+from PySide6.QtWidgets import (
+    QApplication,
+    QHBoxLayout,
+    QTreeWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
 from qfluentwidgets import (
     FluentIcon,
     FluentWindow,
     ListWidget,
     SearchLineEdit,
+    Theme,
     TreeWidget,
     setTheme,
-    Theme,
 )
 
 from fwasset.core.asset_index import save_assets
 from fwasset.core.file_scan import scan_firmware_assets
-from fwasset.ui.view_models.scheme_workbench_model import SchemeWorkbenchModel
 
 
 def build_model(root: Path) -> tuple[SchemeWorkbenchModel, str]:
@@ -85,7 +91,9 @@ class WorkbenchSpike(QWidget):
 
         self.grid = TreeWidget(self)
         self.grid.setColumnCount(5)
-        self.grid.setHeaderLabels(["程序类型", "程序名称", "版本", "程序归属", "程序文件"])
+        self.grid.setHeaderLabels(
+            ["程序类型", "程序名称", "版本", "程序归属", "程序文件"]
+        )
         self.grid.setColumnWidth(0, 170)
         self.grid.setColumnWidth(1, 260)
         self.grid.setColumnWidth(2, 90)
@@ -96,7 +104,12 @@ class WorkbenchSpike(QWidget):
         if self._nav_entries:
             # 默认选中第一个定制方案（最能代表整机层级视图），否则第一项
             first_scheme = next(
-                (i for i, (kind, _k) in enumerate(self._nav_entries) if kind == "scheme"), 0
+                (
+                    i
+                    for i, (kind, _k) in enumerate(self._nav_entries)
+                    if kind == "scheme"
+                ),
+                0,
             )
             self.nav.setCurrentRow(first_scheme)
 
@@ -109,7 +122,10 @@ class WorkbenchSpike(QWidget):
             rows = self.model.get_scheme_module_tree(self.model_name, key)
         else:
             cards = self.model.get_common_modules(self.model_name, key)
-            from fwasset.ui.view_models.scheme_workbench_model import ModuleRow, ModuleVariant
+            from fwasset.ui.view_models.scheme_workbench_model import (
+                ModuleRow,
+                ModuleVariant,
+            )
 
             variants = [
                 ModuleVariant(
@@ -122,7 +138,18 @@ class WorkbenchSpike(QWidget):
                 )
                 for c in cards
             ]
-            rows = [ModuleRow(label=key, source_kind="common", source_label="通用默认", variants=variants)] if variants else []
+            rows = (
+                [
+                    ModuleRow(
+                        label=key,
+                        source_kind="common",
+                        source_label="通用默认",
+                        variants=variants,
+                    )
+                ]
+                if variants
+                else []
+            )
 
         for mrow in rows:
             if len(mrow.variants) == 1:
@@ -132,7 +159,13 @@ class WorkbenchSpike(QWidget):
                     name = f"{name}  {v.default_badge}"
                 files = list(v.asset.get("files", []))
                 item = QTreeWidgetItem(
-                    [mrow.label, name, v.version or "-", v.source_label, files[0] if files else ""]
+                    [
+                        mrow.label,
+                        name,
+                        v.version or "-",
+                        v.source_label,
+                        files[0] if files else "",
+                    ]
                 )
                 self.grid.addTopLevelItem(item)
                 continue
@@ -142,7 +175,15 @@ class WorkbenchSpike(QWidget):
                 name = v.name + (f"  {v.default_badge}" if v.default_badge else "")
                 files = list(v.asset.get("files", []))
                 parent.addChild(
-                    QTreeWidgetItem(["", name, v.version or "-", v.source_label, files[0] if files else ""])
+                    QTreeWidgetItem(
+                        [
+                            "",
+                            name,
+                            v.version or "-",
+                            v.source_label,
+                            files[0] if files else "",
+                        ]
+                    )
                 )
             parent.setExpanded(True)
 
@@ -181,9 +222,11 @@ def main() -> int:
     QTimer.singleShot(0, _report_startup)
 
     if args.screenshot:
+
         def _grab():
             window.grab().save(args.screenshot)
             print(f"SCREENSHOT={args.screenshot}", flush=True)
+
         QTimer.singleShot(1200, _grab)
 
     if args.quit_after > 0:

@@ -4,6 +4,7 @@
 本模块只承载布局度量，数值对齐 `ui/design_tokens.py` 的 8pt 栅格。
 CTk 退役后此文件成为唯一令牌源。
 """
+
 from __future__ import annotations
 
 # --- Spacing Scale（对应 ui/design_tokens.SPACE_*） ---

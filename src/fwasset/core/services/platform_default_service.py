@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 from fwasset.core.path_guard import PathGuardError, assert_within_workspace
@@ -75,9 +76,7 @@ def _alias_keys(defaults: dict[str, str], module: str) -> list[str]:
     return [key for key in defaults if canonical_module_dir(key) == canon]
 
 
-def _apply_module_default(
-    target: PlatformDefaults, module: str, variant: str
-) -> str:
+def _apply_module_default(target: PlatformDefaults, module: str, variant: str) -> str:
     """写入一块 [[platform]] 的模块默认；返回该块上一次的变体名。
 
     - 若块内已有同义键（版/板），全部删除后只保留规范键「板」，避免重复。
@@ -99,7 +98,7 @@ def _apply_module_default(
 
 
 def _load_platforms_for_write(
-    root_path: Path, log_fn
+    root_path: Path, log_fn: Callable[..., None]
 ) -> tuple[list[PlatformDefaults] | None, dict | None]:
     """严格读取平台配置供写服务使用。
 
@@ -135,7 +134,7 @@ def set_default_variant(
     module_dir: str,
     variant_name: str,
     workspace_root: str | Path,
-    log_fn=print,
+    log_fn: Callable[..., None] = print,
 ) -> dict:
     """把某 [[platform]] 条目下某模块的默认变体写入 `平台配置.toml`。
 
@@ -212,7 +211,7 @@ def set_module_default_for_model(
     module_dir: str,
     variant_name: str,
     workspace_root: str | Path,
-    log_fn=print,
+    log_fn: Callable[..., None] = print,
     *,
     model_name: str = "",
 ) -> dict:

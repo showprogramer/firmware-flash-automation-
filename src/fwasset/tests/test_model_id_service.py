@@ -1,4 +1,5 @@
 """Tests for ensure_model_ids — 先读全量、再生成、碰撞与损坏。"""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -105,9 +106,7 @@ def test_damaged_root_skipped_others_continue(tmp_path: Path):
     assert (bad / "型号配置.toml").read_bytes() == original
 
 
-def test_write_failed_stops(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
+def test_write_failed_stops(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     r1 = tmp_path / "L36程序"
     r1.mkdir()
 

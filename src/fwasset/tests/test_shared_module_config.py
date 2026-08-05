@@ -1,4 +1,5 @@
 """Tests for shared_modules load/save on 型号配置.toml (Phase B1)."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -103,9 +104,7 @@ def test_save_model_id_and_shared_roundtrip(tmp_path: Path):
     assert refs[0].module_key == "快捷键程序"
 
 
-def test_atomic_replace_failure(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
+def test_atomic_replace_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     save_model_id(tmp_path, "keep")
     path = tmp_path / "型号配置.toml"
     original = path.read_bytes()

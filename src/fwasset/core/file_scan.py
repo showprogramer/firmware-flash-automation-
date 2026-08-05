@@ -1,7 +1,15 @@
 import os
 import re
+import threading
 from pathlib import Path
+from typing import Literal, cast
 
+from fwasset.core.firmware_catalog import (
+    DEFAULT_FIRMWARE_CATALOG_PATH,
+    FirmwareTypeConfig,
+    enabled_firmware_types,
+)
+from fwasset.core.scheme_config import discover_schemes, scheme_for_path
 from fwasset.core.settings import (
     SCAN_EXCLUDE_DIR_KEYWORDS,
     SCAN_MODEL_PATTERNS,
@@ -11,8 +19,6 @@ from fwasset.core.settings import (
     SCAN_ROM_EXTENSIONS,
     SCAN_VERSION_PATTERNS,
 )
-from fwasset.core.firmware_catalog import DEFAULT_FIRMWARE_CATALOG_PATH, enabled_firmware_types
-from fwasset.core.scheme_config import discover_schemes, scheme_for_path
 from fwasset.core.types import FirmwareAsset, HandcontrolFolder
 
 # 通用/定制 的一级目录名
@@ -47,7 +53,10 @@ def _has_allowed_extension(filename: str, extensions: list[str]) -> bool:
 
 def _is_excluded_dir(dirpath: str) -> bool:
     lower_path = str(dirpath or "").lower()
-    return any(keyword and str(keyword).lower() in lower_path for keyword in SCAN_EXCLUDE_DIR_KEYWORDS)
+    return any(
+        keyword and str(keyword).lower() in lower_path
+        for keyword in SCAN_EXCLUDE_DIR_KEYWORDS
+    )
 
 
 def _files_match_extensions(filenames: list[str], extensions: list[str]) -> bool:
@@ -61,16 +70,24 @@ def _files_match_extensions(filenames: list[str], extensions: list[str]) -> bool
     return False
 
 
-def _match_catalog_type(dirpath: str, filenames: list[str], type_configs: list[dict]) -> dict | None:
+def _match_catalog_type(
+    dirpath: str, filenames: list[str], type_configs: list[FirmwareTypeConfig]
+) -> FirmwareTypeConfig | None:
     lower_parts = [part.lower() for part in Path(dirpath).parts]
     for cfg in type_configs:
-        keywords = [str(item).strip().lower() for item in cfg.get("dir_keywords", []) if str(item).strip()]
+        keywords = [
+            str(item).strip().lower()
+            for item in cfg.get("dir_keywords", [])
+            if str(item).strip()
+        ]
         if cfg.get("key") == "handcontrol_ui":
             has_rom = _files_match_extensions(filenames, SCAN_ROM_EXTENSIONS)
             has_pkg = _files_match_extensions(filenames, SCAN_PKG_EXTENSIONS)
             if has_rom and has_pkg:
                 return cfg
-        if keywords and not any(keyword in part for keyword in keywords for part in lower_parts):
+        if keywords and not any(
+            keyword in part for keyword in keywords for part in lower_parts
+        ):
             continue
         if not _files_match_extensions(filenames, cfg.get("file_extensions", [])):
             continue
@@ -82,7 +99,9 @@ def _extract_model_version(dirpath: str, filenames: list[str]) -> tuple[str, str
     for name in filenames:
         model, version = parse_rom_filename(name)
         if model or version:
-            return model or guess_model_from_path(dirpath), version or guess_version_from_path(dirpath)
+            return model or guess_model_from_path(
+                dirpath
+            ), version or guess_version_from_path(dirpath)
     return guess_model_from_path(dirpath), guess_version_from_path(dirpath)
 
 
@@ -113,7 +132,9 @@ def _part_contains_model(part: str, model: str) -> bool:
     return model_token in _model_token(part)
 
 
-def _model_directory_for_asset(root_path: Path, folder_path: Path, model: str = "", firmware_type: str = "") -> Path:
+def _model_directory_for_asset(
+    root_path: Path, folder_path: Path, model: str = "", firmware_type: str = ""
+) -> Path:
     try:
         relative_parts = folder_path.relative_to(root_path).parts
         base_path = root_path
@@ -162,7 +183,6 @@ def scan_firmware_assets(
     last_scan_at will be skipped (incremental mode).
     If cancel_event is provided, scanning can be interrupted by setting the event.
     """
-    import threading
 
     root_path = Path(root)
     if not root_path.exists():
@@ -170,7 +190,9 @@ def scan_firmware_assets(
     if not root_path.is_dir():
         raise NotADirectoryError(f"扫描根目录不是目录: {root}")
 
-    type_configs = enabled_firmware_types(Path(catalog_path) if catalog_path else DEFAULT_FIRMWARE_CATALOG_PATH)
+    type_configs = enabled_firmware_types(
+        Path(catalog_path) if catalog_path else DEFAULT_FIRMWARE_CATALOG_PATH
+    )
 
     # 方案元数据（有则读）；平台默认仅在 workbench 回源时使用，扫描不读 平台配置.toml
     schemes = discover_schemes(root_path)
@@ -178,7 +200,7 @@ def scan_firmware_assets(
     results: list[FirmwareAsset] = []
     errors: list[str] = []
 
-    def _on_walk_error(exc: OSError):
+    def _on_walk_error(exc: OSError) -> None:
         if exc.filename:
             errors.append(f"{exc.filename}: {exc.strerror}")
         else:
@@ -211,7 +233,9 @@ def scan_firmware_assets(
         model, version = _extract_model_version(dirpath, filenames)
         if str(cfg["key"]) == "handcontrol_ui":
             model = _prefer_handcontrol_directory_model(folder_path, model)
-        model_directory = _model_directory_for_asset(root_path, folder_path, model, str(cfg["key"]))
+        model_directory = _model_directory_for_asset(
+            root_path, folder_path, model, str(cfg["key"])
+        )
         series = guess_series_from_model_or_path(model, str(model_directory))
         files = sorted(filenames)
         label = f"{model}  {version or '-'}  [{folder_path.name}]  {cfg['label']}"
@@ -226,7 +250,10 @@ def scan_firmware_assets(
                 "series": series,
                 "firmware_type": cfg["key"],
                 "firmware_label": cfg["label"],
-                "flash_mode": cfg["flash_mode"],
+                "flash_mode": cast(
+                    Literal["auto_usb", "tool_launch", "manual_doc", "disabled"],
+                    cfg["flash_mode"],
+                ),
                 "usb_flow": cfg.get("usb_flow", ""),
                 "model": model,
                 "version": version,
@@ -240,7 +267,7 @@ def scan_firmware_assets(
                 "tool_path": cfg["tool_path"],
                 "tool_dir": cfg.get("tool_dir", ""),
                 "label": label,
-                "category": category,
+                "category": cast(Literal["common", "custom", ""], category),
                 "platform": platform,
                 "scheme_name": scheme_name,
                 "scheme_path": scheme_path,
@@ -290,7 +317,14 @@ def _infer_asset_context(
         # 在通用区
         category = "common"
         # 检查是否在双机芯专属子目录下
-        platform = _DUAL_CORE_DIR if (len(rel_parts) > common_idx + 1 and rel_parts[common_idx + 1] == _DUAL_CORE_DIR) else ""
+        platform = (
+            _DUAL_CORE_DIR
+            if (
+                len(rel_parts) > common_idx + 1
+                and rel_parts[common_idx + 1] == _DUAL_CORE_DIR
+            )
+            else ""
+        )
         return category, platform, "", ""
 
     if custom_idx is not None:
@@ -335,14 +369,24 @@ def guess_version_from_path(dirpath: str) -> str:
     return ""
 
 
-def handcontrol_folders_from_assets(assets: list[FirmwareAsset]) -> list[HandcontrolFolder]:
+def handcontrol_folders_from_assets(
+    assets: list[FirmwareAsset],
+) -> list[HandcontrolFolder]:
     """从已扫描资产派生手控文件夹列表（不再二次 os.walk）。"""
     results: list[HandcontrolFolder] = []
     for asset in assets:
         if asset.get("firmware_type") != "handcontrol_ui":
             continue
-        rom_files = [name for name in asset.get("files", []) if _has_allowed_extension(name, SCAN_ROM_EXTENSIONS)]
-        pkg_files = [name for name in asset.get("files", []) if _has_allowed_extension(name, SCAN_PKG_EXTENSIONS)]
+        rom_files = [
+            name
+            for name in asset.get("files", [])
+            if _has_allowed_extension(name, SCAN_ROM_EXTENSIONS)
+        ]
+        pkg_files = [
+            name
+            for name in asset.get("files", [])
+            if _has_allowed_extension(name, SCAN_PKG_EXTENSIONS)
+        ]
         if not rom_files or not pkg_files:
             continue
         results.append(
