@@ -30,7 +30,22 @@ UV_PROJECT_ENVIRONMENT=.venv-wsl uv run python -m pytest -m "not ui" -q
 
 Windows 侧 `.venv` 损坏（如 psutil `ImportError: _common`）时：`uv pip install --reinstall psutil` 或删除 `site-packages/psutil*` 后 `uv sync --extra dev`。
 
-覆盖率门槛为 `src/fwasset` 80%；`app.py` 和 `ui_qt/*` 不计入覆盖率，`ui_common/*` 计入覆盖率。当前没有独立 lint 或 type-check 命令。
+覆盖率门槛为 `src/fwasset` 80%；`app.py` 和 `ui_qt/*` 不计入覆盖率，`ui_common/*` 计入覆盖率。
+
+质量检查命令（Windows / WSL）：
+
+```powershell
+uv run ruff check src scripts
+uv run mypy
+.\scripts\quality.ps1          # ruff + format + mypy 合集
+```
+
+```bash
+UV_PROJECT_ENVIRONMENT=.venv-wsl uv run ruff check src scripts
+UV_PROJECT_ENVIRONMENT=.venv-wsl uv run mypy
+```
+
+mypy 范围：`src/fwasset/core`、`src/fwasset/ui_common`、`scripts`（排除 `spike_pyside6.py`）；`ui_qt/*` 和测试代码暂不纳入。ruff 检查 `src` 与 `scripts` 全部文件。改动后须同时跑通 ruff、mypy 和 pytest。
 
 ## 必须遵守的代码约束
 

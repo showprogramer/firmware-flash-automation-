@@ -52,12 +52,46 @@
 流程：
 
 1. 先更新 Task DoD，并区分实现状态与验收状态。
-2. 列出自动化验证命令及结果；没有适用验证时明确写“不适用”。
+2. 列出自动化验证命令及结果；没有适用验证时明确写“不适用”。验证记录使用统一模板，六要素齐全：
+
+```markdown
+## 验证记录
+
+### 自动化验证（已完成 / 不适用）
+
+| 平台 | 环境 | 命令 | 结果 |
+| --- | --- | --- | --- |
+| WSL/Linux | `.venv-wsl` | `UV_PROJECT_ENVIRONMENT=.venv-wsl uv run python -m pytest -m "not ui" -q` | 通过（362 passed, 1 skipped） |
+| WSL/Linux | `.venv-wsl` | `UV_PROJECT_ENVIRONMENT=.venv-wsl uv run ruff check src scripts` | 通过 |
+| WSL/Linux | `.venv-wsl` | `UV_PROJECT_ENVIRONMENT=.venv-wsl uv run mypy` | 通过 |
+| Windows | `.venv` | `uv run python -m pytest -q` | 通过（N passed） |
+
+- 已知平台差异：无（或在 Linux 失败、Windows 通过的用例需逐条列出原因，禁止用“环境问题”笼统带过）
+- 提交：`77cbbd0`（提交前写「待提交」，提交后回填真实 hash）
+
+### 人工验证（已完成 / 不适用）
+
+- 平台：Windows 实机 / 不适用
+- 结论：具体验证内容与结果，不能只写“验证通过”
+```
 3. 需要人工验证的任务回复“实现完成，等待人工验证”，不能直接宣称最终完成。
 4. 用户确认“验证通过”后，补写人工验证记录和最终状态。
 5. 仅在触发条件满足时创建或关闭 Review；未触发时明确标记 Review“不适用”。
 6. 需要时同步 `docs/CHANGELOG.md`、当前任务状态和迁移说明。
 7. 所有必需项完成后，按 `docs/COMMIT_TEMPLATE.md` 生成 Conventional Commit 并提交。
+8. 提交前与提交后各跑一次任务状态一致性检查（error 或 warning 都必须清零）：
+
+```powershell
+uv run python scripts/check_task_sync.py --pre-commit --strict   # 提交前：允许“完成 commit”为“本次提交”
+uv run python scripts/check_task_sync.py --strict                # 提交后：必须回填真实 hash
+```
+
+```bash
+UV_PROJECT_ENVIRONMENT=.venv-wsl uv run python scripts/check_task_sync.py --pre-commit --strict
+UV_PROJECT_ENVIRONMENT=.venv-wsl uv run python scripts/check_task_sync.py --strict
+```
+
+提交前阶段通过后提交；提交完成后把 `完成 commit` 回填为真实 hash（需要时随收尾 commit 落地），再跑提交后阶段。检查项：当前状态与 Task DoD 一致性、「待人工验证」与人工验证记录冲突、Review/CHANGELOG/迁移说明标记、「完成 commit」是否填写且 hash 真实存在。脚本只查存在性与结构，标记内容是否正确仍需人工判断。
 
 最终回复必须区分：
 
@@ -94,6 +128,7 @@ uv run fwasset
 uv run python -m pytest -q
 uv run python -m pytest -m "not ui" -q
 .\scripts\test.ps1
+.\scripts\quality.ps1     # ruff + format + mypy
 ```
 
 具体模块的 focused test 由任务范围决定；没有对应命令时应明确记录为未验证，而不是猜测结果。

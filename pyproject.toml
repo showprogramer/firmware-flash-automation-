@@ -18,9 +18,12 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "hypothesis>=6.0.0",
+    "mypy>=1.13.0",
     "pyinstaller>=6.0.0",
     "pytest>=8.0.0",
     "pytest-cov>=5.0.0",
+    "ruff>=0.9.0",
+    "types-psutil>=6.0.0",
 ]
 [project.scripts]
 fwasset = "fwasset.app:main"
@@ -40,3 +43,23 @@ markers = [
 [tool.coverage.run]
 source = ["src/fwasset"]
 omit = ["src/fwasset/app.py", "src/fwasset/ui_qt/*"]
+
+[tool.ruff]
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "UP"]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["src/fwasset/core", "src/fwasset/ui_common", "scripts"]
+exclude = ["scripts/spike_pyside6.py"]
+check_untyped_defs = true
+disallow_incomplete_defs = true
+no_implicit_optional = true
+warn_unused_configs = true
+show_error_codes = true
+
+[[tool.mypy.overrides]]
+module = "tomli"
+ignore_missing_imports = true
