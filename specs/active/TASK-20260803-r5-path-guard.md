@@ -5,11 +5,11 @@
 | 项 | 状态 |
 | --- | --- |
 | 类型 | core 公共 API + 服务契约（安全边界） |
-| 当前状态 | 🔄 实现完成，待 Windows 人工验证 |
+| 当前状态 | ✅ 人工验证通过，记录已更新 |
 | 前置 | REVIEW-20260728 R5（P1·阻断） |
 | 父任务 | CRUD 前置（REVIEW-20260728-pre-crud-readiness） |
 | 分支 | `feature/pyside6-migration` |
-| 完成 commit | 待提交 |
+| 完成 commit | `77cbbd0` |
 
 ---
 
@@ -82,13 +82,21 @@
 
 ## 验证记录
 
-- 自动化验证（已完成）：
-  - `pytest src/fwasset/tests/test_path_guard.py src/fwasset/tests/test_platform_default_service.py src/fwasset/tests/test_shared_module_service.py src/fwasset/tests/test_b4_shared_scheme_boundary.py src/fwasset/tests/test_scheme_workbench_model.py` → 通过
-  - `pytest -m "not ui"`（WSL `.venv-wsl`）→ 362 passed, 1 skipped；7 个失败（test_panel_host_protocol ×4、test_settings ×2、test_file_scan ×1）经 git stash 基线复测确认是 Linux 环境差异（PySide6 未装 / Windows 路径语义），与本次改动无关
-  - Windows 规范化回归用例 `_fake_win_normcase`（模拟 Windows C 版 normcase 把 `/` 转 `\`）已固化并通过
-- 人工验证（已完成，Windows 实机）：
-  - 首次实机登记共享被误拒，暴露 normcase 顺序回归：Windows `os.path.normcase` 会把 `/` 规范化为 `\`，初版先 `as_posix()` 再 normcase 导致前缀比较永不匹配（Linux no-op 掩盖）
-  - 修复（先 normcase 再统一斜杠）后实机登记共享成功（`D:\按摩器程序\L36双机芯-上3D-下2D程序`）
+### 自动化验证（已完成）
+
+| 平台 | 环境 | 命令 | 结果 |
+| --- | --- | --- | --- |
+| WSL/Linux | `.venv-wsl` | `.venv-wsl/bin/python -m pytest src/fwasset/tests/test_path_guard.py src/fwasset/tests/test_platform_default_service.py src/fwasset/tests/test_shared_module_service.py src/fwasset/tests/test_b4_shared_scheme_boundary.py src/fwasset/tests/test_scheme_workbench_model.py -q` | 通过 |
+| WSL/Linux | `.venv-wsl` | `.venv-wsl/bin/python -m pytest -m "not ui" -q` | 本任务相关测试通过；完整套件：362 passed, 1 skipped，另有 7 个已知平台差异失败 |
+| WSL/Linux | `.venv-wsl` | Windows 规范化回归用例 `_fake_win_normcase`（模拟 Windows C 版 normcase 把 `/` 转 `\`） | 通过（已固化） |
+
+- 已知平台差异：`test_panel_host_protocol` ×4（WSL 未装 PySide6）、`test_settings` ×2、`test_file_scan` ×1（Windows 路径语义）在 WSL 失败，git stash 基线复测结果相同；本次改动相关用例通过。
+- 提交：`77cbbd0`
+
+### 人工验证（已完成）
+
+- 平台：Windows 实机
+- 结论：首次实机登记共享被误拒，暴露 normcase 顺序回归（Windows `os.path.normcase` 会把 `/` 规范化为 `\`，初版先 `as_posix()` 再 normcase 导致前缀比较永不匹配，Linux no-op 掩盖）；修复（先 normcase 再统一斜杠）后实机登记共享成功（`D:\按摩器程序\L36双机芯-上3D-下2D程序`）。
 
 ## 文档与收口
 

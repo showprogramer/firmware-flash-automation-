@@ -103,8 +103,19 @@ specs/
 
 ## 验证记录
 
-- 自动化验证（已完成）：`git diff --check`；三个 Agent ignore 文件去除工具头注释后内容一致；`git check-ignore -v .codex/ .qoder/ .local/ai-prompts/review_prompts.md` 均命中忽略规则；旧路径 `docs/README.md`、`specs/current_project_ui/`、`specs/images/`、`specs/prompts/` 已不存在，新路径均存在。
-- 人工验证（已完成）：用户确认文档位置与文件处理无误。
+### 自动化验证（已完成）
+
+| 平台 | 环境 | 命令 | 结果 |
+| --- | --- | --- | --- |
+| 不限（文档操作） | — | `git diff --check`；三个 Agent ignore 文件去除工具头注释后内容一致；`git check-ignore -v .codex/ .qoder/ .local/ai-prompts/review_prompts.md` | 通过（均命中忽略规则；旧路径 `docs/README.md`、`specs/current_project_ui/`、`specs/images/`、`specs/prompts/` 已不存在，新路径均存在） |
+
+- 已知平台差异：无。
+- 提交：`0616fe3`
+
+### 人工验证（已完成）
+
+- 平台：用户侧
+- 结论：用户确认文档位置与文件处理无误。
 
 ## 文档与收口
 
@@ -112,3 +123,13 @@ specs/
 - 迁移说明：`docs/migrations/MIGRATION-20260803-document-organization.md`（已完成）。
 - Review：不适用（纯文档整理，无代码审查对象）。
 - 按 `AGENTS.md` 的人工验证前置流程提交。
+
+## Task DoD
+
+- [x] 文档目录整理与迁移完成
+- [x] 三个 Agent ignore 文件同步
+- [x] 自动化验证已记录（git diff --check、ignore 规则命中、旧路径清理确认）
+- [x] 人工验证已记录
+- [x] Review 不适用已确认
+- [x] CHANGELOG 已同步
+- [x] 迁移说明已记录

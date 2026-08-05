@@ -8,7 +8,7 @@
 | 当前状态 | ✅ 人工验证通过，记录已更新 |
 | 前置 | 共享来源登记与模块一致性约束已完成 |
 | 分支 | `feature/pyside6-migration` |
-| 完成 commit | 本次提交 |
+| 完成 commit | `31f9efd` |
 
 ## 目标
 
@@ -49,10 +49,21 @@
 
 ## 验证记录
 
-- 自动化验证：
-  - `.venv-wsl/bin/python -m pytest src/fwasset/tests/test_ui_common_helpers.py src/fwasset/tests/test_qt_smoke.py::test_context_menu_hides_default_status_and_uses_replace_actions src/fwasset/tests/test_qt_smoke.py::test_context_menu_groups_default_register_and_directory_actions -q --no-cov -p no:cacheprovider` → 3 passed。
-  - `.venv-wsl/bin/python -m pytest src/fwasset/tests/test_platform_default_service.py src/fwasset/tests/test_scheme_workbench_model.py::test_shortcut_alias_duplicate_prefers_catalog_key_for_badge_and_fallback src/fwasset/tests/test_shared_module_resolver_phase_c.py::test_follow_default_prefers_canonical_shortcut_key -q --no-cov -p no:cacheprovider` → 24 passed。
-- 人工验证（Windows，2026-08-03）：用户确认右键菜单优化、默认切换、重复“快捷键 / 快捷键程序”键的单默认显示与 TOML 合并均通过。
+### 自动化验证（已完成）
+
+| 平台 | 环境 | 命令 | 结果 |
+| --- | --- | --- | --- |
+| WSL/Linux | `.venv-wsl` | `.venv-wsl/bin/python -m pytest src/fwasset/tests/test_ui_common_helpers.py src/fwasset/tests/test_qt_smoke.py::test_context_menu_hides_default_status_and_uses_replace_actions src/fwasset/tests/test_qt_smoke.py::test_context_menu_groups_default_register_and_directory_actions -q --no-cov -p no:cacheprovider` | 通过（3 passed） |
+| WSL/Linux | `.venv-wsl` | `.venv-wsl/bin/python -m pytest src/fwasset/tests/test_platform_default_service.py src/fwasset/tests/test_scheme_workbench_model.py::test_shortcut_alias_duplicate_prefers_catalog_key_for_badge_and_fallback src/fwasset/tests/test_shared_module_resolver_phase_c.py::test_follow_default_prefers_canonical_shortcut_key -q --no-cov -p no:cacheprovider` | 通过（24 passed） |
+
+- 已知平台差异：无。
+- 提交：`31f9efd`
+
+### 人工验证（已完成）
+
+- 平台：Windows 实机
+- 结论：用户确认右键菜单优化、默认切换、重复“快捷键 / 快捷键程序”键的单默认显示与 TOML 合并均通过（2026-08-03）。
+
 - Review：已完成并归档。
 - CHANGELOG：已同步。
 - 迁移说明：不适用。

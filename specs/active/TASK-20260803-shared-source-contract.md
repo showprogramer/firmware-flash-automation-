@@ -8,7 +8,7 @@
 | 当前状态 | ✅ 人工验证通过，记录已更新 |
 | 前置 | Phase B2/Phase C 共享登记已完成；R5 路径守卫已合入 |
 | 分支 | `feature/pyside6-migration` |
-| 完成 commit | 本次提交 |
+| 完成 commit | `0d29111` |
 
 ## 复杂度理由
 
@@ -70,12 +70,23 @@
 
 ## 验证记录
 
-- 自动化验证：
-  - `.venv-wsl/bin/python -m pytest src/fwasset/tests/test_shared_module_service.py src/fwasset/tests/test_ui_common_helpers.py -q --no-cov -p no:cacheprovider` → 19 passed。
-  - `.venv-wsl/bin/python -m pytest src/fwasset/tests/test_qt_smoke.py::test_shared_source_picker_excludes_other_modules src/fwasset/tests/test_qt_smoke.py::test_shared_source_picker_requires_explicit_selection -q --no-cov -p no:cacheprovider` → 2 passed。
-  - `.venv-wsl/bin/python -m pytest -m "not ui" -q --no-cov -p no:cacheprovider` → 374 passed，3 个既有 Windows 路径语义用例失败（`test_file_scan` ×1、`test_settings` ×2），本任务定向用例通过。
-  - `.venv-wsl/bin/python -m pytest src/fwasset/tests/test_qt_smoke.py -q --no-cov -p no:cacheprovider` → 26 passed，1 个既有侧栏重选用例失败；本任务新增 Qt 用例通过。该套件同时因受限运行环境无法写入 `.runtime/logs/app.log` 输出日志错误。
-- 人工验证（Windows，2026-08-03）：用户确认同模块登记、不同模块不可见、固定版本、自动更新与无候选禁用确认均通过。
+### 自动化验证（已完成）
+
+| 平台 | 环境 | 命令 | 结果 |
+| --- | --- | --- | --- |
+| WSL/Linux | `.venv-wsl` | `.venv-wsl/bin/python -m pytest src/fwasset/tests/test_shared_module_service.py src/fwasset/tests/test_ui_common_helpers.py -q --no-cov -p no:cacheprovider` | 通过（19 passed） |
+| WSL/Linux | `.venv-wsl` | `.venv-wsl/bin/python -m pytest src/fwasset/tests/test_qt_smoke.py::test_shared_source_picker_excludes_other_modules src/fwasset/tests/test_qt_smoke.py::test_shared_source_picker_requires_explicit_selection -q --no-cov -p no:cacheprovider` | 通过（2 passed） |
+| WSL/Linux | `.venv-wsl` | `.venv-wsl/bin/python -m pytest -m "not ui" -q --no-cov -p no:cacheprovider` | 本任务相关测试通过；完整套件：374 passed，另有 3 个既有 Windows 路径语义差异失败 |
+| WSL/Linux | `.venv-wsl` | `.venv-wsl/bin/python -m pytest src/fwasset/tests/test_qt_smoke.py -q --no-cov -p no:cacheprovider` | 本任务相关测试通过；完整套件：26 passed，另有 1 个既有侧栏重选用例失败 |
+
+- 已知平台差异：`test_file_scan` ×1、`test_settings` ×2 在 WSL 失败，判定为既有 Windows 路径语义差异（未在 Windows 复跑自动化）；Qt 套件因受限运行环境无法写入 `.runtime/logs/app.log` 输出日志错误。
+- 提交：`0d29111`
+
+### 人工验证（已完成）
+
+- 平台：Windows 实机
+- 结论：用户确认同模块登记、不同模块不可见、固定版本、自动更新与无候选禁用确认均通过（2026-08-03）。
+
 - Review：已完成并归档。
 - CHANGELOG：已同步。
 - 迁移说明：不适用。
