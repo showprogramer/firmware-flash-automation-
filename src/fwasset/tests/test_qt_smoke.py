@@ -64,12 +64,25 @@ def test_import_workbench_window_module(qapp) -> None:
     assert hasattr(module, "main")
 
 
+def _fake_gate(ok: bool) -> dict:
+    """测试替身：跳过真实门闩（TASK-20260806 R1/R10 单测在 test_workbench_helpers）。"""
+    if ok:
+        return {"ok": True, "code": "ok", "message": "", "payload": {}}
+    return {
+        "ok": False,
+        "code": "not_configured",
+        "message": "请先在设置中配置程序文件夹",
+        "payload": {},
+    }
+
+
 def _capture_workbench_context_menu(
     qapp,
     monkeypatch,
     *,
     is_default: bool,
     shared: bool,
+    gate_ok: bool = True,
 ) -> tuple[list[QAction], int]:
     """构建工作台资产右键菜单，并返回其中的动作列表。"""
     from PySide6.QtCore import QPoint
@@ -86,6 +99,11 @@ def _capture_workbench_context_menu(
         workbench.workbench_model,
         "resolve_shared_module",
         lambda _model, _module: {"source": "L50S"} if shared else None,
+    )
+    from fwasset.ui_qt import workbench_window as window_module
+
+    monkeypatch.setattr(
+        window_module, "write_gate_check", lambda *_a, **_k: _fake_gate(gate_ok)
     )
     captured: dict[str, RoundMenu] = {}
     separator_count = 0
@@ -175,12 +193,33 @@ def test_context_menu_groups_default_register_and_directory_actions(
     assert separator_count == 2
 
 
+def test_context_menu_hides_write_actions_when_gate_blocks(qapp, monkeypatch) -> None:
+    """门闩拒绝（如未配置程序文件夹）时，菜单只保留只读操作。"""
+    actions, _separator_count = _capture_workbench_context_menu(
+        qapp,
+        monkeypatch,
+        is_default=False,
+        shared=False,
+        gate_ok=False,
+    )
+    visible = [action for action in actions if not action.isSeparator()]
+
+    assert [action.text() for action in visible] == [
+        "打开所在目录",
+        "复制目录路径",
+    ]
+
+
 def test_shared_source_picker_excludes_other_modules(qapp, monkeypatch) -> None:
     """共享登记入口只传入其它型号的同模块来源。"""
+    from fwasset.ui_qt import workbench_window as window_module
     from fwasset.ui_qt.workbench_window import WorkbenchInterface
 
     workbench = WorkbenchInterface()
     workbench.current_selection.model_name = "目标型号"
+    monkeypatch.setattr(
+        window_module, "write_gate_check", lambda *_a, **_k: _fake_gate(True)
+    )
     target_asset = {"model": "目标型号", "firmware_label": "快捷键程序"}
     shortcut_source = {"model": "L36", "firmware_label": "快捷键程序"}
     bluetooth_source = {"model": "L36", "firmware_label": "蓝牙程序"}

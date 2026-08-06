@@ -777,7 +777,7 @@ CLAUDE.md 明确：默认变体**只由** `平台配置.toml` 定义，`_默认`
 
 | # | 前置项 | 对应 Issue | 复杂度 | 状态 |
 | --- | --- | --- | --- | --- |
-| 1 | 配置根作为写操作权威 + scan_meta 一致性校验 + 未配置时禁用写入口 | R1、R10 | medium | ⏳ 未开始 |
+| 1 | 配置根作为写操作权威 + scan_meta 一致性校验 + 未配置时禁用写入口 | R1、R10 | medium | ✅ 已完成（TASK-20260806-r1-r10-write-gate，Windows 全量 423 passed） |
 | 2 | CRUD 定点写 API + 保留工作区上下文的局部扫描/子树对账 + SQLite 事务 + 文件/索引失败恢复策略（**不含 schema 迁移**；SQLite 事务不包含文件系统动作） | R3 | high | ⏳ 未开始 |
 | 3 | 统一路径守卫 `assert_within_workspace` | R5 | medium | ✅ 已完成（TASK-20260803-r5-path-guard，Windows 实机验证通过） |
 | 4 | TOML 引用反查 + 删除二次确认 + 重命名/移动时级联改写或阻止断链 | R8 | high | ⏳ 未开始 |

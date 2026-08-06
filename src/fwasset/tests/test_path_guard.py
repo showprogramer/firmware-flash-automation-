@@ -5,7 +5,11 @@ from __future__ import annotations
 import pytest
 
 import fwasset.core.path_guard as path_guard
-from fwasset.core.path_guard import PathGuardError, assert_within_workspace
+from fwasset.core.path_guard import (
+    PathGuardError,
+    assert_within_workspace,
+    normalize_workspace_path,
+)
 
 
 def test_accepts_direct_child(tmp_path):
@@ -89,6 +93,18 @@ def test_return_value_is_resolved_path(tmp_path):
     result = assert_within_workspace(target, tmp_path)
     assert result.is_absolute()
     assert result == target.resolve()
+
+
+def test_normalize_workspace_path_returns_empty_for_empty_values():
+    assert normalize_workspace_path(None) == ""
+    assert normalize_workspace_path("") == ""
+    assert normalize_workspace_path("  ") == ""
+
+
+def test_normalize_workspace_path_matches_windows_case_and_separators(monkeypatch):
+    monkeypatch.setattr(path_guard.os.path, "normcase", _fake_win_normcase)
+
+    assert normalize_workspace_path("D:/Root") == normalize_workspace_path("d:\\root")
 
 
 def _fake_win_normcase(s: str) -> str:

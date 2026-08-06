@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-from fwasset.core.types import FirmwareAsset
+from pathlib import Path
+
+from fwasset.core.path_guard import (
+    PathGuardError,
+    assert_within_workspace,
+    normalize_workspace_path,
+)
+from fwasset.core.types import FirmwareAsset, ServiceResult
 
 MODEL_CHIP_LIMIT = 4
 
@@ -120,3 +127,36 @@ def shared_source_picker_caption(module: str) -> str:
     """来源选择对话框顶部说明。"""
     mod = (module or "").strip() or "该模块"
     return f"从其它型号选择一个「{mod}」版本作为共享来源"
+
+
+def write_gate_check(
+    configured_root: str | Path | None,
+    scanned_root: str | Path | None,
+    target_path: str | Path,
+) -> ServiceResult:
+    configured = normalize_workspace_path(configured_root)
+    scanned = normalize_workspace_path(scanned_root)
+    if not configured:
+        return {
+            "ok": False,
+            "code": "not_configured",
+            "message": "请先在设置中配置程序文件夹",
+            "payload": {},
+        }
+    if scanned != configured:
+        return {
+            "ok": False,
+            "code": "root_changed",
+            "message": "配置已变更，请先重新读取程序文件夹",
+            "payload": {},
+        }
+    try:
+        assert_within_workspace(target_path, configured_root or "")
+    except PathGuardError:
+        return {
+            "ok": False,
+            "code": "out_of_workspace",
+            "message": "目标路径不在当前工作区内",
+            "payload": {},
+        }
+    return {"ok": True, "code": "ok", "message": "", "payload": {}}

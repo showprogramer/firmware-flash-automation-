@@ -26,6 +26,14 @@ def _normalize_for_compare(p: Path) -> str:
     return value.replace("\\", "/").rstrip("/")
 
 
+def normalize_workspace_path(value: str | Path | None) -> str:
+    """返回用于工作区路径比较的规范化值；空值返回空字符串。"""
+    raw_value = str(value or "").strip()
+    if not raw_value:
+        return ""
+    return _normalize_for_compare(Path(raw_value).resolve())
+
+
 def assert_within_workspace(path: str | Path, workspace_root: str | Path) -> Path:
     """断言 ``path`` 解析后位于 ``workspace_root`` 之下（允许相等），返回 resolve 后的 Path。
 

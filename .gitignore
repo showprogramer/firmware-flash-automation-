@@ -49,3 +49,6 @@ skills-lock.json
 
 # Local test fixtures (private sandbox)
 TestScenario/
+
+# Manual verification scenario (TASK-20260806)
+.scenario/

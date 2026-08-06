@@ -70,6 +70,7 @@ from fwasset.ui_common.workbench_helpers import (
     shared_source_picker_caption,
     shared_unregister_action_label,
     shared_unregister_confirm_message,
+    write_gate_check,
 )
 from fwasset.ui_qt.data_grid import DataGrid
 from fwasset.ui_qt.design_tokens import (
@@ -790,9 +791,11 @@ class WorkbenchInterface(QWidget):
             and str(asset.get("category", "")) == "common"
         )
         is_default = is_common and self.workbench_model.is_model_module_default(asset)
+        gate = write_gate_check(DEFAULT_ROOT, self.root_dir, asset.get("path", ""))
+        write_ok = gate["ok"]
         if is_common:
             # 默认状态已在表格的 ★默认 徽章表达，菜单只保留可执行操作。
-            if not is_default:
+            if not is_default and write_ok:
                 action = Action(
                     FluentIcon.EDIT, set_default_action_label(model_name, module), menu
                 )
@@ -806,9 +809,11 @@ class WorkbenchInterface(QWidget):
             shared_res = self.workbench_model.resolve_shared_module(
                 model_name, module_key
             )
+
             if is_common and not is_default:
-                menu.addSeparator()
-            if shared_res is not None:
+                if write_ok:
+                    menu.addSeparator()
+            if shared_res is not None and write_ok:
                 reg_action = Action(
                     FluentIcon.SYNC, shared_replace_action_label(module), menu
                 )
@@ -823,7 +828,7 @@ class WorkbenchInterface(QWidget):
                     lambda _c=False: self._unregister_shared(variant)
                 )
                 menu.addAction(unreg_action)
-            else:
+            elif write_ok:
                 reg_action = Action(
                     FluentIcon.LINK, shared_register_action_label(module), menu
                 )
@@ -844,7 +849,27 @@ class WorkbenchInterface(QWidget):
 
         menu.exec(global_pos)
 
+    def _write_gate(self, target_path: str | Path) -> bool:
+        """统一写入门闩（TASK-20260806 R1/R10）。
+
+        先叠加「扫描/烧录进行中」两态，再走三检查纯函数；不通过时弹提示并
+        返回 False，调用方必须据此中止写操作。
+        """
+        if self.scan_state_model.is_scanning:
+            QMessageBox.warning(self, "无法写入", self.scanning_message)
+            return False
+        if self._busy:
+            QMessageBox.warning(self, "无法写入", self.busy_message)
+            return False
+        gate = write_gate_check(DEFAULT_ROOT, self.root_dir, target_path)
+        if not gate["ok"]:
+            QMessageBox.warning(self, "无法写入", gate["message"])
+            return False
+        return True
+
     def _set_default_variant(self, variant: ModuleVariant) -> None:
+        if not self._write_gate(variant.asset.get("path", "")):
+            return
         asset = variant.asset
         model_name = self.current_selection.model_name
         module = module_label_from_asset(asset)
@@ -867,6 +892,8 @@ class WorkbenchInterface(QWidget):
 
     # --- 共享登记入口对话框（B2）---
     def _register_shared_source(self, variant: ModuleVariant) -> None:
+        if not self._write_gate(variant.asset.get("path", "")):
+            return
         target_model = self.current_selection.model_name
         if not target_model:
             self._log("请先选择目标型号")
@@ -1023,6 +1050,13 @@ class WorkbenchInterface(QWidget):
         mode: str = "static",
         source_platform: str = "",
     ) -> None:
+        # 登记写入的是目标型号的 型号配置.toml：目标根也必须通过门闩，
+        # 不能只检查右键选中的资产路径（R10 新增/复制额外检查）。
+        model_root = str(
+            self.workbench_model._model_root_paths.get(target_model, "") or ""
+        )
+        if not self._write_gate(model_root):
+            return
         result = self.workbench_model.register_shared_module(
             target_model,
             source_asset,
@@ -1055,6 +1089,8 @@ class WorkbenchInterface(QWidget):
         self._refresh_main_grid()
 
     def _unregister_shared(self, variant: ModuleVariant) -> None:
+        if not self._write_gate(variant.asset.get("path", "")):
+            return
         target_model = self.current_selection.model_name
         module = module_label_from_asset(variant.asset)
         module_key = canonical_module_dir(module)
