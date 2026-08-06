@@ -9,7 +9,7 @@
 | 前置 | REVIEW-20260728 R1（P1·阻断）+ R10（P2） |
 | 父任务 | CRUD 前置（REVIEW-20260728-pre-crud-readiness） |
 | 分支 | `feature/pyside6-migration` |
-| 完成 commit | （待填） |
+| 完成 commit | `4d4d3c8` |
 
 ---
 
@@ -105,7 +105,7 @@
 - smoke 测试修复：`test_context_menu_*` 与 `test_shared_source_picker_*` 注入 fake gate（真实门闩由 test_workbench_helpers 覆盖），新增 `test_context_menu_hides_write_actions_when_gate_blocks`。此前在 Windows 全量跑时菜单门闩导致 2 例失败 + 1 例模态框卡死，已消除。
 - 实现过程中发现并修复：`_on_grid_right_click` 登记分支漏门闩（`else:` → `elif write_ok:`）；路径归一与归属判定现统一委托 `core.path_guard`，避免 Windows 模拟下的二次归一前缀问题及 POSIX 对 `\` 分隔符的差异。
 - 已知平台差异：无（WSL 与 Windows 全量均通过；UI 测试在 WSL 按 `-m "not ui"` 排除、在 Windows 全量验证）。
-- 提交：（待填）
+- 提交：`4d4d3c8`
 
 ### 人工验证（已完成）
 
