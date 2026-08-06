@@ -34,7 +34,7 @@ feat(core,app): 优化 Excel 写入流程并接入配置化默认值
 - write_excel_record 返回结构化结果，区分占用与写入失败
 - UI 按失败原因分别提示，保留备用文件补录路径
 - 新增 config.toml 并在 settings 中提供安全回退
-- 补充 CHANGELOG，记录未发布改动与近期提交
+- 有用户可见变化时同步 `docs/CHANGELOG.md` 的 `Unreleased` 条目；纯内部工程、测试或格式化提交不要求新增 CHANGELOG 条目
 
 影响范围:
 - app 写入与提示逻辑

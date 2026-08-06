@@ -74,6 +74,8 @@ UI、核心公共 API、类型/服务契约、schema、扫描索引、USB、配�
 
 自动化验证必须列出命令和结果；人工确认后才按 `docs/COMMIT_TEMPLATE.md` 提交，并按需同步 CHANGELOG、Review、任务状态和迁移说明。
 
+CHANGELOG 按 Keep a Changelog 维护：只记录用户可感知功能、重要缺陷修复和必要兼容性变化；测试命令、任务状态、Review 过程及纯格式化/类型修复不写入 CHANGELOG，具体格式见 `docs/agent-workflow.md`。
+
 每个 Task 完成前都要更新任务文件的 DoD 和状态。人工验证、Review、CHANGELOG 和迁移说明不是所有任务都必需，但必须明确标记为“已完成”或“不适用”，不能留空。最终回复必须区分“实现完成，等待人工验证”和“人工验证通过，记录已更新”。
 
 完整流程、复杂度标注、Review 自动化和迁移说明见 [docs/agent-workflow.md](docs/agent-workflow.md)。

@@ -101,6 +101,25 @@ UV_PROJECT_ENVIRONMENT=.venv-wsl uv run python scripts/check_task_sync.py --stri
 
 普通文档、单测补充等低风险任务可以不创建 Review；UI、公共 API、类型契约、schema、扫描索引、USB、重大重构和新功能仍按上面的人工验证及 Review 触发条件执行。
 
+## CHANGELOG 规范
+
+`docs/CHANGELOG.md` 按 Keep a Changelog 结构维护，使用 `Unreleased` 和日期/版本段落，并按实际内容使用以下分类：
+
+- `Added`：新增用户可使用的能力。
+- `Changed`：已有用户流程、界面或配置语义发生变化。
+- `Fixed`：用户可感知的缺陷修复或安全边界修复。
+- `Removed`：移除已有能力或明确取消的范围。
+- `Deprecated` / `Security`：仅在确有对应内容时使用。
+
+写入规则：
+
+- 一条记录描述一个用户结果，不按 commit 数量逐条复制，也不在标题中堆叠 Task、Review 或 commit hash。
+- 只记录用户可感知功能、重要缺陷、数据/配置兼容性和安全边界变化；纯格式化、类型标注、内部重构、测试用例、测试命令和任务状态不写入。
+- 同一功能的实现、修复和 UI 调整合并为一条结果导向记录，避免重复描述内部文件和阶段名称。
+- 有用户可见变化时更新 `Unreleased`；只有内部工程或测试变化时标记 CHANGELOG 为“不适用”。
+- 验证命令、测试数量、人工验收和 Review 结论写入 Task/Review，不复制到 CHANGELOG。
+- 历史细节以 Git 历史和归档文档为准，不在 CHANGELOG 保留逐提交流水账。
+
 ## 复杂度标注
 
 新建或修改 `specs/active/` 任务及活跃 Review 时，每个 Task 或 Issue 都要在标题末尾标注 `complexity: low|medium|high|xhigh`，并在文件列表前说明理由。
