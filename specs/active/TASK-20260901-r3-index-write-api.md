@@ -9,7 +9,7 @@
 | 前置 | REVIEW-20260728 前置条件清单 **#3**（R3，P1·阻断） |
 | 父任务 | CRUD 前置（REVIEW-20260728-pre-crud-readiness） |
 | 分支 | `feature/pyside6-migration` |
-| 完成 commit | 本次提交 |
+| 完成 commit | `7a00879` |
 | 复杂度 | `high`（见下） |
 
 **复杂度理由：** 触碰 `asset_index`（扫描索引真源缓存）、`file_scan`（扫描器）与 `path_guard`（路径守卫）三条公共路径，新增公开 API 属索引契约改动，需跨平台回归（Windows 路径归一）与 Windows 实机人验；但不涉及 schema 迁移、UI 与 TOML 写，故不到 `xhigh`。
@@ -146,7 +146,7 @@
 - 既有 `prune_missing_hidden_items` 修复为路径边界判断（原 `startswith` 会把 `...\A` 与 `...\AB` 混淆），相关既有测试全绿。
 - codex 实现审查（第一轮）发现 1 P0 / 3 P1 / 2 P2 已全部修复：P0 工作区根消失被误判为已删子树（现报错不改库）+ 预置取消先于空快照写库；P1 stale 行与 hidden 边界采用词法/resolved 双重归属、单行接口按 normcase 身份匹配防大小写变体重复行、隐藏项清理扩展到子树祖先（兄弟仍保留）、hidden 判活身份贯穿（junction 场景，附 mklink /J 回归测试）；P2 补自定义 catalog 透传与 onerror 错误测试、验收标准按用户决定改为纯 Windows。第二轮终验结论：「实现合格，无阻断问题」。
 - 已知平台差异：无（本项目纯 Windows 开发/使用，验证以 Windows `.venv` 为准；WSL 不再使用）。
-- 提交：本次提交
+- 提交：`7a00879`
 
 ### 人工验证（已完成）
 

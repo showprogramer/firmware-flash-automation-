@@ -109,6 +109,7 @@ def commit_subject(h: str) -> str | None:
         ["git", "log", "--format=%s", "-1", h],
         capture_output=True,
         text=True,
+        encoding="utf-8",  # git 输出为 UTF-8；Windows 默认 GBK 解码中文 subject 会崩
         check=False,
     )
     return result.stdout.strip() or None
