@@ -44,6 +44,7 @@ build/
 .opencode/
 .codex/
 .qoder/
+.commandcode/
 .local/
 skills-lock.json
 

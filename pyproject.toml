@@ -63,3 +63,8 @@ show_error_codes = true
 [[tool.mypy.overrides]]
 module = "tomli"
 ignore_missing_imports = true
+
+[dependency-groups]
+dev = [
+    "debugpy>=1.8.21",
+]
