@@ -30,6 +30,16 @@
 
 这些目录同时由 Git 和各 Agent ignore 文件排除。
 
+## 任务文件写法
+
+`specs/active/` 里的 Task 是给后续 Agent 对照执行的**当前规格**，不是会话日记。Git 负责过程历史。
+
+- 只保留：当前目标、当前规则、当前验收、当前 DoD、最新一次验证记录，以及仍有效的非目标或「须另立 TASK」项。
+- 用户改需求时**改原文**（规则、验收、DoD 一起改成现在的样子）。不要追加「修订 N」「修订理由」或新旧对照长文。
+- 作废规则直接删掉，不要留「已作废，仅记录过程」。
+- 验证记录只留**最新一次**跑通的命令和结果；表格覆盖写入，不按轮次追加行。
+- DoD 是当前完成清单，随规格改写；不要把每次反馈加成新勾选项。
+
 ## 任务验证与提交
 
 以下改动完成后，必须先通知人工验证，得到“验证通过”后才能提交：
@@ -38,6 +48,8 @@
 - `core/` 公共 API、类型契约、服务返回结构或数据库 schema 改动；
 - 固件资产、USB、配置、性能或安全边界改动；
 - 重构、新功能、操作面板注册表或 UI 入口改动。
+
+**无 UI 的人工验证等效规则：** 改动没有 UI 可供人工操作时（如纯 core 层能力），允许由 Agent 编写并执行一次性隔离场景脚本（独立临时目录，不触碰真实用户数据）驱动验证；把脚本命令与全部通过的结果记入 Task 的人工验证记录，用户确认「验证通过」后即可提交。涉及 UI 或现场行为的改动仍须用户实机验证。
 
 每个 Task 都必须维护完成状态；Review 和人工验证按任务风险条件决定，不是所有任务的固定步骤。Task 文件至少应能明确表达：
 
@@ -51,8 +63,8 @@
 
 流程：
 
-1. 先更新 Task DoD，并区分实现状态与验收状态。
-2. 列出自动化验证命令及结果；没有适用验证时明确写“不适用”。验证记录使用统一模板，六要素齐全：
+1. 按当前规格改写 Task DoD，并区分实现状态与验收状态。
+2. 用最新一次自动化验证覆盖写入命令和结果；没有适用验证时明确写“不适用”。验证记录使用统一模板，六要素齐全：
 
 ```markdown
 ## 验证记录
@@ -61,10 +73,11 @@
 
 | 平台 | 环境 | 命令 | 结果 |
 | --- | --- | --- | --- |
-| WSL/Linux | `.venv-wsl` | `UV_PROJECT_ENVIRONMENT=.venv-wsl uv run python -m pytest -m "not ui" -q` | 通过（362 passed, 1 skipped） |
-| WSL/Linux | `.venv-wsl` | `UV_PROJECT_ENVIRONMENT=.venv-wsl uv run ruff check src scripts` | 通过 |
-| WSL/Linux | `.venv-wsl` | `UV_PROJECT_ENVIRONMENT=.venv-wsl uv run mypy` | 通过 |
-| Windows | `.venv` | `uv run python -m pytest -q` | 通过（N passed） |
+| Windows | `.venv` | `uv run python -m pytest -m "not ui" -q` | 通过（N passed） |
+| Windows | `.venv` | `uv run ruff check src scripts` | 通过 |
+| Windows | `.venv` | `uv run mypy` | 通过 |
+
+（本项目纯 Windows，验证只在 Windows `.venv` 下执行，不再使用 WSL / `.venv-wsl`。）
 
 - 已知平台差异：无（或在 Linux 失败、Windows 通过的用例需逐条列出原因，禁止用“环境问题”笼统带过）
 - 提交：`77cbbd0`（提交前写「待提交」，提交后回填真实 hash）
@@ -84,11 +97,6 @@
 ```powershell
 uv run python scripts/check_task_sync.py --pre-commit --strict   # 提交前：允许“完成 commit”为“本次提交”
 uv run python scripts/check_task_sync.py --strict                # 提交后：必须回填真实 hash
-```
-
-```bash
-UV_PROJECT_ENVIRONMENT=.venv-wsl uv run python scripts/check_task_sync.py --pre-commit --strict
-UV_PROJECT_ENVIRONMENT=.venv-wsl uv run python scripts/check_task_sync.py --strict
 ```
 
 提交前阶段通过后提交；提交完成后把 `完成 commit` 回填为真实 hash（需要时随收尾 commit 落地），再跑提交后阶段。检查项：当前状态与 Task DoD 一致性、「待人工验证」与人工验证记录冲突、Review/CHANGELOG/迁移说明标记、「完成 commit」是否填写且 hash 真实存在。脚本只查存在性与结构，标记内容是否正确仍需人工判断。
@@ -117,12 +125,12 @@ UV_PROJECT_ENVIRONMENT=.venv-wsl uv run python scripts/check_task_sync.py --stri
 - 只记录用户可感知功能、重要缺陷、数据/配置兼容性和安全边界变化；纯格式化、类型标注、内部重构、测试用例、测试命令和任务状态不写入。
 - 同一功能的实现、修复和 UI 调整合并为一条结果导向记录，避免重复描述内部文件和阶段名称。
 - 有用户可见变化时更新 `Unreleased`；只有内部工程或测试变化时标记 CHANGELOG 为“不适用”。
-- 验证命令、测试数量、人工验收和 Review 结论写入 Task/Review，不复制到 CHANGELOG。
-- 历史细节以 Git 历史和归档文档为准，不在 CHANGELOG 保留逐提交流水账。
+- 验证命令、测试数量、人工验收和 Review 结论写入 Task/Review 的**当前**验证记录，不复制到 CHANGELOG，也不在 Task 里堆积历史轮次。
+- 历史细节以 Git 历史和归档文档为准，不在 CHANGELOG 或活跃 Task 里保留逐提交流水账。
 
 ## 复杂度标注
 
-新建或修改 `specs/active/` 任务及活跃 Review 时，每个 Task 或 Issue 都要在标题末尾标注 `complexity: low|medium|high|xhigh`，并在文件列表前说明理由。
+新建或改写 `specs/active/` 任务及活跃 Review 时，每个**当前仍有效**的 Task 或 Issue 都要在标题末尾标注 `complexity: low|medium|high|xhigh`，并在文件列表前说明理由。同一任务的后续反馈用来改写该 Task/Issue，不要为此新增「修订 N」小节。
 
 - `low`：单文件、纯文档或测试补齐。
 - `medium`：多文件但单一关注点，或涉及一层 UI/service。
@@ -151,17 +159,3 @@ uv run python -m pytest -m "not ui" -q
 ```
 
 具体模块的 focused test 由任务范围决定；没有对应命令时应明确记录为未验证，而不是猜测结果。
-
-## 双平台虚拟环境纪律
-
-- `.venv` 只在 Windows 下使用；`.venv-wsl` 只在 WSL/Linux 下使用。
-- **WSL 下禁止执行裸 `uv run` / `uv sync`**：uv 检测到 `.venv` 平台不匹配会尝试重建它，在 `/mnt/d` 挂载上删除失败会留下残缺包（2026-08-03 曾损坏 psutil，缺 8 个文件导致 `ImportError: cannot import name '_common'`）。
-- WSL 下正确的测试方式（二选一）：
-
-```bash
-.venv-wsl/bin/python -m pytest -m "not ui" -q
-UV_PROJECT_ENVIRONMENT=.venv-wsl uv run python -m pytest -m "not ui" -q
-```
-
-- 若 `.venv-wsl` 未安装依赖：`UV_PROJECT_ENVIRONMENT=.venv-wsl uv sync --extra dev`（不会触碰 `.venv`）。
-- Windows 侧 `.venv` 修复：`uv pip install --reinstall psutil`，或删除 `site-packages/psutil*` 后 `uv sync --extra dev`。

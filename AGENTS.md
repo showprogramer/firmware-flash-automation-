@@ -21,28 +21,18 @@ uv run python -m pytest -m "not ui" -q
 .\scripts\test.ps1
 ```
 
-**环境约束：** `.venv` 是 Windows 虚拟环境（WSL 的 uv 会因平台不匹配尝试重建它而损坏包，曾导致 psutil 文件被删）。在 WSL/Linux 下运行测试一律使用 `.venv-wsl`，不得执行裸 `uv run` / `uv sync`：
+**环境约束：** 本项目纯 Windows 开发、Windows 使用，所有验证只在 Windows `.venv` 下执行（`uv run`），不再使用 WSL / `.venv-wsl`。
 
-```bash
-.venv-wsl/bin/python -m pytest -m "not ui" -q
-UV_PROJECT_ENVIRONMENT=.venv-wsl uv run python -m pytest -m "not ui" -q
-```
-
-Windows 侧 `.venv` 损坏（如 psutil `ImportError: _common`）时：`uv pip install --reinstall psutil` 或删除 `site-packages/psutil*` 后 `uv sync --extra dev`。
+`.venv` 损坏（如 psutil `ImportError: _common`）时：`uv pip install --reinstall psutil` 或删除 `site-packages/psutil*` 后 `uv sync --extra dev`。
 
 覆盖率门槛为 `src/fwasset` 80%；`app.py` 和 `ui_qt/*` 不计入覆盖率，`ui_common/*` 计入覆盖率。
 
-质量检查命令（Windows / WSL）：
+质量检查命令：
 
 ```powershell
 uv run ruff check src scripts
 uv run mypy
 .\scripts\quality.ps1          # ruff + format + mypy 合集
-```
-
-```bash
-UV_PROJECT_ENVIRONMENT=.venv-wsl uv run ruff check src scripts
-UV_PROJECT_ENVIRONMENT=.venv-wsl uv run mypy
 ```
 
 mypy 范围：`src/fwasset/core`、`src/fwasset/ui_common`、`scripts`（排除 `spike_pyside6.py`）；`ui_qt/*` 和测试代码暂不纳入。ruff 检查 `src` 与 `scripts` 全部文件。改动后须同时跑通 ruff、mypy 和 pytest。
@@ -62,7 +52,8 @@ mypy 范围：`src/fwasset/core`、`src/fwasset/ui_common`、`scripts`（排除 
 ## 文档与本地文件
 
 - 项目概览：`README.md`。
-- 当前任务：`specs/active/`；长期架构决策仅在有实际决策时创建 `specs/decisions/`。
+- 当前任务：`specs/active/`。任务文件只写当前规格（目标、规则、验收、DoD、最新验证）；需求变化时改原文，不追加修订流水账。详见 [agent-workflow.md](docs/agent-workflow.md)。
+- 长期架构决策仅在有实际决策时创建 `specs/decisions/`。
 - UI 运行截图：`docs/ui-reference/screenshots/`。
 - UI 初始草图：`specs/design/sketches/`。
 - 个人 AI 沟通草稿：`.local/ai-prompts/`，不提交、不共享。
@@ -72,10 +63,12 @@ mypy 范围：`src/fwasset/core`、`src/fwasset/ui_common`、`scripts`（排除 
 
 UI、核心公共 API、类型/服务契约、schema、扫描索引、USB、配置、性能边界、重构和新功能改动，完成后必须先人工验证，再提交。
 
+**无 UI 的人工验证等效规则：** 改动没有 UI 可供人工操作时（如纯 core 层能力），允许由 Agent 编写并执行一次性隔离场景脚本（独立临时目录，不触碰真实用户数据）驱动验证，把脚本命令与全部通过的结果记入 Task 即视为人工验证完成；用户确认「验证通过」后提交。涉及 UI 或现场行为的改动仍须用户实机验证。
+
 自动化验证必须列出命令和结果；人工确认后才按 `docs/COMMIT_TEMPLATE.md` 提交，并按需同步 CHANGELOG、Review、任务状态和迁移说明。
 
 CHANGELOG 按 Keep a Changelog 维护：只记录用户可感知功能、重要缺陷修复和必要兼容性变化；测试命令、任务状态、Review 过程及纯格式化/类型修复不写入 CHANGELOG，具体格式见 `docs/agent-workflow.md`。
 
-每个 Task 完成前都要更新任务文件的 DoD 和状态。人工验证、Review、CHANGELOG 和迁移说明不是所有任务都必需，但必须明确标记为“已完成”或“不适用”，不能留空。最终回复必须区分“实现完成，等待人工验证”和“人工验证通过，记录已更新”。
+每个 Task 完成前都要按当前规格改写 DoD 和状态，不要追加修订史。人工验证、Review、CHANGELOG 和迁移说明不是所有任务都必需，但必须明确标记为“已完成”或“不适用”，不能留空。最终回复必须区分“实现完成，等待人工验证”和“人工验证通过，记录已更新”。
 
-完整流程、复杂度标注、Review 自动化和迁移说明见 [docs/agent-workflow.md](docs/agent-workflow.md)。
+完整流程、任务文件写法、复杂度标注、Review 自动化和迁移说明见 [docs/agent-workflow.md](docs/agent-workflow.md)。
