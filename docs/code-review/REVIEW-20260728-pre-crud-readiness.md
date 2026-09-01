@@ -1,840 +1,188 @@
 # REVIEW-20260728: CRUD 准入审查（Pre-CRUD Readiness）
 
+> **2026-09-01 重构更新**：本文按当前源码（`705fe60`）与 HTML 网页原型（TASK-20260806）整体重写。
+> 已关闭项（R1/R10、R5）压缩为现状摘要；已撤销/不适用项（R2、R4、R6b/R6c/R6d/R6e、R7、R12）的历史分析不再保留，需要时查本文件在 `705fe60` 之前的 git 版本。
+> 文中所有行号与 API 名以 `feature/pyside6-migration` @ `705fe60` 为准。
+
 | 项 | 内容 |
 | --- | --- |
 | 类型 | 准入审查 / 架构边界 |
-| 模块 | `core/asset_index.py`、`core/settings.py`、`core/model_config.py`、`core/services/*`、`ui_qt/workbench_window.py` |
-| 状态 | 🔄 进行中（仅准入审查；CRUD 实施尚未开始） |
-| 相关 TASK | 待立项 `TASK-YYYYMMDD-firmware-crud`（本审查为其前置） |
-| 基线 | `feature/pyside6-migration` @ `a4c6fdc`；`uv run python -m pytest -m "not ui" -q` → 357 passed，coverage 89.56% |
+| 模块 | `core/asset_index.py`、`core/path_guard.py`、`core/file_scan.py`、`core/services/*`、`ui_common/workbench_helpers.py`、`ui_qt/workbench_window.py` |
+| 状态 | 🔄 进行中（R1/R10、R5 已关闭；R3、R8 未开始；产品交互规则已由 HTML 原型定稿） |
+| 相关 TASK | ✅ TASK-20260803-r5-path-guard（已完成）、✅ TASK-20260806-r1-r10-write-gate（已完成）、✅ TASK-20260806-independent-crud-web-prototype（人工验证通过，待提交）、⏳ 正式 CRUD TASK（待立项，本审查为其前置） |
+| 基线 | `feature/pyside6-migration` @ `705fe60`；`uv run python -m pytest -m "not ui" -q` → 394 passed, 31 deselected，coverage 88.82%（门禁 80%） |
 
 ## 审查目标
 
 判断当前 Qt-only、配置、索引、固件目录与测试体系，是否已经可以安全进入「软件直接改真实程序文件」的 CRUD 阶段。
 
-## 术语约定
+**范围边界**：只审当前 CRUD 准入相关的 gate 项；不重审历史代码、不重审已归档 TASK/REVIEW。已归档结论（Qt-only 收口、共享引用语义、平台默认写回）默认成立，只在 CRUD 会破坏它们时才提出。
 
-| 术语 | 含义 |
-| --- | --- |
-| **CRUD 首版** | **CRUD 功能自身的第一个可交付版本**，即完成本审查 gate 后落地的那一版增删改。本文中所有「首版」**一律指此**，**不是**指 CRUD 之前的现有版本。 |
-| **准入前 / 现状** | 本审查基线（`a4c6fdc`）上的已有版本，即 CRUD 尚未开始的当下。需要指代它时用「现状」或「准入前」，不用「首版」。 |
-| **gate / 前置条件** | 文末「前置条件清单」那 5 项（R6e 已移出）。以那张表为唯一准绳。 |
+## 现行产品规则（以 HTML 原型为准）
 
-例：「CRUD 首版只允许改目录名」= **CRUD 落地的第一版就只允许**，而非「现状只允许、CRUD 时再放开」。
+CRUD 的交互与产品语义由 `specs/design/prototypes/firmware-crud-prototype.html` 定稿（TASK-20260806-independent-crud-web-prototype，人工验证通过）。**正式 CRUD TASK 立项时以该原型及其任务文件「当前规则」一节为准**，此前 2026-08-07 的产品修正（`handcontrol_ui` 版本唯一来自 `.rom` 文件名、复制手控文件到 U 盘文案、主表隐藏历史版本等）继续有效。与本文关系最密切的规则：
 
-**范围边界**：只审 CRUD 准入相关的 5 项；不重审历史代码、不重审已归档 TASK/REVIEW。已归档结论（Qt-only 收口、共享引用语义、平台默认写回）默认成立，只在 CRUD 会破坏它们时才提出。
-
-### 代码复核记录（当前 HEAD `b4250f0`）
-
-本轮按当前源码逐项复核了 `asset_index`、扫描器、工作区缓存恢复、型号/平台 TOML、共享引用解析与 USB 目录复制路径。结论仍为 **Conditional Go**，但它只表示“可以立项并推进只读准备”，**不表示当前已经允许新增 CRUD 写入口**。R5 已实现并修正 Windows 路径规范化比较，待 Windows 人工验证；其余 4 项（#1 R1/R10、#2 R3、#4 R8、#5 R6d）当前尚未实现；同时原文有以下几处需要收紧：
-
-- `assets` 并非“只有 `save_assets` 一个写接口”：现有 `delete_missing_assets()` 已做逐行删除；准确缺口是**没有面向 CRUD 的定点 upsert / replace / delete / 子树重建 API，也没有路径变化时同步 hidden 状态的事务接口**。
-- SQLite 事务不能包住文件系统操作；一致性模型应明确为“文件动作成功后提交索引事务，任一步失败则按磁盘真相重扫子树”，不能写成把文件动作与数据库动作绑定在同一个事务。
-- 当前扫描器只有 `scan_firmware_assets(root)`，同时把传入参数当作“工作区根”和“遍历起点”。因此不能直接把新变体目录作为 `root` 来做局部重扫，否则 `category` / `scheme_*` / `model_directory_*` 等上下文可能推导错误。R3 还必须补“保留工作区上下文的局部扫描/子树对账”能力，或明确退化为全根扫描。
-- 共享登记 service 的局部守卫会拒绝**解析后落在工作区外的结果**，但不会保留并检查原始词法段；解析器能识别 `..`，但 `Path(...).parts` 会归一掉显式 `.`，所以不能写成“两份都显式拒绝 `.` / `..`”。
-- 引用反查只弹警告不足以覆盖“重命名”：重命名若命中平台默认或静态共享引用，必须级联改写引用，或阻止操作；允许确认后留下断链只适用于产品明确接受的删除语义。
-- `atomic_write_text()` 的临时文件就在目标目录，因此它自身不会发生跨卷 `os.replace`；跨卷风险属于未来目录移动/复制实现，不能直接类比该 helper。
-- 现状并非完全只读：右键“设为默认”和共享登记/取消登记已经会写 `平台配置.toml` / `型号配置.toml`。因此 R1、R5、R10 的统一写入门闩不只服务未来 CRUD，也应覆盖这些既有写入口。
-- “本机 105 个资产”“回收站行为”等属于先前现场记录，无法仅从仓库源码复现；本轮保留为历史验证证据，但不把它们写成当前代码静态复核所得的新结论。
-
----
+- **CRUD 范围**：型号与定制方案的新建/重命名/删除，程序（变体目录）的新增/更新（含回收站备用副本）/重命名/删除，以及借用登记。复制、移动程序仍不在范围。
+- **型号是一等单元**：独立目录 + `型号配置.toml` + 机芯类型（枚举 `单3D`/`单2D`/`双2D`/`上3D下2D`），全部在软件内创建，不靠资源管理器。删除型号/方案 = 其下程序送系统回收站，可撤销。
+- **借用（共享）按「型号 → 型号、每程序类型一条」**：两种模式 `static`（固定用这个程序）/ `follow_asset`（跟随来源程序的后续更新）。UI 一律用「借用」等大白话，禁止出现 TOML、引用、共享/共用、配置键、展示层的「平台」等术语。
+- **归属厂商**：`VENDORS` 预置 `摩众`/`国瑞`/`亿微`/`明锐`，名单在设置里可添加，不写死在代码里。
+- **写操作交互**：立即生效 + 提示条撤销；删除前反查「谁在用」并二次确认，有借用时必须勾选；更新程序放入新文件后才询问旧程序去向（回收站 / `旧版本/` 备用副本）。
 
 ## 准入结论
 
-### 🟡 Conditional Go（仅立项 / 只读准备）
+### 🟡 Conditional Go（gate 已关闭 2/4，仍不允许真实目录写入）
 
-**可以立 CRUD TASK，也可以先推进公共边界收口；但当前对“新增 CRUD 写入口”仍是 No-Go。** 文末 5 项是完整 CRUD 首版的准入 gate（R6e 已移出；R5 已实现、待 Windows 人工验证），以那张表为准。
-
-更细地说：任何子任务要开始改真实程序目录，至少先完成公共边界 R1/R10、R3、R5；重命名/删除再叠加 R8，新增/复制/重命名再叠加 R6d。完整增删改首版发布前，5 项必须全部关闭。
+**可以立正式 CRUD TASK；但对「新增 CRUD 写入口」仍要求先关闭 R3、R8。** 现有元数据写入口（设为默认、共享登记/取消登记）已被统一门闩和路径守卫覆盖，这是相对 2026-07-28 初稿的主要进展。
 
 理由摘要：
 
-- **底子比预期好**：`型号配置.toml` 写盘已经是「原子写 + 全量合并保留未知键」（`config_io.atomic_write_text` + `model_config._merge_write_model_config`），型号已有稳定 `model_id`（B0），共享引用解析有完整的工作区越界与 id 校验双保险。这三块是 CRUD 最容易翻车的地方，而它们已经收口了。注意：`platform_config.save_platform_config()` 按“应用托管文件”契约整体重写，并不承诺保留未知键，不能把 `model_config` 的合并语义泛化到所有 TOML。
-- **阻断点集中在索引层**：`assets` 已有全量替换 `save_assets()` 和面向对账的逐行删除 `delete_missing_assets()`，但没有 CRUD 所需的定点 upsert / replace / delete / 子树重建 API，也没有路径变化时同步 `hidden_items` 的专用事务边界。这是 R3。
-- **工作区边界有一处真实分叉**：`DEFAULT_ROOT` 为空但缓存有旧根时，UI 会静默沿用旧根而设置页显示「未配置」。这是 R1。
-- **删除类操作缺少统一的安全底座**：没有「路径必须在工作区内」的统一守卫函数（`shared_module_service` 内有一份局部实现，未复用）。这是 R5。
-- **归档功能整体取消**：CRUD 首期继续平铺显示所有版本，不移动任何文件。未来若版本数量导致主视图拥挤，再由 R6c 折叠展示解决（R6c 暂缓，不阻断 CRUD）。取消归档把原 P1 阻断项整个消解，也消除了 schema v4 的唯一字段需求。
+- **写入口已收口（有一处缺口）**：R5 路径守卫（`core/path_guard.py`）+ R1/R10 写入门闩（`ui_common/workbench_helpers.write_gate_check` + `ui_qt/workbench_window._write_gate`）已实现并经 Windows 实机验证；既有交互式 TOML 写入口均已接入，唯一例外是 `ensure_model_ids` 的自动写入（详见「已关闭项」的覆盖缺口）。
+- **TOML 写语义成熟**：`model_config._merge_write_model_config()` 读全量 dict → 局部 mutate → 原子写回且解析失败拒绝当空 dict 覆盖；`atomic_write_text()` 同目录临时文件 + `fsync` + `os.replace`。注意 `platform_config.save_platform_config()` 按「应用托管文件」契约整体重写、不承诺保留未知键，不能把 `model_config` 的合并语义泛化到所有 TOML。
+- **阻断点仍在索引层与引用层**：`assets` 仍只有全量替换 `save_assets()` 和对账式 `delete_missing_assets()`，没有定点 upsert / replace / delete / 子树重建 API（R3）；文件操作会打断 TOML 引用且无写前反查（R8）。
+- **原型扩大了 CRUD 面**：型号/方案成为可新建、删除的一等单元，「更新程序」会产生 `旧版本/` 备用副本与默认/借用迁移问题——这些都落在 R3/R8 的能力范围内，但具体动作语义要在正式 TASK 中按原型逐条定稿。
 
-**不是 No-Go 的原因**：以上缺口都是可加固的，不是架构性错误。领域模型（通用/定制/共享）本身对 CRUD 是自洽的，不需要推倒重来。
-
----
-
-## 1. 工作区与根目录语义
-
-### 现状（已确认）
-
-`save_assets()` 的单工作区语义是**正确且经验证的**。实测换根扫描：
-
-```text
-scan A → count=1, meta=[{root_dir: D:/RootA}], hidden={D:/RootA/a1}
-scan B → count=1, meta=[{root_dir: D:/RootB}], hidden={}   ← 旧根 hidden 被 prune
-active_workspace_root() → D:/RootB
-```
-
-`assets` 整表替换、`scan_meta` 只留一行、`prune_missing_hidden_items` 清掉悬空隐藏项——三者一致，无残留。`active_workspace_root()` 提供最近一次扫描根的唯一来源（只代表上次扫描根，不代表当前配置意图，详见 R1）。
-
-### R1（P1·阻断）：配置根为空时恢复旧缓存，导致界面工作区与配置状态不一致  `complexity: medium`
-
-**复杂度理由：** 涉及 Qt 工作区状态与所有既有/未来写入口的统一禁用条件，并需补 UI 契约测试；不动 schema。
-**文件：** `src/fwasset/ui_qt/workbench_window.py::_handle_scan_result`、`QtWorkbenchWindow._open_configuration`、`main`
-
-```python
-if root_dir and os.path.normcase(previous_root) != os.path.normcase(root_dir):
-    QTimer.singleShot(0, lambda: self.workbench._auto_scan(root_dir))
-```
-
-`previous_root` 为空（首次配置 / 用户此前跳过向导）时，`"" != root_dir` 成立，看似会扫描——但真正的问题在另一条路径：**开发模式下 `main()` 的向导只在 `sys.frozen` 时弹出**（`workbench_window.py:1106`），而 `__init__` 无条件调用 `_load_cached_assets()`（`:164`）。若本机 `config.toml` 未配 `root_dir` 但 `.runtime/fwasset.db` 有上一工作区的缓存，启动后 `_handle_scan_result` 会走 `:458-466` 的 `scan_meta` 兜底，把 `self.root_dir` 恢复成**缓存里的旧根**，而 `DEFAULT_ROOT` 仍为空。
-
-此时 UI 显示的是旧根的资产树，但「设置」里显示「未配置」。更重要的是，现状已有“设为默认”和共享登记/取消登记等 TOML 写入口，它们没有统一门闩；因此这不只是未来 CRUD 的假设风险，**当前版本就可能在配置为空时修改缓存旧根中的元数据文件**。新增 CRUD 后影响会进一步扩大到真实程序目录。
-
-**建议**：明确三层权威来源，各司其职：
-
-- **配置文件 `root_dir`**：写操作权威来源。任何文件写操作以此为准，不得以 `scan_meta` 替代——`active_workspace_root()` 来自 SQLite 的 `scan_meta`，只能代表最近一次扫描根，不代表用户当前的配置意图。
-- **`scan_meta`（`active_workspace_root()`）**：缓存恢复来源。仅用于启动时恢复上次浏览状态，不作为写操作的权威来源。
-- **配置为空时**：允许只读浏览缓存内容，但禁止所有写操作（包括现有“设为默认”、共享登记/取消登记，以及未来 CRUD），只允许浏览 + 前往设置。
-
-**未覆盖的中间态**：配置非空但与 `scan_meta` 不一致——用户在设置里改了根目录，但界面尚未重新读取。此时界面显示旧根资产，配置权威已指向新根；若对旧资产执行写操作，目标路径不属于当前配置根，等同于越界写入。
-
-**CRUD 写入口三检查**（缺一不可，详见 R10 门闩）：
-
-```python
-configured_root = normalize(DEFAULT_ROOT)           # Path.resolve() + normcase
-scanned_root    = normalize(active_workspace_root())
-
-if not configured_root:
-    # 禁止写入，提示「请先在设置中配置程序文件夹」
-
-if scanned_root != configured_root:
-    # 禁止写入，提示「配置已变更，请先重新读取程序文件夹」
-
-if not is_under_workspace(target_path, configured_root):
-    # 禁止写入，路径越界
-```
-
-- **根目录一致性检查**：解决「改了配置但还没重新读取」中间态；
-- **路径守卫**：解决旧选中项、异步回调、共享来源或外部路径；
-- **新增 / 复制操作**还需对**目标写入路径**执行第三条检查，不能只检查当前选中资产路径；
-- 所有路径比较必须用 `Path.resolve()` + `os.path.normcase()`，否则相对路径、大小写差异或符号链接别名会造成误判。
-
-### R2（P3·降级）：切根后未显式重置选中项 —— UX/防御性清理，**非写入安全问题**  `complexity: medium`
-
-**复杂度理由：** 虽然改动集中在既有 `_auto_scan` / 刷新路径，但会改变 Qt 选择与筛选状态并需 UI 回归；无 core/schema 变化。
-**文件：** `src/fwasset/ui_qt/workbench_window.py:473-479`、`:686-716`、`:719-724`
-
-> **2026-07-29 更正**：本条初稿定为 P2 并声称「切根后操作面板仍持有旧资产 dict，会让危险按钮指向已不属于当前工作区的路径」。
-> **该判断不成立，已降级为 P3。** 感谢复核指出。
-
-#### 更正依据（已逐条走查）
-
-1. **面板确实每次都被销毁**。`_on_grid_selection_changed(None)`（`:719-724`）开头无条件拆除并 `deleteLater()` 现有 `active_operation_panel`：
-
-```python
-if self.active_operation_panel is not None:
-    self.ops_layout.removeWidget(self.active_operation_panel)
-    self.active_operation_panel.deleteLater()
-    self.active_operation_panel = None
-```
-
-2. **`_refresh_main_grid` 的两条正常出口都会调用它**：方案树分支 `:712`、其余分支 `:716`。
-
-3. **切根必然走到刷新**。实测切根前后型号列表：
-
-```text
-旧根 models = ['A']      新根 models = ['B空父']
-判断 current='A' not in ['B空父'] → True
-→ 走 _on_model_changed(new_models[0])
-→ 该方法设 node_type='all' 后调用 _refresh_main_grid()
-→ model_name / node_type 均非空，不触发早返回 → 面板被清理
-```
-
-4. **`load_all_models()` 几乎不会返回空**——实测即使新根是空目录或无可识别资产的父目录，也会回退到根目录名（`['B空父']`），所以 `:473` 的 `if models:` 这条「什么都不做」的路径在实践中难以命中。
-
-**结论**：旧资产 dict 不会残留在操作面板里。原描述的写入安全风险**不存在**。
-
-#### 仍然值得做的部分（P3）
-
-保留 `current_selection`（`model_name` / `node_type` / `scheme_name` / `common_type`）在切根后不重置，会造成**筛选体验不佳**——例如切根后仍带着旧根的 `common_type` 语义。这是 UX 与防御性清理，不是安全项。
-
-另注意一处**真实但低危**的早返回：`_refresh_main_grid:691-694`，当 `model_name` 或 `node_type` 为空时直接 `return`，**不会**走到 `_on_grid_selection_changed(None)`，此时面板不被清理。但如上所述，切根路径会把 `node_type` 设为 `"all"`，正常流程进不来；它更像是初始态的兜底分支。若要彻底防御，可把清理提到函数开头。
-
-**建议**：切根时显式重置 `current_selection` + 清 grid 选中。**从 CRUD 前置条件中移除**，可随手做或延后。
-
-> **对 R10 的影响**：R10「写入口门闩」里那条「当前选中资产的 `path` 不在当前工作区内」的守卫**仍然要做**——它防的是其它路径（如共享引用指向外部型号、异步任务回调期间切根），不依赖本条的错误前提。
-
-### 结论
-
-| 问题 | 状态 |
-| --- | --- |
-| 缓存/scan_meta/UI root 是否可能分叉 | ⚠️ 可能（R1） |
-| 无 config + 有旧缓存时的行为 | ⚠️ 静默使用旧根，需禁用写 |
-| 切根是否安全重置 | ✅ 操作面板每次刷新必被销毁，无旧资产残留；仅 `current_selection` 未重置（R2，P3·UX） |
-| `save_assets` 单工作区语义 | ✅ 正确，实测通过 |
+**不是 No-Go 的原因**：缺口都是可加固的，不是架构性错误。领域模型（通用/定制/共享）对 CRUD 自洽，不需要推倒重来；原型也未推翻「目录树 + TOML 是真源、SQLite 是搜索缓存」的结构派生原则。
 
 ---
 
-## 2. SQLite 是否能承接行级 CRUD
+## 已关闭项（现状摘要）
+
+### R5 ✅ 统一工作区路径守卫（TASK-20260803，Windows 实机验证通过）
+
+`core/path_guard.py`（67 行）：`PathGuardError` + `assert_within_workspace(path, workspace_root) -> Path`。契约：空根拒绝、必须绝对路径、resolve 前显式拒绝 `..`、resolve 后 `os.path.normcase` + 统一正斜杠比较（先 normcase 再转斜杠——初版顺序在 Windows 上导致误拒，已修并补回归测试）、允许目标等于工作区根。已接入全部写入口：`set_shared_module`（源资产 + 目标根）、`clear_shared_module`、`set_default_variant`、`set_module_default_for_model`；`shared_module_resolver` 的读端词法检查委托守卫。测试见 `tests/test_path_guard.py`（100% 覆盖）。
+
+### R1/R10 ✅ 统一写入门闩（TASK-20260806-r1-r10-write-gate）
+
+- 纯函数 `ui_common/workbench_helpers.write_gate_check(configured_root, scanned_root, target_path) -> ServiceResult`，三检查依次：配置根为空 → `not_configured`；已读工作区根 ≠ 配置根 → `root_changed`；路径守卫拒绝 → `out_of_workspace`。所有路径比较经 `Path.resolve()` + `os.path.normcase`。
+- UI 包装 `ui_qt/workbench_window._write_gate()`（`:852-868`）叠加任务态检查：扫描中（`scan_state_model.is_scanning`）与烧录任务中（`_busy`）一律禁写。
+- 三层权威来源已落实：配置文件 `root_dir` 是写操作权威；`scan_meta`（`active_workspace_root()`）仅作缓存恢复；配置为空或根不一致时只读浏览 + 前往设置。
+- **⚠️ 已知覆盖缺口（2026-09-01 codex 复核发现）**：`core/services/model_id_service.ensure_model_ids()` → `save_model_id()` 会为缺 id 的型号根直接写 `型号配置.toml`（`model_id_service.py:60-64`），未接门闩也未接守卫；它由工作台 `_load_model_ids` / `ensure_model_id` 自动触发（`scheme_workbench_model.py:251,275`），且 scan_meta 兜底恢复路径（`workbench_window.py:463-469`）也会走到。该自动写入须在正式 CRUD 前接入 #1/#2，或改为受控的显式迁移动作。
+
+---
+
+## 未关闭 gate
 
 ### R3（P1·阻断）：`assets` 以 `path` 为主键且缺少 CRUD 定点写接口  `complexity: high`
 
-**复杂度理由：** 新增一组写 API + 保留工作区上下文的局部扫描/对账能力 + SQLite 事务与文件/索引失败恢复设计；跨 core 与 Qt 刷新路径，需人工回归；当前结论不要求 schema 迁移。
-**文件：** `src/fwasset/core/asset_index.py:75-98`（schema）、`:158-203`（`save_assets`）
+**文件：** `src/fwasset/core/asset_index.py:75-98`（schema v3）、`:184-228`（`save_assets`）、`:308-323`（`delete_missing_assets`）
 
-当前 `asset_index` 公开 API 全量清单（实测）：
+当前公开函数列表（`705fe60` 实测；另有公开常量/类型 `AssetIndexError`、`SCHEMA_VERSION`、`HiddenItemType`）：
 
 ```text
-active_workspace_root  count_assets  delete_missing_assets  hide_item
-init_asset_index  load_assets  load_hidden_items  load_scan_meta
-prune_missing_hidden_items  query_assets  save_assets  schema_version  unhide_item
+active_workspace_root  connect_asset_index  count_assets  default_index_path
+delete_missing_assets  hide_item  init_asset_index  load_assets  load_hidden_items
+load_scan_meta  prune_missing_hidden_items  query_assets  save_assets  schema_version
+unhide_item
 ```
 
-其中 `delete_missing_assets(existing_paths)` 会逐行删除不在保留集合中的资产，因此原稿所称“没有任何行级写 / 唯一写路径是 `save_assets`”并不准确。但它是**全库对账式删除**，需要先枚举完整保留集合，并不能替代 CRUD 所需的 `upsert_asset` / `replace_asset` / `delete_asset` / 子树重建接口；当前仍然没有定点插入、替换或路径迁移能力。`save_assets` 则仍是 `DELETE FROM assets` + `executemany` 的全量冷路径。
+`delete_missing_assets(existing_paths)` 是全库对账式删除（keep 集合之外全删），不能替代 CRUD 所需的定点写；`save_assets` 仍是 `DELETE FROM assets` + `executemany` 的全量冷路径。`upsert_asset` / `replace_asset` / `delete_asset` / `bulk_reindex_subtree` 均不存在。
 
 后果：
 
-1. **重命名/移动缺少可直接复用的 CRUD 表达**。现有 `delete_missing_assets` 只能做全库保留集对账，无法定点插入/替换受影响行；而重命名/移动会连带改变多个**从路径推导**的字段（实测见下），需要「删旧行 + 插入重扫生成的完整新行 + 同步 `hidden_items`」在**同一 SQLite 事务**内完成。
-2. **`hidden_items` 也以 `path` 为键**，移动资产会让隐藏状态静默失效（`prune_missing_hidden_items` 会当作悬空项删掉）。
-3. **没有文件系统动作与索引提交之间的一致性编排**。`save_assets` 内部虽在单个 SQLite 事务里，但 SQLite 不可能把目录移动/删除纳入同一事务。CRUD 需要显式补上“文件成功 → 提交索引事务；失败/索引提交失败 → 按磁盘真相重扫受影响子树”的恢复策略。
+1. **重命名/更新/删除缺少可直接复用的 CRUD 表达**。原型中的「更新程序」（换文件夹）与「重命名」会连带改变多个从路径推导的字段，需要「删旧行 + 插入重扫生成的完整新行 + 同步 `hidden_items`」在同一 SQLite 事务内完成。
+2. **`hidden_items` 以 `path` 为键**，路径变化会让隐藏状态静默失效（`prune_missing_hidden_items` 当作悬空项删掉）。
+3. **没有文件系统动作与索引提交之间的一致性编排**。SQLite 事务包不住文件系统操作；必须显式实现「文件成功 → 提交索引事务；任一步失败 → 按磁盘真相重扫受影响子树」的恢复策略。
 
 #### 建议方案（供 TASK 立项时定夺）
 
-**不建议引入 UUID 型 asset ID。** 理由：真相源是目录树 + TOML，UUID 必须落盘到某个 TOML 才能跨扫描存活，这会给每个变体目录塞一个配置文件，成本高于收益。
-
-**建议**：保留 `path` 主键，但补齐行级写 API，并把「移动」显式建模为一等操作：
+**不引入 UUID 型 asset ID**（真相源是目录树 + TOML，UUID 必须落盘才能跨扫描存活，成本高于收益）。保留 `path` 主键，补齐行级写 API：
 
 | 新接口 | 语义 |
 | --- | --- |
 | `upsert_asset(asset)` | 新增/覆盖单行（新建、编辑后重扫单目录） |
-| `replace_asset(old_path, new_asset)` | 单事务内：按 `old_path` 删旧行 → 写入**重新扫描生成的完整** `new_asset` → 同步 `hidden_items` 旧路径。**不是只 UPDATE path** |
+| `replace_asset(old_path, new_asset)` | 单事务内：按 `old_path` 删旧行 → 写入**重新扫描生成的完整** `new_asset` → 同步 `hidden_items` 旧路径。不是只 UPDATE path |
 | `delete_asset(path)` | 删单行 + 关联 hidden |
-| `bulk_reindex_subtree(workspace_root, subtree_root, assets)` | 某子树重扫后替换该子树的行（复制/移动后用）；必须同时保留“工作区根”和“遍历子树”两个参数，路径归属按 `Path.relative_to()` 等边界明确方式判断，不能用裸字符串 `startswith`，避免 `foo` 误命中 `foobar` |
+| `bulk_reindex_subtree(workspace_root, subtree_root, assets)` | 子树重扫后替换该子树的行；必须同时保留「工作区根」和「遍历子树」两个参数，路径归属用 `Path.relative_to()` 判断，不能用裸 `startswith` |
 
-现有 `scan_firmware_assets(root)` 不能直接承担上述局部重扫：它会把 `root` 同时当作上下文根与遍历根。实现时应新增类似 `scan_firmware_subtree(workspace_root, subtree_root)` 的入口，或先全根扫描再筛选受影响子树；不能直接调用 `scan_firmware_assets(new_variant_dir)` 并把结果写库。
+**⚠️ 路径变化时不能只更新 `path`**（2026-07-28 实测，见 git 历史）：同模块重命名会变 `path`/`directory_name`/`version`/`label`；跨归属移动会变 `category`/`platform`/`scheme_name`/`scheme_path`/`model_directory_path`。正确流程四步：① 动真实目录 → ② **保留工作区上下文的局部扫描**生成完整新 `FirmwareAsset` → ③ 事务内删旧行 + 插完整新行 → ④ 同事务同步 `hidden_items`。第 2 步必须复用扫描器推导，不得在 CRUD 里手写字段映射。
 
-若被重命名/移动的“变体目录”内部可能包含多个可识别资产，必须走子树接口，而不是假设一次操作只对应一行。子树移动时，`hidden_items` 中等于旧根或位于旧根之下的记录都要按相对路径重基，不能只迁移与单个资产路径完全相等的一条。
+**扫描器现状（`705fe60`）**：入口已扩为 `scan_firmware_assets(root, catalog_path=None, last_scan_at=None, cancel_event=None)`（`file_scan.py:172-177`）——新增了扫描器级的增量跳过（`last_scan_at`，仅扫描器内跳过旧目录，`scan_service` 目前并未传该参数、结果仍整库覆盖）与取消（`cancel_event`）支持，但 `root` 仍是唯一遍历起点兼工作区根，**仍无保留上下文的局部子树扫描入口**。R3 实现时应新增 `scan_firmware_subtree(workspace_root, subtree_root)` 类入口，或先全根扫描再筛选受影响子树；不能直接 `scan_firmware_assets(new_variant_dir)` 写库。
 
-#### ⚠️ 关键：路径变化时**不能只更新 `path`**（实测）
-
-初稿把接口写成 `move_asset(old_path, new_path)` / 「单事务内 `UPDATE assets SET path=...`」，**这个表述有误导性**，会让实现者以为改一列就够。实测两种场景：
-
-**场景一：同模块内重命名**（`英文-通用` → `英文-通用_V2.1`）
-
-```text
-变化字段: path, directory_name, version, label
-  version:        ''                        → 'V2.1'
-  label:          'L36  -  [英文-通用]  蓝牙程序' → 'L36  V2.1  [英文-通用_V2.1]  蓝牙程序'
-```
-
-**场景二：跨归属移动**（`通用/蓝牙程序/英文-通用` → `定制/越南-娉娉/蓝牙程序/英文-通用`）
-
-```text
-变化字段: category, platform, scheme_name, scheme_path, model_directory_path
-  category:     'common'  → 'custom'
-  platform:     ''        → '标准单机芯3D'      ← 从方案配置.toml 读出
-  scheme_name:  ''        → '越南-娉娉'
-```
-
-**根因**：`FirmwareAsset` 的绝大多数字段是**从路径与磁盘内容推导**的（`_extract_model_version` 解析目录名/文件名得 `version`，`_infer_asset_context` 按路径段推 `category`/`platform`/`scheme_*`，`label` 由多个字段拼接）。路径一变，这些推导结果全部可能失效。
-
-**正确流程**（四步，缺一不可）：
-
-```text
-1. 移动/重命名真实目录（文件系统操作，不可回滚）
-2. 对新目录做**保留原工作区上下文的局部扫描** → 生成完整的新 `FirmwareAsset`（而非手工改几个字段）
-3. 数据库事务内：删旧行 + 插入完整新行
-4. 同一事务内同步 hidden_items 的旧路径 → 新路径
-```
-
-第 2 步是关键——**必须复用扫描器推导，不要在 CRUD 里手写字段映射**，否则 `version`/`label`/`category` 的推导逻辑会出现第二份实现，与 `file_scan` 漂移。
-
-**与「删行插行」的区别**：初稿担心的「删旧行插新行会丢失行上附加状态」在**当前 v3 schema 下不成立**——`assets` 表所有列都是从磁盘推导的，没有任何仅存于数据库的状态。真正需要显式迁移的只有 `hidden_items`（它是纯数据库状态），所以第 4 步必须在同一事务里做。
-
-> 若将来真的引入了「扫描无法推导」的列（见 R4），那时才需要在替换前把这些列读出来、写回新行——但那也同时意味着必须升 schema。当前不存在这种列。
-
-`save_assets()` 保留为**冷路径**（首次导入 / 强制对账），职责与行级写分开——这一点模块顶部注释（`:33-34`）已经预告过，方向一致。
-
-**一致性策略建议**：**先动文件，再动库，失败则重扫子树**。理由是文件系统操作不可回滚（尤其跨卷移动），而库可以从磁盘重建。反过来（先库后文件）会在文件失败时留下一个指向不存在路径的行。配套需要一个 `reconcile_subtree(path)` 冷接口，兜住任何中途失败。
-
-### R4（P3·降级）：schema v4 **不是**行级 CRUD 的前提，改为按需触发  `complexity: medium`
-
-**复杂度理由：** 单文件 schema 迁移 + 迁移测试；一旦发布不可逆，故需在真正有新字段需求时才做。
-**文件：** `src/fwasset/core/asset_index.py:14`、`:75-98`、`:124-146`
-
-> **2026-07-29 更正**：本条初稿把「schema v4 一次性定稿」写进准入前置条件。**该判断过严，已降级为 P3 并移出 gate。** 感谢复核指出「当前把 v4 写成硬性前置会过早锁定数据模型」。
-
-#### 更正依据（实测）
-
-现有 v3 schema **无需任何迁移**即可支撑行级 CRUD。实测在单事务内改路径并同步 `hidden_items`：
-
-```text
-before: assets=['D:/R/a1']  hidden={'D:/R/a1': 'asset'}
-        UPDATE assets      SET path='D:/R/a2' WHERE path='D:/R/a1'
-        UPDATE hidden_items SET path='D:/R/a2' WHERE path='D:/R/a1'   （同一事务）
-after : assets=['D:/R/a2']  hidden={'D:/R/a2': 'asset'}
-schema_version 仍为 3 → 未迁移
-```
-
-> ⚠️ **上面这段实测只证明一件事：v3 schema 不阻碍行级写、不需要迁移。**
-> 它**不代表**「移动 = 只 UPDATE path」——实际实现必须按 R3 的四步流程走（删旧行 + 插入重扫生成的完整新行 + 同步 hidden），因为路径变化会连带改变 `version` / `label` / `category` / `scheme_*` 等推导字段。上面的 SQL 只是最小化的 schema 能力验证，**不是推荐的实现方式**。
-
-`path` 作为主键**不构成迁移理由**：无论是 `UPDATE` 还是「删行+插行」，v3 表结构都能承载。R3 建议的 `upsert_asset` / `replace_asset` / `delete_asset` / `bulk_reindex_subtree` **全部可在 v3 上实现**。
-
-#### 什么时候才真的需要 v4
-
-只有当确定要持久化**扫描无法从磁盘推导**的状态时才迁移。原本唯一的候选是归档标记 `archived_at`——**归档功能已整体取消**（见 R6b），该需求随之消失。
-
-其余候选（如 `source_kind`）目前都能从路径或 TOML 推导，按 R6b 确立的原则「状态必须能从磁盘推导，否则活不过一次全量扫描」，它们本来就不该进数据库。
-
-**结论**：CRUD 首版**大概率完全不需要 v4**。若将来确有需求，再一次性迁移；现有 v1→v2→v3 迁移链写法清晰可直接照搬。
-
-#### 仍然有效的一条
-
-`:143-146` 版本不匹配直接抛 `AssetIndexError` 要求重扫——这个行为在 CRUD 阶段要保留（重扫是安全的冷路径），但错误文案建议区分「版本旧需升级」与「库损坏」。这属于体验改进，不阻断。
-
----
-
-## 3. 文件系统操作安全
-
-### R5（P1·阻断）：缺少统一的工作区路径守卫  `complexity: medium`
-
-**复杂度理由：** 新增一个 core 级纯函数 + 全部写入口接入 + 越界用例测试；无 UI、无 schema。
-**文件：** 新建 `core/path_guard.py`；参考现有 `core/shared_module_service.py:32-44`、`core/shared_module_resolver.py:23-28`
-
-目前已有两份局部归属校验：
-
-- `services/shared_module_service._resolve_relative()`：先 `resolve()` 再转工作区相对路径，能拒绝最终落在工作区外的结果；原始 `.` / `..` 词法信息会在此过程中丢失
-- `shared_module_resolver._is_under_workspace()` + `resolve_shared_module()` 的段检查：`Path(rel).parts` 能保留并拒绝 `..`，但会归一掉显式 `.`；随后再拒绝解析后落在工作区外的结果
-
-两处都能阻止最终路径落到工作区外，但只服务共享引用，没有被抽成公共写入守卫，词法策略也不完全一致。更关键的是，现有“设为默认”、共享取消登记等目标写入路径并未统一经过工作区根校验。CRUD 的每一个写操作以及这些既有元数据写入口都需要同一份校验。
-
-**建议**：抽出 `assert_within_workspace(path, workspace_root) -> Path`。最低契约是：空配置根先拒绝；对尚未归一化的输入显式拒绝 `..`；`resolve()` 后确认目标仍在工作区内；Windows 比较统一经 `os.path.normcase`。是否拒绝无害的显式 `.` 可作为输入规范决定，但不要依赖 `Path.parts` 在构造后仍保留它。所有文件写操作强制走该守卫。
-
-> **2026-08-03 已完成（TASK-20260803-r5-path-guard）**：新建 `core/path_guard.py`（`PathGuardError` + `assert_within_workspace`，含空根拒绝、`..` 词法拒绝、绝对路径要求、normcase + 正斜杠归一比较，允许目标等于工作区根）。已接入全部写入口：`set_shared_module`（源资产 + 目标根）、`clear_shared_module`、`set_default_variant`、`set_module_default_for_model`；`shared_module_resolver._is_under_workspace` 委托守卫（读端词法双保险保留）；view model 的 `unregister_shared_module` / `set_default_variant` 传入 `workspace_root` 并在未绑定时返回 `invalid_args`。越界/边界用例见 `tests/test_path_guard.py` 与服务层 `out_of_workspace` 用例。
->
-> **2026-08-03 回归修复（Windows 实机验证发现）**：初版比较函数先 `as_posix()` 转正斜杠再 `normcase`，而 Windows 的 `os.path.normcase`（C 实现）会把 `/` 一并规范化为 `\`，导致前缀边界比较 `base + "/"` 永不匹配——Linux 上 normcase 是 no-op 故测试全绿，Windows 实机登记共享被误拒（`D:\按摩器程序\L36双机芯-上3D-下2D程序` 报"路径不在工作区内"）。已改为先 `normcase(str(p))` 再 `replace("\\", "/")` 统一斜杠，并补模拟 Windows normcase 的回归测试（`_fake_win_normcase`）。人工验证：Windows 实机登记共享成功。
-
-### R6（P2）：各 CRUD 动作的文件语义需在 TASK 中逐条定稿  `complexity: medium`
-
-**复杂度理由：** 纯设计定稿产物（写进 TASK），但决定后续多个子任务的实现边界。
-
-审查**不替 TASK 做产品决策**，但以下每一项必须在 CRUD TASK 立项时写死，否则实现会反复：
-
-| 操作 | 必须先定清楚 | 审查建议倾向 |
-| --- | --- | --- |
-| 新增 | 目录结构、命名规则、文件来源 | 新建变体目录必须落在 `通用/<模块>/` 或 `定制/<方案>/<模块>/` 下，不允许任意路径 |
-| 编辑 | 改展示元数据 / 文件名 / 目录位置 | CRUD 首版**只允许按 R6d 规则重命名变体目录**（= 改系列名或版本号）；不允许改固件文件名、不允许跨目录移动。独立的版本覆写（R6e）暂不提供，等 R6e 落地后再扩展编辑能力；重命名输出必须走统一命名函数 |
-| 复制为新版本 | 新旧文件、版本号、方案归属 | 同模块目录内复制为兄弟目录；目录名由 **R6d 规范**构造（系列名不变 + 新版本号），版本号由用户输入并预填「父版本 patch+1」 |
-| 移动 | 通用/定制/共享之间允许怎么移动 | **通用 ↔ 定制 的移动必须先禁止**，只允许同类内移动；跨类语义涉及回源与共享引用，风险最高 |
-| ~~归档~~ | — | ❌ **功能已取消**，不在任何版本计划内。需求（版本变多时主视图不拥挤）将由后续 R6c 折叠展示满足（暂缓实现，不阻断 CRUD） |
-| 删除 | 永久删除、二次确认、失败恢复 | **送系统回收站**（可逆，无新依赖）+ R8 引用反查二次确认；无回收站的卷需显式告警。见下方说明 |
-
-**⚠️ 删除语义**：由于归档功能取消，删除没有应用内软删兜底，须明确落点。
-
-> **2026-07-29 修订**：本条初稿建议「CRUD 首版不提供删除」。**该建议已改为 B（送系统回收站）**，理由见下——初稿的主要论据经实测不成立。
-
-| 选项 | 说明 | 评价 |
-| --- | --- | --- |
-| A. CRUD 首版不提供删除 | 只做增/改/复制，删除交给资源管理器 | ❌ **不再推荐**。见下方三条反驳 |
-| **B. 删除 → 系统回收站**（建议） | 走 Windows Shell API 送回收站 | ✅ **可逆**，用户可自行还原；且**无需新依赖**（实测见下） |
-| C. 永久删除 + 二次确认 | 直接 `rmtree` | ❌ 不做。固件是生产资产，误删无法恢复 |
-
-#### 为什么改推 B —— 对初稿建议 A 的三条反驳
-
-1. **「无需新依赖」的实测推翻了 A 的成本论据。** 初稿说 B「引入新依赖（`send2trash`）」，这不成立。Windows 自带 `shell32.SHFileOperationW` + `FOF_ALLOWUNDO` 即可送回收站，纯 `ctypes` 调用，零新增依赖。实测：
-
-```text
-创建: True
-SHFileOperationW rc = 0 (0 = 成功)
-删除后仍存在: False        ← 目录已进回收站，可从回收站还原
-```
-
-既然 B 几乎没有额外成本，A 的「省事」优势消失。
-
-2. **A 并不真正降低风险，只是把风险转移给资源管理器。** 用户仍然要删，只是改用资源管理器删——而资源管理器**不知道 R8 的 TOML 引用关系**，删掉一个被 `平台配置.toml` 引用为默认、或被其它型号 `shared_modules` 引用的变体时，**不会有任何警告**。反倒是应用内删除能跑引用反查并弹确认。**A 让最危险的那次删除发生在最没有防护的地方。**
-
-3. **A 会让 CRUD 显得残缺，诱发绕过。** 一个能增能改不能删的工具，用户会习惯性切回资源管理器操作——而一旦养成「在软件外改目录」的习惯，索引不一致风险会上升，这与 CRUD 的初衷相悖。
-
-#### B 的实施要点
-
-- 用 `SHFileOperationW` + `FOF_ALLOWUNDO` + **`FOF_NOCONFIRMATION`**；由**应用统一负责确认**，关闭 Windows 系统重复确认弹窗，避免双重弹窗。调用实现还必须满足 Shell API 的双 NUL 结尾路径列表契约。
-- **删除前必须跑 R8 引用反查**，确认流程由应用侧统一处理：
-  - **命中引用**：应用弹出确认框，展示「目标路径 + 受影响的引用方（型号 / 模块名）+ 不可恢复风险说明」，用户确认后再调 `SHFileOperationW`。
-  - **无引用命中**：应用弹标准删除确认（展示目标路径），用户确认后调 `SHFileOperationW`。
-  - 两种情况均在**应用侧完成确认**，不依赖系统弹窗，因此必须加 `FOF_NOCONFIRMATION`。这是删除入口存在的最大价值。
-- **降级处理**：网络盘 / 某些卷无回收站时可能退化为永久删除。必须在调用前探测目标卷是否支持回收站并走更强确认；仅捕获 `SHFileOperationW` 返回码不充分，因为 `rc=0` 只表示操作成功，不能证明目标确实进入回收站。不能在 `FOF_NOCONFIRMATION` 下静默永久删。
-- 删除后走 R3 的 `delete_asset(path)` 同步索引。
-
-### R6b（已关闭·不再适用）：物理归档  `complexity: n/a`
-
-> **2026-07-29 决策：归档功能整体取消，不在任何版本计划内。**
-> 原因不是「难做所以延后」，而是**不需要移动文件来解决展示拥挤**——CRUD 首期继续平铺显示版本；
-> 未来版本数量增加后，再由 R6c 的折叠展示解决，不需要物理归档。
->
-> 本条原分析（物理归档三种放置各自的失败模式）已删除，不再保留为待决项。
-> 唯一仍有价值的副产物已独立记录在下方「扫描器排除规则」备注中。
-
-**扫描器排除规则备注**（与归档无关，但值得留档）：
-代码中有**两个同名的 `_is_excluded_dir`**，容易引错：
-
-| 函数 | 匹配对象 | 关键词来源 |
-| --- | --- | --- |
-| `file_scan._is_excluded_dir(dirpath)`（`:48`，**扫描器实际使用**） | **整个路径**字符串 | `settings.SCAN_EXCLUDE_DIR_KEYWORDS` = `["CH341SER","接线图","旧","新建文件夹","照片"]` |
-| `scheme_config._is_excluded_dir(name)`（`:91`） | **单个目录名** | 硬编码 `backup`/`-back`/`旧`/`temp`/`tmp` |
-
-实测：`backup`、`temp` 在**扫描器侧根本不被排除**（只有 `scheme_config` 侧排除，那仅用于方案发现与共享变体枚举）。
-未来任何「按目录名排除/特殊处理」的需求都要认准第一个函数。
-
-### R6c（P2·非阻断）：历史版本折叠展示  `complexity: medium`
-
-**复杂度理由：** 需引入 `ProgramLine` 分组层 + 改造 view model 构建逻辑 + 树控件渲染适配；不动文件、不动 schema、不动扫描器。工作量集中在 UI 数据结构重构。
-**文件：** `ui_common/view_models/scheme_workbench_model.py:109-115`、`:1139-1174`；`ui_qt/data_grid.py`
-
-**决策**：旧版本**继续留在原位置**，可一键烧录；日常视图默认只展示当前版本，历史版本折叠。
-这是「版本变多时主视图不拥挤」的**后续展示方案**——归档功能已整体取消（见 R6b），CRUD 首期暂不实现折叠。
-
-```text
-蓝牙程序
-  V2.3  通用默认              ← 当前展示
-  + 4 个历史版本  [展开]      ← 展开后见 V2.1 / V1.9 ...，仍可直接烧录
-```
-
-**为什么纯展示就够**：需求本质是「主视图别挤」，不是「文件要分开放」。折叠不动文件 → 零文件系统风险、扫描器/schema 都不用改、TOML 引用不打断、烧录路径不变、也没有「归档后要先恢复才能管理」的语义负担。
-
-#### 实施要点
-
-> **⚠️ 暂缓实现，保留为后续设计参考。** R6c 不作为当前 CRUD gate 的实施内容，可在 CRUD 主线完成后独立做。
-
-**注意：正确的目标数据结构不是简单地给 `ModuleRow` 加 `current/history`**，而应是：
-
-```text
-ModuleRow
-  → ProgramLine[]                    # 按「程序系列」分组（如「中文-通用」「英文-通用」各一条）
-      → current: ModuleVariant       # 当前/默认展示版本
-      → history: list[ModuleVariant] # 折叠的历史版本
-```
-
-一个 `ModuleRow`（如「蓝牙程序」）可能同时含多个并行程序系列，不能只放一个 `current/history`——否则「英文-通用」会被当成「中文-通用」的历史版本误折叠。现有 `ModuleRow.variants` 是平铺结构，设计时需先引入 `ProgramLine` 分组层。
-
-以下排序与默认逻辑基于上述嵌套结构假设，供后续参考：
-
-1. **变体排序**：`variants` 按版本降序，最新在前。`sort_config._version_sort_value` 实测可靠——元组比较，`V2.10 > V2.3`、`V13 > V2` 均正确，空版本排最后不崩：
-
-```text
-'V2.3'   -> (0, (2,3), 'V2.3')      'V2.10'  -> (0, (2,10), 'V2.10')
-'V13.0'  -> (0, (13,0), 'V13.0')    ''       -> (1, (), '')
-```
-
-2. **`ProgramLine` 加折叠字段**：每条 `ProgramLine`（对应一个程序系列）含 `current: ModuleVariant` + `history: list[ModuleVariant]`。UI 默认只渲染各系列的 `current`，展开才渲染 `history`。`ModuleRow.variants` 需先按系列名重新分组为 `program_lines: list[ProgramLine]`，再在组内做版本折叠。
-
-3. **默认展示哪一个**——这是唯一需要定的产品语义，建议优先级：
-   **① 有 `★默认` 徽章的变体（`default_badge` 非空）→ ② 版本号最高 → ③ `modified_time` 最新**。
-   理由：平台默认是烧录员显式设过的意图，应当压过版本号大小。
-
-#### ⚠️ 一个必须先定的边界：什么算「同一模块的历史版本」
-
-实测发现版本号存在**并列**情况，这直接决定折叠会不会误伤：
-
-```text
-'V2.3'      -> (0, (2,3), 'V2.3')
-'V2.3_2'    -> (0, (2,3), 'V2.3_2')     ← 数字元组相同
-'V2.3-中文'  -> (0, (2,3), 'V2.3-中文')   ← 数字元组相同
-'V2.3-英文'  -> (0, (2,3), 'V2.3-英文')   ← 数字元组相同
-```
-
-**风险**：`蓝牙程序` 下的 `中文-通用` 和 `英文-通用` 是**并行的语言变体**，不是历史版本。若按版本号一律折叠，英文变体会被当成「历史版本」藏进折叠区——这是功能性回归，比版本多更糟。
-
-**建议**：折叠**只在同一变体系列内**进行，不跨变体名折叠。即先按变体名去掉版本号后的「系列名」分组（`中文-通用` / `英文-通用` 各成一组），组内才按版本折叠。
-
-> **R6d 落地后此风险消除**（对新建资产）：命名规范 `<系列名>_V<x.y.z>` 让系列名可被可靠反解，实测 `带披肩加热` / `不带披肩加热` 正确分为两行不折叠，`英文-通用` 的三个版本正确折叠为一行。见 R6d。
-> 对**历史**目录（37% 无版本号、命名无规律），系列名仍不可靠推导，**退化为不折叠**（保持全展开）比误折叠安全。
-
-这条也解释了为什么 R6c 定为 P2 而非 P0：它需要一点设计，不适合塞进 CRUD 主线赶工。
-
-### R6d（P1·阻断）：CRUD 写入必须强制统一的变体命名规范  `complexity: medium`
-
-**复杂度理由：** 一个 core 级纯函数（构造 + 解析 + 校验）+ 新增/复制/重命名入口接入 + 测试；无 schema、无扫描器改动。
-**文件：** 新建 `core/naming.py`；`core/settings.py:147-155`（现有解析正则）；CRUD 新增/复制 service
-
-#### 结论先行：这是**唯一**该做的「多版本」基础设施，`program_id` 映射不该做
-
-现状实测（用户本机索引 105 个资产）：
-
-```text
-同一(模块+归属+变体名)分组：105 个，其中含多版本的组：0 个
-去版本号后同系列且 >1 的组：0 个
-无版本号资产：39 / 105（37%）
-```
-
-**当前目录树里不存在「同一程序多版本」现象。**但这不是「不需要做」的理由——用户指出根因：**历史目录来自不同厂商，命名本就无统一逻辑**。所以正确的动作不是给历史混乱补映射，而是**让 CRUD 从此不再产出混乱**。
-
-| 方案 | 评价 |
-| --- | --- |
-| 给平铺旧目录补持久化 `program_id` 映射 | ❌ **不做**。要跨扫描存活必须落盘（每个变体目录塞 TOML，与 R3「不引入 UUID asset ID」同理由）；只存 SQLite 则全量扫描即失效（R6b 教训）。且需为 105 个既有目录**手工建立并长期维护**映射，目录一改名映射就烂——等于把真相源从「目录树」换成「映射表」，违反 CLAUDE.md 的结构派生原则。 |
-| **CRUD 写入强制命名规范** | ✅ **做**。只约束**新写入**，零历史迁移成本；版本关系直接由目录名表达，无需外部映射。 |
-
-关键洞察：**「复制为新版本」时父子关系是已知的**，用命名约定表达即可，不需要 ID 映射。让 CRUD 自己产出规整结构，比给历史平铺目录补映射便宜得多。
-
-#### 规范定义
-
-**变体目录名格式**：
-
-```text
-<系列名>_V<版本号>
-
-示例（两段）：  英文-通用_V2.1
-               越南-带中文_V2.3
-示例（三段）：  英文-通用_V1.0.0
-               越南-带中文_V2.3.0
-               希伯来语_V2.16.0
-```
-
-> **⚠️ 待确认产品规则**：两段（`V<major>.<minor>`）还是强制三段（`V<major>.<minor>.<patch>`）须作为独立产品规则确定，不能以示例直接代替规范。此前讨论中出现过 `V2.1`、`V2.3` 等两段版本；`_version_sort_value` 两段与三段均可正确排序，现有解析正则也同时支持。建议在 CRUD TASK 立项时明确选一种，写进 `core/naming.py` 的校验规则。
-
-- **系列名**：语言/功能标识，同一「程序线」内保持不变（`英文-通用`、`带披肩加热`）。这是区分**并行变体**的维度。
-- **版本后缀**：`_V` + 经 R6d 产品决策选定的数字段数（两段或三段）。这是区分**同一变体的迭代**的维度。
-- 两个维度正交——这正是历史命名缺失的东西。
-
-**实测：解析器能正确读回**（`guess_version_from_path` + `_version_sort_value`）：
-
-```text
-英文-通用_V1.0.0   → 'V1.0.0'   排序键 (0,(1,0,0))
-中文-通用_V2.10.0  → 'V2.10.0'  排序键 (0,(2,10,0))   ← V2.10 > V2.3 正确
-AYA-林娉娉_V7.4.9  → 'V7.4.9'   排序键 (0,(7,4,9))
-```
-
-无需改动 `SCAN_VERSION_PATTERNS`，现有正则已覆盖。
-
-**实测：系列名提取正确支撑 R6c 折叠**（规则 = 去掉结尾 `_V<x.y.z>`）：
-
-```text
-折叠  英文-通用      ['V1.0.0','V1.2.0','V2.10.0']   ← 同系列多版本，正确折叠
-单行  越南-带中文    ['V1.0.0']
-单行  越南-不带中文  ['V1.0.0']                      ← 并行变体，正确不折叠
-单行  带披肩加热     ['V1.0.0']
-单行  不带披肩加热   ['V1.0.0']
-```
-
-**这直接解决了 R6c 里标记的「误折叠」风险**：`带披肩加热` / `不带披肩加热` 系列名不同，不会被当成互为历史版本。R6c 的「系列名无法可靠推导则退化为不折叠」降级条款，在规范落地后对**新建**资产不再需要。
-
-#### 实施要点
-
-新建 `core/naming.py`，三个纯函数：
-
-| 函数 | 职责 |
-| --- | --- |
-| `build_variant_dir_name(series, version) -> str` | 构造规范目录名；CRUD 新增/复制/重命名**唯一**的命名出口 |
-| `parse_variant_dir_name(name) -> (series, version)` | 反解；R6c 折叠分组用 |
-| `validate_series_name(s) -> (ok, reason)` | 拒绝非法字符 `/\:*?"<>\|`、控制字符、结尾已含 `_V<数字>`（防双重版本后缀） |
-
-**校验必须复用 R5 的路径守卫**：构造出的目录名还要经 `assert_within_workspace` 才落盘。
-
-**UI 侧**：新增/复制/重命名对话框都把「系列名」和「版本号」拆成**两个输入框**，目录名由程序拼接、只读预览。不要让用户手打完整目录名——那等于把规范重新交给人工维护。版本号建议给三个数字框或带校验的单框，复制为新版本时预填「父版本 patch+1」。
-
-#### 边界与非目标
-
-- **不改历史目录**。规范只作用于 CRUD 新写入。历史资产保持原样，照常显示与烧录。
-  > 注：R6d 初稿写的「37% 无版本号」是**解析正则过严**所致，非数据缺失——放宽后 39/39 全部可解析，见 R6e。历史资产不需要靠改名来获得版本号。
-- **不做批量重命名工具**。历史命名来自不同厂商，语义只有人清楚，自动改名风险远大于收益。若将来要规整，应是人工逐个走 CRUD 的「编辑」入口。
-- **`firmware_catalog.toml` 的 `dir_keywords` 匹配不受影响**：`_match_catalog_type` 匹配的是路径中任一段含关键词，`英文-通用_V1.0.0` 仍在 `蓝牙程序/` 下，模块识别不变。
-
-### R6e（P3·非阻断）：版本号应「解析为主 + 可覆写」，而非纯解析或纯独立存储  `complexity: medium`
-
-> **2026-07-29 调整：本条已从 CRUD 准入 gate 移出，不作为阻断条件。**
-> - **R6e-a（放宽版本解析 + 人验）**：独立低风险准备工作，可在有实际解析问题时单独处理，无需等 CRUD。
-> - **可选覆写通道**：等实际出现无法解析或需要人工修正的资产后再做，暂不列入任何 gate。
->
-> R6d 的命名规范确保新建资产的版本号可被现有正则直接解析，大幅缩小 R6e 的适用场景。
-
-**复杂度理由：** 放宽解析正则（单文件）+ TOML 覆写字段 + 显示优先级；无 schema 破坏性变更，但影响所有资产的版本展示，需人验。
-**文件：** `core/settings.py:147-155`（`SCAN_VERSION_PATTERNS`）；`core/file_scan.py:81-86`；新增变体级 TOML 覆写
-
-#### 先纠正一个前提：不是「解析很难做到」，是正则太严
-
-用户直觉认为「人能一眼看出 `Vxx`，解析却做不到」。**实测表明：数据在，是正则漏了。**
-
-现有 `SCAN_VERSION_PATTERNS` 主模式为 `[Vv](\d+\.\d+(?:\.\d+)?(?:_\d+)?)` —— **强制要求至少一个小数点**。于是：
-
-```text
-怡捷-...-双向_V1.0.6.bin                      → 'V1.0.6'  ✅ 解析成功
-YJ_Bt_Eng_Massage_..._Pro_V15.mot            → ''        ❌ 单段 V15 被漏
-YJ_Bt_Pty_L36_Massage_..._Pro_V26.mot        → ''        ❌
-YJ_3DMain_..._MA82G5C64_V23_7-L50-241114.bin → ''        ❌
-```
-
-厂商大量使用**单段版本号**（`V15`/`V26`/`V60`/`V23`），而正则只认多段。
-
-**实测放宽效果**（39 个「无版本」资产）：
-
-| 正则 | 可解析 | 仍无 |
-| --- | --- | --- |
-| 现状（强制小数点） | 0 / 39 | 39 |
-| 放宽允许单段 `V\d+` | **34 / 39** | 5 |
-| 再允许版本号后紧跟括号 | **39 / 39** | **0** |
-
-最后 5 个失败的原因是版本号后紧跟括号注释：
-
-```text
-L36_蓝牙板(中文)_V9(改气囊6档)_R5F104BC.mot   → V9
-yijie_en_unix_v10(uart 1).bin              → v10
-yijie_cn_xiaojie_V05(uart 1).bin           → V05
-```
-
-加一个 `(?=[_\-\.\(（]|$)` 前瞻即可全部命中。
-
-**结论：37% 的「版本号缺失」不是数据问题，是解析问题，且修复成本极低。** 这推翻了「必须独立存储才能有版本号」的前提。
-
-#### 那到底该怎么存？——三方案对比
-
-用户提出的核心权衡是对的：**独立存储改起来方便，不影响程序文件命名**。但要区分两个不同的问题：
-
-- **存在哪里**（真相源）
-- **从哪里显示**（展示优先级）
-
-| 方案 | 优点 | 致命问题 |
-| --- | --- | --- |
-| **A. 纯文件名解析**（现状） | 无额外状态，永远与文件一致 | 改版本号 = 改文件名（动真实固件文件，风险高）；厂商命名不可控 |
-| **B. 纯独立存储** | 改起来方便，不动文件 | ❌ **与「目录树是真相源」冲突**。外部手动加了个新版本目录，软件里没有记录 → 显示无版本。且需为 105 个既有资产**逐个补录**，等同 R6d 里已否决的 `program_id` 映射 |
-| **C. 解析为主 + 可选覆写**（建议） | 兼得：默认零录入，需要时可改且不动固件文件 | 需定义覆写优先级与失效处理 |
-
-**建议 C**，理由与 R6b/R6d 一脉相承：**状态必须能从磁盘推导，覆写只是例外通道**。
-
-#### 方案 C 的具体设计
-
-**显示优先级**（三级回退）：
-
-```text
-① 变体目录内 版本配置.toml 的 version   ← 人工覆写，例外通道
-② 从文件名/目录名解析（放宽后的正则）      ← 默认路径，覆盖 100% 现有资产
-③ 空（排序时 _version_sort_value 返回 (1,(),'') 排最后，不崩）
-```
-
-**覆写落盘位置**：变体目录内一个小 TOML（如 `版本配置.toml`，仅 `version = "V2.3.0"`）。理由：
-
-- 跟着目录走——**移动/复制目录时覆写自然跟随**，不像数据库记录会因 path 变化失效（R3 的同一问题）。
-- 与既有 `平台配置.toml` / `方案配置.toml` / `型号配置.toml` 的模式一致，写入复用 `atomic_write_text` + 合并写（`model_config._merge_write_model_config` 的成熟做法）。
-- **不动固件文件本身**——这正是用户要的「改起来方便，不影响程序文件命名」。
-
-**关键约束**：覆写是**例外**，不是默认。UI 上不要在新增流程里强制填版本；只在「编辑」里提供「手动指定版本号」的可选项，并显示当前解析值作为默认。若人人都要手填，就退化成方案 B 了。
-
-#### ⚠️ 实测发现：覆写 TOML 会污染 `files[]` 并被复制到 U 盘
-
-实测在变体目录放入 `版本配置.toml` 后：
-
-```text
-资产 files = ['YJ_Bt_Eng_Pro_V15.mot', '版本配置.toml']    ← 混进程序文件列表
-```
-
-两处后果，**都必须处理**：
-
-1. **主表「程序文件」列**会显示 `版本配置.toml`，让烧录员误以为它是固件文件之一。
-2. **`usb_ops.copy_directory_to_usb`（`:80`）用 `shutil.copytree` 整目录复制**，会把 `版本配置.toml` 一起拷进 U 盘根目录的目标文件夹。虽然多数烧录器会忽略无关文件，但这是**把管理元数据带进产线介质**，语义上不该发生。
-
-**必须的配套改动**（任选其一，建议两个都做）：
-
-| 位置 | 改法 |
-| --- | --- |
-| `file_scan` 收集 `files` 时 | 过滤掉软件自管的配置文件名（`版本配置.toml` 等），不计入 `files[]` |
-| `usb_ops.copy_directory_to_usb` | 给 `copytree` 加 `ignore=shutil.ignore_patterns('*.toml')`，或显式排除已知管理文件 |
-
-这条也提醒：**任何「往固件目录里塞管理文件」的方案都要先过这两关**。既有的 `平台配置.toml` / `方案配置.toml` 不在变体目录内（在型号根 / 方案根），所以从未暴露这个问题——`版本配置.toml` 是第一个进入**变体目录**的管理文件。
-
-> 若不愿承担这两处改动，**替代方案**：把版本覆写写进**方案/型号级**已有的 TOML（如型号根 `型号配置.toml` 加 `[version_overrides]` 段，键为变体相对路径）。代价是移动目录时覆写不会自动跟随，需要 CRUD 移动逻辑同步维护——**与 R3 的 path 主键问题同构**。两者取舍建议在 CRUD TASK 立项时定。
-
-#### 与 R6d 的关系（重要）
-
-R6d 规定 CRUD **新建**目录名为 `<系列名>_V<选定版本格式>`，此时：
-
-- 解析路径（②）天然命中，**不需要**写覆写文件。
-- 覆写（①）只用于**历史资产**——厂商命名不规范、或解析结果不理想时的人工修正。
-
-两者不冲突：**R6d 管新写入的规范，R6e 管历史资产的兜底**。
-
-#### 实施要点
-
-1. **放宽 `SCAN_VERSION_PATTERNS`**：允许单段 `V\d+`，允许版本号后接括号。⚠️ 放宽正则会**改变现有 105 个资产的展示版本**（从空变成有值），属于现场数据语义变化，**必须人验一轮**确认解析结果符合烧录员预期——尤其确认没有把型号号（`R5F104BC`、`M82G5C64`）误当版本。
-
-   **时机**：这一步**不必等 CRUD**，可在准入前（现状版本）就做——它独立于 CRUD、成本低，且做完后能确知还剩多少资产真正需要人工覆写，为覆写 UI 提供真实依据。
-2. 顺序上**先放宽解析、人验通过**，再考虑覆写通道——很可能放宽后覆写的需求就很小了。
-3. 覆写 TOML 的读取要**容错**（缺失/损坏 → 回退解析，不抛），与 `load_shared_modules` 的只读容错风格一致。
-
-### R7（P2）：跨卷移动与 Windows 文件占用  `complexity: medium`
-
-**复杂度理由：** 需要真实环境验证 + 错误分支处理；实现量不大但人验成本高。
-
-`config_io.atomic_write_text` 用同目录临时文件再 `os.replace`，所以该 helper 的替换源与目标天然同卷；它本身不存在跨卷问题。未来 CRUD 若允许把固件目录移动到另一个卷，才会遇到：
-
-- 跨卷移动不是原子的，中途失败会留半个目录 → 必须先复制到目标、校验完整、再删源。
-- Windows 下目录被资源管理器/杀软占用时 `rmtree` 会失败 → 需要明确的错误码与「稍后重试」提示，不能裸抛。
-- 固件目录可能很大（含 `.rom`/`.pkg`），复制需要进度反馈，走现有 `_run_task` 线程模型。
-
----
-
-## 4. 领域规则与 TOML 边界
-
-### 现状（已确认，评价正面）
-
-这一层是当前**最经得起 CRUD 冲击**的部分：
-
-- `model_config._merge_write_model_config()`（`:177-197`）：读全量 dict → 局部 mutate → 整 dict 写回，且**解析失败时拒绝当空 dict 覆盖**（`:188-189`）。这正是 CRUD 需要的写语义。
-- `remove_shared_module()`（`:244-263`）：文件缺失时短路返回，不凭空创建空配置（注释标注为「审查 #1」的修复）。
-- `atomic_write_text()`：临时文件 + `fsync` + `os.replace`，无半写风险（同卷内）。
-- `slugify_model_id()`（`:68-89`）：已过滤 `/\:*?"<>|` 与控制字符。
+**一致性策略**：先动文件、再动库、失败则重扫子树（文件系统不可回滚，库可从磁盘重建）。配套 `reconcile_subtree(path)` 冷接口兜底。v3 schema 无需迁移即可承载上述全部接口（schema 升级仅在有扫描不可推导的持久化字段需求时按需触发）。
 
 ### R8（P1·阻断）：文件操作会使 TOML 引用失效，但无级联校验  `complexity: high`
 
-**复杂度理由：** 跨 `model_config` / `shared_module_resolver` / CRUD service 三层；需新增引用反查 + UI 确认流程。
-**文件：** `core/model_config.py:126-166`、`core/shared_module_resolver.py:49-129`、`core/platform_config.py`
+**文件：** `core/model_config.py:52-66`（`SharedModuleRef`）、`core/shared_module_resolver.py:118-209`、`core/platform_config.py`
 
-两类**当前变体操作直接涉及的** TOML 引用会被文件操作打断，现状没有写前反查：
+两类 TOML 引用会被文件操作打断，现状没有写前反查：
 
-1. **`平台配置.toml` 的 `[platform.defaults]`**：`module_dir → variant_name`。删除/重命名一个通用变体目录，会让该平台默认指向不存在的变体。后果：所有依赖回源的定制方案该模块变空。
-2. **`型号配置.toml` 的 `shared_modules`**：`source_relative_path` 指向另一型号的具体路径。移动/删除**源**型号的目录，会让所有引用它的型号解析成 `missing`。解析器**会优雅降级**（`resolver` 返回 `status="missing"` + `reason`），不会崩——但用户在源型号侧操作时**得不到任何警告**。
+1. **`平台配置.toml` 的 `[platform.defaults]`**：`module_dir → variant_name`。删除/重命名/更新一个通用变体目录会让平台默认指向不存在的变体，依赖回源的定制方案该模块变空。
+2. **`型号配置.toml` 的 `shared_modules`**：`source_relative_path` 指向另一型号的具体路径。移动/删除/更新源型号目录会让引用方解析成 `missing`。解析器会优雅降级（`status="missing"` + `reason`），但用户在源型号侧操作时得不到任何警告。
 
-另有一类未来扩展边界：`定制/方案配置.toml` 的 `platform` 会受“平台重命名”影响，但 R6 当前并未把平台重命名列入 CRUD 首版，因此它不是本轮变体 CRUD gate 的直接对象；若未来加入平台编辑，应单独补级联规则。
+当前 `SharedModuleRef.mode` 只有 `static` / `follow_default`（后者经显式或自动检测的 `source_platform` 跟随源型号的平台默认，`shared_module_resolver.py:181-209`）。**原型要求的 `follow_asset`（跟随指定程序）尚不存在**——正式落地需给来源程序一个跨重命名/更新的稳定标识并迁移语义（原型任务已标注此点），这会直接影响 R8 反查的实现方式。
 
 **建议**（CRUD 前置）：
 
-- 新增 `find_references_to(path, workspace_root) -> list[Reference]`：反查哪些 TOML 指向该路径（平台默认 + 跨型号共享引用）。实现必须区分 static 引用的具体变体路径与 follow_default 引用的模块目录，并正确处理目标与引用路径的祖先/后代关系。
-- **删除**前调用：命中则必须弹二次确认，列出受影响的型号与模块；允许确认后断链属于删除的显式产品语义。
-- **重命名/移动**前调用：命中时必须级联改写 `平台配置.toml` 的默认变体名及 static `shared_modules.source_relative_path`，或直接阻止操作；不能只警告后留下断链。所有相关 TOML 写入失败时按磁盘真相对账并报告未完成项。
-- 「复制为本型号私有」= 复制文件到本型号 + `clear_shared_module()` 解除引用。`clear_shared_module` 已存在且是幂等的（`shared_module_service.py:285-323`），可直接复用，**不需要新写**。
-
-### R9（P2）：`_默认` 目录名后缀与 `平台配置.toml` 的双轨在 CRUD 下会重新暴露  `complexity: low`
-
-**复杂度理由：** 一条实现约束 + 一条测试；主要是不做什么。
-
-CLAUDE.md 明确：默认变体**只由** `平台配置.toml` 定义，`_默认` 后缀是 legacy 显示、**永不作为写目标**。CRUD 的「重命名变体」必须遵守：**不得**因为用户改名带上/去掉 `_默认` 就改变默认归属。重命名后需同步更新 `平台配置.toml` 里指向旧名的 `defaults` 值（属于 R8 的级联范畴）。
+- 新增 `find_references_to(path, workspace_root) -> list[Reference]`：反查平台默认 + 跨型号共享（借用）引用。区分 static 引用的具体变体路径与 follow 类引用的模块/来源语义，正确处理祖先/后代路径关系。
+- **删除**前调用：命中则二次确认，列出受影响的型号与模块（原型规则：有借用时必须勾选确认）。
+- **重命名/更新**前调用：命中时级联改写平台默认变体名与引用路径，或阻止操作；不能只警告后留断链。TOML 写入失败时按磁盘真相对账并报告未完成项。
+- **原型扩面带来的新级联场景**（正式 TASK 定稿）：删除型号/方案 = 级联删除其下全部程序（逐个走反查）；「更新程序」改类型时原类型默认失效、借用来源失效的提示与迁移；新建型号 = 新建目录 + `型号配置.toml`（写入口同样接入门闩 + 守卫）。
+- 「复制为本型号私有」不在当前范围；`clear_shared_module()`（`shared_module_service.py:339-350`）已存在且幂等，将来可直接复用。
 
 ---
 
-## 5. Qt CRUD 交互入口
+## 原型与当前 core 的差异清单（正式 TASK 立项前逐项定稿）
 
-本节只定结构，不要求现在实现。
+原型交互已人工验证，但以下各点在 core 层尚无对应实现，立项时必须写死：
 
-### R10（P2）：写操作入口需要统一的禁用门闩  `complexity: medium`
-
-**复杂度理由：** 新增一个状态判定 + 接入所有写入口按钮；单文件为主但触点多。
-**文件：** `src/fwasset/ui_qt/workbench_window.py`
-
-现有 `_busy` 只互锁「扫描 ↔ 烧录任务」。CRUD 需要扩展为多态门闩，以下条件**任一**成立时禁用所有写入口：
-
-- `DEFAULT_ROOT` 未配置（R1：缓存恢复出旧根但 config 为空）
-- `active_workspace_root()` 与配置根不一致（R1 中间态：用户已改配置但尚未重新读取）→ 提示「请先重新读取程序文件夹」
-- 扫描进行中（`scan_state_model.cancel_event is not None`）
-- 烧录任务进行中（`_busy`）
-- 当前选中资产的 `path` 不在配置根之下（防陈旧选中、异步回调、共享来源外部路径）
-
-现有写入口（“设为默认”、共享登记/取消登记）也必须纳入同一门闩，不能只给未来 CRUD 按钮接入。
-
-**新增 / 复制操作额外检查**：目标写入路径也必须在配置根之下，不能只检查当前选中资产路径。
-
-所有路径比较须用 `Path.resolve()` + `os.path.normcase()`，详见 R1 三检查伪代码。
-
-### 建议的 UI 结构（供 TASK 参考）
-
-| 决策点 | 建议 |
-| --- | --- |
-| 新增程序入口 | 主表工具栏「新增」按钮 + 侧栏模块节点右键「在此新增变体」；后者能预填模块归属，更安全 |
-| 编辑入口 | 右键 → 对话框（不做行内编辑）。行内编辑对「改目录名 = 改真相源」这种高风险操作反馈太弱 |
-| 删除 | 送系统回收站（可逆）；删除前跑 R8 引用反查并二次确认（见 §3 删除语义） |
-| 需二次确认的操作 | 删除、移动、任何命中 R8 引用反查的操作。复制/新增不需要 |
-| 危险确认形态 | 列出**受影响的具体路径与引用方**，不要只写「确定吗」 |
-| 详情面板 | 复用右侧操作面板区域，新增一个「详情/编辑」panel，走现有 registry |
+| # | 差异点 | 现状 | 待定稿 |
+| --- | --- | --- | --- |
+| 1 | 借用 `follow_asset`（跟随指定程序） | `SharedModuleRef` 只有 `static`/`follow_default` | 来源程序的稳定标识与持久化方式；`follow_default` 存量数据的迁移 |
+| 2 | 机芯类型枚举（`单3D`/`单2D`/`双2D`/`上3D下2D`） | `platform` 是方案/平台 TOML 里的自由文本块 | 枚举与 `[[platform]]` 块的映射；多个平台块并存时默认写哪一块 |
+| 3 | 归属厂商名单（设置内可添加） | 生产源码无 vendor 配置或资产字段（`types.py`/schema 均无；原型 HTML 已有 `VENDORS` 演示逻辑） | 名单存放位置（`config.toml` 或独立 TOML）；程序资产上厂商字段的落盘与派生 |
+| 4 | 新建/删除型号、新建/删除方案 | 只有扫描发现；无型号/方案的创建、重命名、删除服务。`型号配置.toml` 可由 `ensure_model_ids()` 自动创建（见 R1/R10 覆盖缺口），型号目录本身仍由外部产生 | 目录与 TOML 的创建/删除事务语义；删除型号的级联范围 |
+| 5 | 更新程序 → `旧版本/` 备用副本 | 无此概念 | `旧版本/` 的落点（型号内还是变体内）；扫描器排除确认；`usb_ops.copy_directory_to_usb` 目前整目录 `copytree`（`usb_ops.py:83-93`，无 ignore），副本目录若在变体内会被拷进 U 盘 |
+| 6 | UI 术语（借用、程序文件、机芯类型…） | Qt 界面仍是「共享模块/登记共享来源」等旧术语 | 术语映射表，含右键菜单改造（原型：右键只保留上下文相关操作） |
 
 ---
 
-## 6. 测试与人验策略
+## 仍然有效的约束（非阻断）
 
-### 现状
-
-36 个测试文件，357 passed（`-m "not ui"`），coverage 89.56%。`core/` 覆盖良好，`ui_common/scheme_workbench_model.py` 85%。`ui_qt/*` 不计覆盖率（按 `pyproject.toml` 口径）。
-
-### R11（P2）：CRUD 需要新的测试分层约定  `complexity: medium`
-
-**复杂度理由：** 新增测试基础设施（临时目录夹具 + 对账断言）；不改产品代码。
-
-| 层次 | 覆盖内容 | 方式 |
-| --- | --- | --- |
-| **纯单测** | 路径守卫（R5）越界用例、引用反查（R8）、行级写 API（R3）的 SQL 语义 | 常规 pytest，`tmp_path` + 内存/临时 db |
-| **临时目录集成测** | 完整 CRUD 动作：建树 → 操作 → 断言文件系统 + 断言索引一致 | `tmp_path` 造完整 `通用/定制` 树；**必须同时断言磁盘与库**，只断言一侧是当前最大的测试盲区 |
-| **冻结 exe 人验** | 切根、首次配置、危险确认对话框、进度反馈 | 每个 CRUD 子 TASK 至少一轮；R1/R2 必须在 exe 上验 |
-| **真实 U 盘人验** | 仅当 CRUD 改动影响烧录源路径时 | CRUD 本身不碰 USB；重命名/移动会改变资产路径，需回归一次一键烧录。另 R6e 若采用变体目录内 `版本配置.toml`，必须验证它未被 `copytree` 带进 U 盘 |
-
-**关键新增约定**：每个 CRUD 集成测试必须有一条 **文件-索引一致性断言**（操作后 `query_assets()` 的 path 集合 == 磁盘实际扫描结果）。这直接对应你担心的「文件改了库没改 / 库改了文件没改」。
-
-### R12（已取消·不再适用）：外部手动改目录后的对账入口  `complexity: n/a`
-
-> **2026-08-03 决策：不单独做「软件外改目录」的对账 UI 与服务。**
->
-> 本系统是公司内部使用工具，用户在软件外用资源管理器改动目录属于用户操作责任；为此单独维护一套只读对账 UI（`reconcile_workspace()` + 「检查程序文件夹变化」按钮）收益有限，取消。
->
-> **保留的底线**：CRUD **自身**失败时仍必须有「按磁盘真相重扫受影响子树」的恢复能力——文件动作成功但写库失败时，索引与磁盘会不一致，必须能重扫兜底。该能力属于 R3 的 `bulk_reindex_subtree` / `reconcile_subtree(path)` 冷接口，不因本决策而取消。
+- **R9 `_默认` 后缀**：默认变体只由 `平台配置.toml` 定义，`_默认` 后缀是 legacy 显示、永不作为写目标。重命名不得因名字带上/去掉 `_默认` 改变默认归属；改名后同步更新 `defaults` 值（属 R8 级联）。
+- **版本规则**：版本号只对 `handcontrol_ui` 有业务意义，唯一来源是该目录内 `.rom` 文件名解析（`file_scan._extract_model_version` + `parse_rom_filename`，要求目录同时含 `.rom` 与 `.pkg`）。不得从 `.pkg` 文件名、目录名或独立 TOML 覆写；其他程序类型的版本不作为搜索/排序/分组/CRUD 字段。
+- **扫描器排除规则**：认准 `file_scan._is_excluded_dir(dirpath)`（匹配整个路径，关键词 `settings.SCAN_EXCLUDE_DIR_KEYWORDS = ["CH341SER","接线图","旧","新建文件夹","照片"]`，硬编码不再读用户配置）；`scheme_config._is_excluded_dir(name)` 只服务方案发现。原型要求的排除 `旧版本/` 目前靠「旧」关键词子串匹配覆盖——若未来收紧关键词需显式验证。
+- **删除落盘**：删除语义 = 系统回收站。Windows 自带 `shell32.SHFileOperationW` + `FOF_ALLOWUNDO` 经 `ctypes` 调用可行且零新依赖（先前本机实测，见 git 历史验证记录）；应用侧统一确认需加 `FOF_NOCONFIRMATION`，调用前探测目标卷是否支持回收站（`rc=0` 不保证进回收站，网络盘可能退化永久删）。
+- **测试分层**（原 R11 收敛）：纯单测（守卫/反查/行级写 SQL）+ `tmp_path` 完整树集成测（**必须同时断言磁盘与库**：操作后 `query_assets()` 的 path 集合 == 磁盘实际扫描结果）+ 每个 CRUD 子 TASK 一轮冻结 exe 人验 + 改动影响 USB 复制时回归「复制手控文件到 U 盘」。
+- **`schema_version` 不匹配**直接抛 `AssetIndexError` 要求重扫的行为保留；错误文案可区分「版本旧需升级」与「库损坏」，体验改进不阻断。
 
 ---
 
 ## 前置条件清单（Conditional Go 的「Condition」）
 
-在完整 CRUD 首版开放写操作前必须完成下列 5 项。若按子 TASK 渐进实施，任何真实目录写入都先满足 #1–#3；涉及删除/重命名再满足 #4，涉及新增/复制/重命名再满足 #5。现有 TOML 写入口也应尽早接入 #1 与 #3：
+在当前范围 CRUD 开放写操作前必须完成下列项。任何真实目录写入先满足 #2；涉及删除或改变被引用路径的操作再叠加 #4：
 
 | # | 前置项 | 对应 Issue | 复杂度 | 状态 |
 | --- | --- | --- | --- | --- |
-| 1 | 配置根作为写操作权威 + scan_meta 一致性校验 + 未配置时禁用写入口 | R1、R10 | medium | ✅ 已完成（TASK-20260806-r1-r10-write-gate，Windows 全量 423 passed） |
-| 2 | CRUD 定点写 API + 保留工作区上下文的局部扫描/子树对账 + SQLite 事务 + 文件/索引失败恢复策略（**不含 schema 迁移**；SQLite 事务不包含文件系统动作） | R3 | high | ⏳ 未开始 |
-| 3 | 统一路径守卫 `assert_within_workspace` | R5 | medium | ✅ 已完成（TASK-20260803-r5-path-guard，Windows 实机验证通过） |
-| 4 | TOML 引用反查 + 删除二次确认 + 重命名/移动时级联改写或阻止断链 | R8 | high | ⏳ 未开始 |
-| 5 | 变体命名规范 + 新增/复制/重命名入口强制走它 | R6d | medium | ⏳ 未开始（待版本段数产品决策） |
-| ~~6~~ | ~~放宽版本解析正则（+ 人验），可选覆写通道~~（已移出 gate） | ~~R6e~~ | —— |
+| 1 | 配置根作为写操作权威 + scan_meta 一致性校验 + 未配置时禁用写入口 | R1、R10 | medium | ✅ 已完成（TASK-20260806-r1-r10-write-gate）；⚠️ 覆盖缺口：`ensure_model_ids` 自动写入未接入，须补 |
+| 2 | 统一路径守卫 `assert_within_workspace` | R5 | medium | ✅ 已完成（TASK-20260803-r5-path-guard，Windows 实机验证通过）；⚠️ 同上覆盖缺口 |
+| 3 | CRUD 定点写 API + 保留工作区上下文的局部扫描/子树对账 + SQLite 事务 + 文件/索引失败恢复策略（不含 schema 迁移；SQLite 事务不包含文件系统动作） | R3 | high | ✅ 已完成（TASK-20260901-r3-index-write-api：4 行级写 API + `scan_firmware_subtree` + `asset_reconcile.reconcile_subtree`；Windows 全量 477 passed / 95.18%；经 codex 两轮实现审查「实现合格，无阻断问题」；人工验证按无 UI 等效规则以 `scripts/verify_r3_write_api.py` 四类场景通过 + 用户确认；含 `hidden_items` A/AB 前缀缺陷修复） |
+| 4 | TOML 引用反查 + 删除二次确认 + 重命名/更新时级联改写或阻止断链（含原型差异清单 #1、#4 的语义定稿） | R8 | high | ⏳ 未开始 |
 
-> **⚠️ R6d 立项前必须先关闭的产品决策**：版本号段数（两段 `V2.1` 还是三段 `V2.1.0`）须作为独立产品规则确定后，`core/naming.py` 的校验规则才能定稿。见 R6d「待确认产品规则」注。
+**以上 4 项即本审查的完整 gate。** 未列入的一律不阻断当前范围 CRUD 立项。「原型差异清单」不单独构成 gate，但其中影响写语义的条目（#1、#4）必须并入 #3/#4 的 TASK；其余条目在对应 CRUD 子 TASK 中定稿。R1/R10 与 R5 的 `ensure_model_ids` 覆盖缺口不改变其「已关闭」判定（缺口是既有自动迁移行为，非 CRUD 入口），但正式 CRUD 开放写操作前必须收口。
 
-**以上 5 项即本审查的完整 gate。** 未列入的一律不阻断 CRUD 立项。R6e（版本解析放宽与可选覆写）已移出 gate，见下方变更记录。
-
-变更记录：
-- **R2 移出**（2026-07-29）：「切根后操作面板持有旧资产」判断不成立——`_on_grid_selection_changed(None)` 每次刷新都会销毁面板。降级 P3·UX。
-- **R4（schema v4）移出**（2026-07-29）：经实测，v3 现有 schema 无需迁移即可支撑行级 CRUD，详见 R4。迁移改为**按需触发**，不作为准入前提。
-- **R6e 移出**（2026-07-29）：版本解析放宽（R6e-a）与可选覆写通道均属独立低风险工作，不作为 CRUD 准入阻断条件。R6d 命名规范确保新建资产直接可被现有正则解析；R6e-a 可在出现实际解析问题时单独处理；覆写通道等出现无法解析资产后再做。降级 P3·非阻断。
-- **R12 取消**（2026-08-03）：内部使用工具，外部改目录属用户操作责任，不单独做只读对账 UI 与服务（`reconcile_workspace` 不再作为目标 API）。CRUD 失败恢复所需的子树重扫能力保留在 R3。
-
-**建议实施顺序**：R5 + R1/R10（先收口现有写入口与工作区边界）→ R3（索引行级写 + 局部扫描能力，含失败恢复用的子树重扫）→ **R6d（命名规范，必须早于新增/复制/重命名入口上线）** → R8（引用级联）→ 才开始做对应的增删改。
-
-> R6d 之所以必须早于新增/复制/重命名入口：命名规范只要晚一步，就会有不规范目录被 CRUD 写进真实目录树。规范本身是纯函数，成本低，没有理由延后；它不影响既有 TOML 写入口的收口顺序。
-
-**明确不阻断的项**：R6（其余动作语义定稿，随 TASK 立项做）、**R6c（历史版本折叠，纯展示层，可安排在 CRUD 之后独立做）**、R7（跨卷移动，实现时处理）、R9、R11、**R2（切根重置，P3·UX）**。
-
-> **归档决策（2026-07-29）**：**归档功能整体取消**，不在任何版本计划内。CRUD 首期继续平铺显示所有版本，不移动文件。未来版本数量导致主视图拥挤时，再由 R6c 折叠展示解决（R6c 暂缓，不阻断 CRUD）。取消归档使原 R6b 从 P1 阻断项中移除，且消除了 `archived` 字段的需求，是 R4 得以移出 gate 的直接原因。
+**建议实施顺序**：R3（索引行级写 + 局部扫描能力，含失败恢复子树重扫）→ R8（引用反查与级联，含借用语义迁移）→ 按原型范围实现新增、更新、重命名、删除、型号/方案管理。
 
 ---
 
 ## 验证记录
 
-### 自动化验证
+### 自动化验证（2026-09-01，HEAD `705fe60`）
 
 ```text
 uv run python -m pytest -m "not ui" -q
-→ 357 passed, 24 deselected；coverage 89.56%（门禁 80%）
+→ 394 passed, 31 deselected；coverage 88.82%（门禁 80%）
 ```
 
-- **当前 HEAD 复核**：`uv run python -m pytest -m "not ui" -q` → **357 passed, 26 deselected；coverage 89.22%**（门禁 80%）。与基线记录的 deselected/coverage 小幅差异来自基线后 Qt smoke 测试调整；核心测试数量仍为 357 passed。
-- 索引层单工作区语义由现有回归测试再次确认：换根会全量替换资产、`scan_meta` 只保留当前根、悬空 hidden 会被清理，`active_workspace_root()` 返回最近扫描根。
-- 静态枚举确认 4 项 gate 尚无完整实现：未发现 `upsert_asset` / `replace_asset` / `find_references_to` / `build_variant_dir_name` 等目标 API；同时现有扫描器也没有区分 `workspace_root` 与 `subtree_root` 的局部扫描入口。（`assert_within_workspace` 已于 2026-08-03 随 TASK-20260803-r5-path-guard 实现，Windows 实机验证通过。）
-- 复核还确认现状已有 TOML 写入：`set_module_default_for_model()`、`set_shared_module()`、`clear_shared_module()` 均可由 Qt 右键入口触发，因此 R1/R5/R10 不能只按“未来 CRUD”处理。
+- 静态枚举确认 gate 现状：`asset_index` 无 `upsert_asset` / `replace_asset` / `delete_asset` / `bulk_reindex_subtree`；`file_scan.scan_firmware_assets` 已扩为 4 参但仍无局部子树扫描入口；生产源码无 vendor 配置。
+- `path_guard.py` 契约逐条复核通过（空根拒绝、`..` 拒绝、normcase + 斜杠归一比较、允许等于根），测试覆盖 100%。
+- 写入门闩复核：`write_gate_check` 三检查（`not_configured` / `root_changed` / `out_of_workspace`）+ UI 层扫描/烧录任务态检查；service 层既有交互式写入口均接入路径守卫（`ensure_model_ids` 缺口见上）。
+- `SharedModuleRef.mode` 当前为 `static` / `follow_default`（+ 可选 `source_platform`），无 `follow_asset`。
+- 原型自动化验证：`node specs\design\prototypes\firmware-crud-prototype.test.js` → 122 项断言通过（TASK-20260806 记录）。
+- **codex 独立复核（2026-09-01，read-only）**：逐项判定 R3/R8 未实现、`follow_asset` 缺失、差异清单 #1/#2/#5/#6 正确；发现 `ensure_model_ids()` 自动写 `型号配置.toml` 绕过门闩与守卫（已核实并补入 R1/R10 与 gate 表），并指出 API 列表范围、`last_scan_at` 未接线、vendor 表述、`型号配置.toml` 可内部创建四处措辞偏差（均已修正）。总体判定：Conditional Go 方向成立，条件清单已补全。
 
-`asset_index` 公开 API 复核：已有 `delete_missing_assets` 的对账式逐行删除，但没有 CRUD 定点 upsert / replace / delete / 子树重建接口，见 §2 R3。
+### 历史实测证据（不再重复执行，详见 git 历史 @705fe60 之前的本文版本）
 
-扫描器排除规则实测：确认扫描器使用的是 `file_scan._is_excluded_dir` + `SCAN_EXCLUDE_DIR_KEYWORDS`（匹配整个路径），而非同名的 `scheme_config._is_excluded_dir`（匹配单个目录名）；`backup` / `temp` 在扫描器侧不被排除。见 §3 R6b 备注。
-
-版本解析实测（先前本机数据记录）：39 个「无版本」资产中，放宽单段 `V\d+` 后 34 个可解析，再允许版本号后接括号则 39/39 全部可解析，见 §3 R6e。本轮仅用仓库内样例确认当前正则确实不识别 `V15` / `V23_7` / `V9(...)`，未读取本地索引重新统计 105 个资产。
-
-回收站删除实测（先前本机记录）：Windows 自带 `shell32.SHFileOperationW` + `FOF_ALLOWUNDO` 经 `ctypes` 调用成功将目录送入回收站，未增加第三方依赖。该记录支持“技术上可行”，但不等于所有卷都保证可恢复；本轮未重复执行真实删除操作。见 §3 删除语义。
-
-v3 行级写实测（R4 更正）：在现有 v3 schema 上单事务执行 `UPDATE assets` + `UPDATE hidden_items`，两表同步成功，`schema_version` 仍为 3。证明 schema 迁移不是行级 CRUD 的前提，见 §2 R4。（注：该实测仅验证 schema 能力，非推荐实现方式，见下条。）
-
-路径变化的连带字段实测（R3 修订）：
-- 同模块重命名 `英文-通用` → `英文-通用_V2.1`：`path` / `directory_name` / `version` / `label` **4 个字段**变化。
-- 跨归属移动 `通用/…` → `定制/越南-娉娉/…`：`category`（common→custom）/ `platform`（''→'标准单机芯3D'）/ `scheme_name` / `scheme_path` / `model_directory_path` **5 个字段**变化。
-
-证明移动/重命名**不能只更新 `path`**，必须重扫生成完整资产行，见 §2 R3。
-
-切根路径走查（R2 更正）：实测 `load_all_models()` 对空目录/无资产父目录仍回退返回根目录名，故 `:473` 的 `if models:` 难以命中；切根必经 `_on_model_changed` → `_refresh_main_grid` → `_on_grid_selection_changed(None)`，操作面板被销毁。原「旧资产残留」判断不成立，见 §1 R2。
+- v3 schema 单事务行级写能力验证；路径变化的连带字段实测（重命名 4 字段 / 跨归属移动 5 字段）；回收站删除实测（`SHFileOperationW` + `FOF_ALLOWUNDO`）；切根面板残留判定更正（R2，已结案为 UX 清理项）；版本解析放宽实测（R6e，已撤销）。
 
 ### 人工验证
 
@@ -842,4 +190,6 @@ v3 行级写实测（R4 更正）：在现有 v3 schema 上单事务执行 `UPDA
 
 ## 相关 Commit
 
-- 基线：`a4c6fdc` docs: 归档 PySide6 迁移总 TASK
+- `77cbbd0` feat(core,ui): R5 统一工作区路径守卫（TASK-20260803-r5-path-guard）
+- `4d4d3c8` feat(core,ui): R1/R10 统一写入门闩（TASK-20260806-r1-r10-write-gate）
+- 基线：`a4c6fdc` docs: 归档 PySide6 迁移总 TASK；本审查初稿：`b4250f0`

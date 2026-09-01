@@ -7,12 +7,40 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Literal, cast
 
+from fwasset.core.path_guard import (
+    PathGuardError,
+    assert_within_workspace,
+    contained_subpath,
+    is_same_or_under,
+    normalize_workspace_path,
+)
 from fwasset.core.settings import ASSET_INDEX_PATH
 from fwasset.core.sort_config import SortKey, apply_sort
 from fwasset.core.types import FirmwareAsset
 
 SCHEMA_VERSION = 3
 HiddenItemType = Literal["model_directory", "firmware_type", "asset"]
+
+# FirmwareAsset 全键集合：行级写入前校验调用方传入完整资产（TypedDict 在
+# 运行时不校验，缺键会被 _asset_to_row 静默填空值，必须在入口拦住）。
+FIRMWARE_ASSET_KEYS: frozenset[str] = frozenset(FirmwareAsset.__annotations__)
+
+# 行级写与全量替换共用的列清单（保持与 assets 表结构一致）。
+_ASSET_COLUMNS = (
+    "path, series, model, model_directory_name, model_directory_path, "
+    "firmware_type, firmware_label, flash_mode, usb_flow, version, directory_name, "
+    "files_json, modified_time, scanned_at, tool_name, tool_path, tool_dir, label, "
+    "category, platform, scheme_name, scheme_path"
+)
+_ASSET_BINDINGS = (
+    ":path, :series, :model, :model_directory_name, :model_directory_path, "
+    ":firmware_type, :firmware_label, :flash_mode, :usb_flow, :version, :directory_name, "
+    ":files_json, :modified_time, :scanned_at, :tool_name, :tool_path, :tool_dir, :label, "
+    ":category, :platform, :scheme_name, :scheme_path"
+)
+_INSERT_ASSET_SQL = (
+    f"INSERT INTO assets ({_ASSET_COLUMNS}) VALUES ({_ASSET_BINDINGS})"
+)
 
 # 连接 busy 等待秒数。扫描写库（DELETE+INSERT）可能较长；默认 5s 易在
 # 读路径（query/缓存加载）上提前抛 OperationalError。
@@ -200,23 +228,7 @@ def save_assets(
     with connect_asset_index(path) as conn:
         # 单工作区：当前根的快照覆盖整库（见模块顶部注释）。
         conn.execute("DELETE FROM assets")
-        conn.executemany(
-            """
-            INSERT INTO assets (
-                path, series, model, model_directory_name, model_directory_path,
-                firmware_type, firmware_label, flash_mode, usb_flow, version, directory_name,
-                files_json, modified_time, scanned_at, tool_name, tool_path, tool_dir, label,
-                category, platform, scheme_name, scheme_path
-            )
-            VALUES (
-                :path, :series, :model, :model_directory_name, :model_directory_path,
-                :firmware_type, :firmware_label, :flash_mode, :usb_flow, :version, :directory_name,
-                :files_json, :modified_time, :scanned_at, :tool_name, :tool_path, :tool_dir, :label,
-                :category, :platform, :scheme_name, :scheme_path
-            )
-            """,
-            asset_rows,
-        )
+        conn.executemany(_INSERT_ASSET_SQL, asset_rows)
         # 只保留当前工作区一行，清掉历史 root_dir（旧库可能多行）。
         conn.execute("DELETE FROM scan_meta")
         conn.execute(
@@ -323,6 +335,320 @@ def delete_missing_assets(
         return removed
 
 
+# ---------------------------------------------------------------------------
+# 行级写 API（REVIEW-20260728 R3 / gate #3）
+#
+# 供未来 CRUD 动作使用的定点写能力。纪律：
+# - SQLite 事务不包含文件系统动作；主行写与 hidden_items 同步同事务。
+# - 不引入 UUID asset ID：保留 path 主键，路径变化必须整行替换
+#   （replace_asset），禁止调用方只 UPDATE path。
+# - bulk/reconcile 强校验「库内 scan_meta 根 == 传入 workspace_root」，
+#   防止用工作区 B 的参数改工作区 A 的数据库。
+# ---------------------------------------------------------------------------
+
+
+def _validate_asset_payload(asset: FirmwareAsset) -> None:
+    """行级写入前的运行时校验：全键存在、path 非空且为绝对路径。"""
+    missing = sorted(FIRMWARE_ASSET_KEYS - set(asset.keys()))
+    if missing:
+        raise AssetIndexError(f"资产缺少必需字段，已拒绝写入：{'、'.join(missing)}")
+    asset_path = str(asset.get("path") or "").strip()
+    if not asset_path:
+        raise AssetIndexError("资产 path 不能为空，已拒绝写入")
+    if not Path(asset_path).is_absolute():
+        raise AssetIndexError(f"资产 path 必须为绝对路径，已拒绝写入：{asset_path}")
+
+
+def _find_equivalent_asset_path(conn: sqlite3.Connection, target: str) -> str | None:
+    """定位与 ``target`` 物理等价的现存资产 path 主键。
+
+    先精确匹配，再按 normcase 归一身份匹配（Windows 大小写 / 分隔符差异，
+    防止同一路径两种写法产生重复行或漏删目标）。
+    """
+    row = conn.execute(
+        "SELECT path FROM assets WHERE path = ? LIMIT 1", (target,)
+    ).fetchone()
+    if row is not None:
+        return str(row["path"])
+    target_norm = normalize_workspace_path(target)
+    if not target_norm:
+        return None
+    for row in conn.execute("SELECT path FROM assets").fetchall():
+        stored = str(row["path"])
+        if normalize_workspace_path(stored) == target_norm:
+            return stored
+    return None
+
+
+def _within_boundary(stored: str, boundary: str) -> bool:
+    """存量路径是否位于边界之内：词法（normcase）或 resolved 归属任一命中。"""
+    if is_same_or_under(stored, boundary):
+        return True
+    return contained_subpath(stored, boundary) is not None
+
+
+def _affected_by_boundary(stored: str, boundary: str) -> bool:
+    """隐藏项是否受子树边界影响：子树内（后代）或子树祖先（边界在其之下）。
+
+    祖先方向用于「对账叶子子树清空后，位于父型号/类型目录的隐藏项失活」；
+    兄弟边界的隐藏项不受影响，由 :func:`_hidden_item_exists` 判活决定。
+    两个方向都用词法（normcase）+ resolved 双重归属，junction/真实路径混用
+    也能命中。
+    """
+    return _within_boundary(stored, boundary) or _within_boundary(boundary, stored)
+
+
+def _has_asset_column_identity(
+    conn: sqlite3.Connection, column: str, item_path: str
+) -> bool:
+    """assets 表 ``column`` 列是否存在与 ``item_path`` 物理等价的值。
+
+    精确匹配优先，其次 normcase+resolve 归一身份（junction / 大小写 /
+    分隔符变体视为同一路径）。``column`` 仅接受内部常量，无注入面。
+    """
+    row = conn.execute(
+        f"SELECT 1 FROM assets WHERE {column} = ? LIMIT 1", (item_path,)
+    ).fetchone()
+    if row is not None:
+        return True
+    item_norm = normalize_workspace_path(item_path)
+    if not item_norm:
+        return False
+    rows = conn.execute(f"SELECT {column} AS val FROM assets").fetchall()
+    return any(
+        normalize_workspace_path(str(r["val"])) == item_norm for r in rows
+    )
+
+
+def _require_index_workspace(conn: sqlite3.Connection, workspace_root: str) -> None:
+    """断言库内 scan_meta 根与传入工作区根一致（单工作区语义）。"""
+    meta_row = conn.execute(
+        "SELECT root_dir FROM scan_meta ORDER BY last_scan_at DESC LIMIT 1"
+    ).fetchone()
+    db_root = str(meta_row["root_dir"]).strip() if meta_row is not None else ""
+    if not db_root or normalize_workspace_path(db_root) != normalize_workspace_path(
+        workspace_root
+    ):
+        raise AssetIndexError(
+            "索引工作区与目标工作区不一致（或无扫描记录），拒绝子树写入；请先重新扫描"
+        )
+
+
+def upsert_asset(
+    asset: FirmwareAsset,
+    *,
+    path: str | Path | None = None,
+    scanned_at: float | None = None,
+) -> None:
+    """新增/覆盖单行（新建、编辑后重扫单目录）。
+
+    同一路径的大小写/分隔符变体视为同一行（normcase 身份），不会产生重复行。
+    """
+    _validate_asset_payload(asset)
+    now = float(scanned_at if scanned_at is not None else time.time())
+    row = _asset_to_row(asset, now)
+    init_asset_index(path)
+    conn = connect_asset_index(path)
+    try:
+        with conn:
+            existing = _find_equivalent_asset_path(conn, str(asset["path"]))
+            if existing is not None:
+                conn.execute("DELETE FROM assets WHERE path = ?", (existing,))
+            conn.execute(_INSERT_ASSET_SQL, row)
+    except sqlite3.DatabaseError as exc:
+        raise AssetIndexError(f"资产写入失败，可重扫该子树恢复：{exc}") from exc
+    finally:
+        conn.close()
+
+
+def replace_asset(
+    old_asset_path: str,
+    new_asset: FirmwareAsset,
+    *,
+    path: str | Path | None = None,
+    scanned_at: float | None = None,
+) -> None:
+    """单事务整行替换：删旧行 → 写完整新行 → 精确迁移 asset 级隐藏行。
+
+    路径变化时 ``directory_name``/``version``/``label`` 等字段都会变，调用方
+    必须传入保留工作区上下文重扫生成的完整资产，不允许只 UPDATE ``path``。
+    旧行不存在或新路径被其他行占用时抛 :class:`AssetIndexError`。
+    """
+    old_path = str(old_asset_path).strip()
+    if not old_path:
+        raise AssetIndexError("旧资产路径不能为空，已拒绝替换")
+    _validate_asset_payload(new_asset)
+    new_path = str(new_asset["path"])
+    now = float(scanned_at if scanned_at is not None else time.time())
+    row = _asset_to_row(new_asset, now)
+    init_asset_index(path)
+    conn = connect_asset_index(path)
+    try:
+        with conn:
+            # 身份按 normcase 归一：大小写/分隔符变体视为同一资产
+            old_key = _find_equivalent_asset_path(conn, old_path)
+            if old_key is None:
+                raise AssetIndexError(f"旧资产不存在，无法替换：{old_path}")
+            new_key = _find_equivalent_asset_path(conn, new_path)
+            if new_key is not None and new_key != old_key:
+                raise AssetIndexError(f"新路径已被其他资产占用，无法替换：{new_path}")
+            # 精确 + 归一匹配的 asset 级隐藏行迁移到新路径
+            old_norm = normalize_workspace_path(old_key)
+            hidden_rows = conn.execute(
+                "SELECT path FROM hidden_items WHERE hide_type = 'asset'"
+            ).fetchall()
+            for hidden_row in hidden_rows:
+                hidden_path = str(hidden_row["path"])
+                if hidden_path == old_key or (
+                    old_norm
+                    and normalize_workspace_path(hidden_path) == old_norm
+                ):
+                    conn.execute(
+                        "UPDATE hidden_items SET path = ? WHERE path = ?",
+                        (new_path, hidden_path),
+                    )
+            conn.execute("DELETE FROM assets WHERE path = ?", (old_key,))
+            conn.execute(_INSERT_ASSET_SQL, row)
+    except sqlite3.DatabaseError as exc:
+        raise AssetIndexError(f"资产替换失败，可重扫该子树恢复：{exc}") from exc
+    finally:
+        conn.close()
+
+
+def delete_asset(
+    asset_path: str, *, path: str | Path | None = None
+) -> bool:
+    """删单行 + 关联 asset 级隐藏行；型号/类型级隐藏项按边界清理。
+
+    行不存在时返回 ``False``（幂等），不抛错。
+    """
+    target = str(asset_path).strip()
+    if not target:
+        raise AssetIndexError("资产路径不能为空，已拒绝删除")
+    init_asset_index(path)
+    conn = connect_asset_index(path)
+    try:
+        with conn:
+            # 身份按 normcase 归一：大小写/分隔符变体视为同一资产
+            key = _find_equivalent_asset_path(conn, target)
+            if key is None:
+                return False
+            exists = conn.execute(
+                "SELECT model_directory_path FROM assets WHERE path = ? LIMIT 1",
+                (key,),
+            ).fetchone()
+            model_dir = str(exists["model_directory_path"])
+            conn.execute("DELETE FROM assets WHERE path = ?", (key,))
+            # 精确 + 归一匹配的 asset 级隐藏行一并删除
+            hidden_rows = conn.execute(
+                "SELECT path FROM hidden_items WHERE hide_type = 'asset'"
+            ).fetchall()
+            key_norm = normalize_workspace_path(key)
+            for hidden_row in hidden_rows:
+                hidden_path = str(hidden_row["path"])
+                if hidden_path == key or (
+                    key_norm and normalize_workspace_path(hidden_path) == key_norm
+                ):
+                    conn.execute(
+                        "DELETE FROM hidden_items WHERE path = ?", (hidden_path,)
+                    )
+            # 只清理受该资产影响的型号/类型级隐藏项：型号目录与资产的
+            # model_directory_path 物理等价，或类型路径边界包含被删资产；
+            # 不做全局清理。
+            model_dir_norm = normalize_workspace_path(model_dir)
+            hidden_rows = conn.execute(
+                "SELECT path, hide_type FROM hidden_items"
+            ).fetchall()
+            for row in hidden_rows:
+                item_path = str(row["path"])
+                hide_type = str(row["hide_type"])
+                if hide_type == "asset":
+                    continue
+                if hide_type == "model_directory":
+                    same_model = item_path == model_dir or (
+                        model_dir_norm
+                        and normalize_workspace_path(item_path) == model_dir_norm
+                    )
+                    if not same_model:
+                        continue
+                if hide_type == "firmware_type" and not _within_boundary(
+                    key, item_path
+                ):
+                    continue
+                if not _hidden_item_exists(conn, item_path, hide_type):
+                    conn.execute(
+                        "DELETE FROM hidden_items WHERE path = ?", (item_path,)
+                    )
+    except sqlite3.DatabaseError as exc:
+        raise AssetIndexError(f"资产删除失败，可重扫该子树恢复：{exc}") from exc
+    finally:
+        conn.close()
+    return True
+
+
+def bulk_reindex_subtree(
+    workspace_root: str,
+    subtree_root: str,
+    assets: list[FirmwareAsset],
+    *,
+    path: str | Path | None = None,
+    scanned_at: float | None = None,
+) -> None:
+    """子树整批重建：替换 ``subtree_root`` 边界内的全部资产行（R3）。
+
+    - 同时保留「工作区根」与「遍历子树」两个参数；库内 scan_meta 根必须与
+      ``workspace_root`` 一致，否则拒绝且不改库（单工作区语义）。
+    - 整批原子：写入前一次性校验全部资产（全键、绝对路径、均位于子树内、
+      路径无重复），任一失败整批拒绝。
+    - 隐藏项只处理子树边界内的行：失活依据消失的清理，边界外一律保留。
+    - ``assets`` 传空列表表示该子树已清空（删除恢复场景），只删不插。
+    """
+    ws_norm = normalize_workspace_path(workspace_root)
+    if not ws_norm:
+        raise AssetIndexError("工作区根目录未配置，拒绝子树重建")
+    try:
+        subtree_resolved = assert_within_workspace(subtree_root, workspace_root)
+    except PathGuardError as exc:
+        raise AssetIndexError(f"子树不在工作区内，已拒绝重建：{exc}") from exc
+    boundary = str(subtree_resolved)
+
+    now = float(scanned_at if scanned_at is not None else time.time())
+    rows: list[dict[str, object]] = []
+    seen: set[str] = set()
+    for asset in assets:
+        _validate_asset_payload(asset)
+        asset_path = str(asset["path"])
+        if contained_subpath(asset_path, boundary) is None:
+            raise AssetIndexError(
+                f"资产不在子树内，已拒绝整批重建：{asset_path}（子树：{boundary}）"
+            )
+        dup_key = normalize_workspace_path(asset_path)
+        if dup_key in seen:
+            raise AssetIndexError(f"批量资产路径重复，已拒绝整批重建：{asset_path}")
+        seen.add(dup_key)
+        rows.append(_asset_to_row(asset, now))
+
+    init_asset_index(path)
+    conn = connect_asset_index(path)
+    try:
+        with conn:
+            _require_index_workspace(conn, workspace_root)
+            stale_paths = [
+                str(row["path"])
+                for row in conn.execute("SELECT path FROM assets").fetchall()
+                if _within_boundary(str(row["path"]), boundary)
+            ]
+            conn.executemany(
+                "DELETE FROM assets WHERE path = ?", [(p,) for p in stale_paths]
+            )
+            conn.executemany(_INSERT_ASSET_SQL, rows)
+            _prune_hidden_items(conn, boundary=boundary)
+    except sqlite3.DatabaseError as exc:
+        raise AssetIndexError(f"子树重建失败，可重扫该子树恢复：{exc}") from exc
+    finally:
+        conn.close()
+
+
 def hide_item(
     item_path: str,
     hide_type: HiddenItemType = "asset",
@@ -359,6 +685,47 @@ def load_hidden_items(path: str | Path | None = None) -> dict[str, str]:
         return {str(row["path"]): str(row["hide_type"]) for row in rows}
 
 
+def _hidden_item_exists(
+    conn: sqlite3.Connection, item_path: str, hide_type: str
+) -> bool:
+    """判断隐藏项是否仍有存活依据（R3：路径边界 + 归一身份，不裸 ``startswith``）。
+
+    - ``asset``：与资产 ``path`` 物理等价（精确或 normcase/resolved 身份）；
+    - ``model_directory``：与资产 ``model_directory_path`` 物理等价；
+    - ``firmware_type``：任一资产路径在该隐藏路径边界之内（词法 +
+      resolved 双重归属，避免 ``...\\A`` 与 ``...\\AB`` 前缀混淆）。
+    """
+    if hide_type == "asset":
+        return _has_asset_column_identity(conn, "path", item_path)
+    if hide_type == "model_directory":
+        return _has_asset_column_identity(conn, "model_directory_path", item_path)
+    asset_paths = [
+        str(row["path"]) for row in conn.execute("SELECT path FROM assets").fetchall()
+    ]
+    return any(_within_boundary(asset_path, item_path) for asset_path in asset_paths)
+
+
+def _prune_hidden_items(
+    conn: sqlite3.Connection, boundary: str | None = None
+) -> int:
+    """按存活依据清理隐藏项；``boundary`` 给定时只处理受该边界影响的行
+    （子树内 + 子树祖先），边界外的兄弟隐藏行一律保留。"""
+    hidden_rows = conn.execute(
+        "SELECT path, hide_type FROM hidden_items"
+    ).fetchall()
+    removed = 0
+    for row in hidden_rows:
+        item_path = str(row["path"])
+        hide_type = str(row["hide_type"])
+        if boundary is not None and not _affected_by_boundary(item_path, boundary):
+            continue
+        if _hidden_item_exists(conn, item_path, hide_type):
+            continue
+        conn.execute("DELETE FROM hidden_items WHERE path = ?", (item_path,))
+        removed += 1
+    return removed
+
+
 def prune_missing_hidden_items(
     path: str | Path | None = None,
     conn: sqlite3.Connection | None = None,
@@ -369,35 +736,7 @@ def prune_missing_hidden_items(
         conn = connect_asset_index(path)
         close_conn = True
     try:
-        asset_paths = {
-            str(row["path"])
-            for row in conn.execute("SELECT path FROM assets").fetchall()
-        }
-        model_paths = {
-            str(row["model_directory_path"])
-            for row in conn.execute(
-                "SELECT DISTINCT model_directory_path FROM assets"
-            ).fetchall()
-        }
-        hidden_rows = conn.execute(
-            "SELECT path, hide_type FROM hidden_items"
-        ).fetchall()
-        removed = 0
-        for row in hidden_rows:
-            item_path = str(row["path"])
-            hide_type = str(row["hide_type"])
-            if hide_type == "asset":
-                exists = item_path in asset_paths
-            elif hide_type == "model_directory":
-                exists = item_path in model_paths
-            else:
-                exists = any(
-                    asset_path.startswith(item_path) for asset_path in asset_paths
-                )
-            if exists:
-                continue
-            conn.execute("DELETE FROM hidden_items WHERE path = ?", (item_path,))
-            removed += 1
+        removed = _prune_hidden_items(conn)
         if close_conn:
             conn.commit()
         return removed

@@ -9,6 +9,7 @@ from fwasset.core.firmware_catalog import (
     FirmwareTypeConfig,
     enabled_firmware_types,
 )
+from fwasset.core.path_guard import assert_within_workspace
 from fwasset.core.scheme_config import discover_schemes, scheme_for_path
 from fwasset.core.settings import (
     SCAN_EXCLUDE_DIR_KEYWORDS,
@@ -169,6 +170,23 @@ def _prefer_handcontrol_directory_model(folder_path: Path, model: str) -> str:
     return model
 
 
+def _require_scan_root(root_path: Path, label: str) -> None:
+    if not root_path.exists():
+        raise FileNotFoundError(f"扫描根目录不存在: {label}")
+    if not root_path.is_dir():
+        raise NotADirectoryError(f"扫描根目录不是目录: {label}")
+
+
+def _load_scan_context(
+    root_path: Path, catalog_path: str | Path | None
+) -> tuple[list[FirmwareTypeConfig], list]:
+    """加载固件类型目录配置与方案元数据（方案按工作区根发现）。"""
+    type_configs = enabled_firmware_types(
+        Path(catalog_path) if catalog_path else DEFAULT_FIRMWARE_CATALOG_PATH
+    )
+    return type_configs, discover_schemes(root_path)
+
+
 def scan_firmware_assets(
     root: str,
     catalog_path: str | Path | None = None,
@@ -183,20 +201,52 @@ def scan_firmware_assets(
     last_scan_at will be skipped (incremental mode).
     If cancel_event is provided, scanning can be interrupted by setting the event.
     """
-
     root_path = Path(root)
-    if not root_path.exists():
-        raise FileNotFoundError(f"扫描根目录不存在: {root}")
-    if not root_path.is_dir():
-        raise NotADirectoryError(f"扫描根目录不是目录: {root}")
-
-    type_configs = enabled_firmware_types(
-        Path(catalog_path) if catalog_path else DEFAULT_FIRMWARE_CATALOG_PATH
+    _require_scan_root(root_path, root)
+    type_configs, schemes = _load_scan_context(root_path, catalog_path)
+    return _scan_assets(
+        root_path, root_path, type_configs, schemes, last_scan_at, cancel_event
     )
 
-    # 方案元数据（有则读）；平台默认仅在 workbench 回源时使用，扫描不读 平台配置.toml
-    schemes = discover_schemes(root_path)
 
+def scan_firmware_subtree(
+    workspace_root: str,
+    subtree_root: str,
+    catalog_path: str | Path | None = None,
+    cancel_event: "threading.Event | None" = None,
+) -> tuple[list[FirmwareAsset], list[str]]:
+    """局部子树扫描（REVIEW-20260728 R3）：仅遍历 ``subtree_root``。
+
+    - 归属推导（category/platform/scheme_name/scheme_path/model_directory）
+      按 ``workspace_root`` 计算，必须与 :func:`scan_firmware_assets` 的
+      全根扫描对同一路径给出字段级一致的结果——本函数与全根扫描共享同一
+      推导实现（:func:`_scan_assets`），不得在调用方手写字段映射。
+    - ``subtree_root`` 必须位于 ``workspace_root`` 之下（经路径守卫校验）；
+      子树不存在返回空快照（支撑删除恢复），存在但不是目录则报错。
+    - 不支持 ``last_scan_at`` 增量跳过：局部重建必须拿到该子树的完整快照。
+    """
+    ws_path = Path(workspace_root)
+    _require_scan_root(ws_path, workspace_root)
+    sub_path = Path(subtree_root)
+    assert_within_workspace(sub_path, ws_path)
+    if not sub_path.exists():
+        return [], []
+    if not sub_path.is_dir():
+        raise NotADirectoryError(f"扫描子树不是目录: {subtree_root}")
+    type_configs, schemes = _load_scan_context(ws_path, catalog_path)
+    return _scan_assets(ws_path, sub_path, type_configs, schemes, None, cancel_event)
+
+
+def _scan_assets(
+    context_root: Path,
+    walk_root: Path,
+    type_configs: list[FirmwareTypeConfig],
+    schemes: list,
+    last_scan_at: float | None,
+    cancel_event: "threading.Event | None",
+) -> tuple[list[FirmwareAsset], list[str]]:
+    """从 ``walk_root`` 遍历扫描，归属按 ``context_root`` 推导。"""
+    root_path = context_root
     results: list[FirmwareAsset] = []
     errors: list[str] = []
 
@@ -206,12 +256,12 @@ def scan_firmware_assets(
         else:
             errors.append(str(exc))
 
-    for dirpath, dirnames, filenames in os.walk(root_path, onerror=_on_walk_error):
+    for dirpath, dirnames, filenames in os.walk(walk_root, onerror=_on_walk_error):
         if cancel_event is not None and cancel_event.is_set():
             errors.append("扫描已被用户取消")
             break
 
-        if last_scan_at is not None and dirpath != str(root_path):
+        if last_scan_at is not None and dirpath != str(walk_root):
             try:
                 dir_mtime = Path(dirpath).stat().st_mtime
                 if dir_mtime < last_scan_at:

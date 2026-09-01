@@ -65,3 +65,34 @@ def assert_within_workspace(path: str | Path, workspace_root: str | Path) -> Pat
             f"路径不在工作区内，已拒绝写入：{raw_path}（工作区根：{raw_root}）"
         )
     return candidate
+
+
+def is_same_or_under(path: str | Path, boundary: str | Path) -> bool:
+    """规范化后判断 ``path`` 是否等于或在 ``boundary`` 之下。
+
+    纯字符串比较（normcase + 正斜杠归一），不触碰文件系统，供数据库中
+    存量路径（hidden_items、assets.path）做边界归属判断使用；禁止业务代码
+    用裸 ``startswith`` 自行判断（会把 ``...\\A`` 与 ``...\\AB`` 混淆）。
+    """
+    p = _normalize_for_compare(Path(str(path)))
+    b = _normalize_for_compare(Path(str(boundary)))
+    if not b:
+        return False
+    return p == b or p.startswith(b + "/")
+
+
+def contained_subpath(path: str | Path, boundary: str | Path) -> Path | None:
+    """resolved 归属判定：``path`` 解析后在 ``boundary``（含相等）内返回
+    resolved Path，否则返回 ``None``。
+
+    归属判定用 :meth:`pathlib.Path.relative_to`（Windows 路径语义大小写与
+    分隔符不敏感），供写入口校验子树成员关系；与 :func:`is_same_or_under`
+    的区别是会真正 resolve（跟随符号链接、折叠 ``..``）。
+    """
+    try:
+        resolved = Path(str(path)).resolve()
+        base = Path(str(boundary)).resolve()
+        resolved.relative_to(base)
+    except (OSError, ValueError):
+        return None
+    return resolved

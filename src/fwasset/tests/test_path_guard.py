@@ -141,3 +141,54 @@ def test_normalize_for_compare_order_regression(monkeypatch):
         path_guard._normalize_for_compare(Path("D:/按摩器程序/L36双机芯-上3D-下2D程序"))
         == "d:/按摩器程序/l36双机芯-上3d-下2d程序"
     )
+
+
+# --- R3：边界归属 helper -----------------------------------------------------
+
+
+def test_is_same_or_under_boundary_cases(tmp_path):
+    base = tmp_path / "型号A"
+    inside = base / "手控UI" / "v1"
+    sibling = tmp_path / "型号AB" / "v1"
+
+    assert path_guard.is_same_or_under(base, base)  # 等于边界
+    assert path_guard.is_same_or_under(inside, base)  # 边界之内
+    assert not path_guard.is_same_or_under(sibling, base)  # 兄弟前缀（A vs AB）
+    assert not path_guard.is_same_or_under(inside, "")
+    assert not path_guard.is_same_or_under("", base)
+
+
+def test_is_same_or_under_mixed_separators_and_case(tmp_path, monkeypatch):
+    monkeypatch.setattr(path_guard.os.path, "normcase", _fake_win_normcase)
+
+    assert path_guard.is_same_or_under("D:/Root/L36/手控UI", "d:\\root\\l36")
+    assert not path_guard.is_same_or_under("D:/Root/L36B/x", "d:/root/l36")
+
+
+def test_is_same_or_under_lexical_dotdot_is_prefix_matched(tmp_path):
+    # 字符串比较不做 resolve：含 ".." 的串按词法前缀命中边界。
+    # ".." 防越界由 assert_within_workspace 的词法段拒绝负责，
+    # is_same_or_under 只服务扫描产物等无 ".." 的存量路径。
+    base = tmp_path / "型号A"
+    traversal = base / ".." / "型号B"
+    assert path_guard.is_same_or_under(traversal, base) is True
+
+
+def test_contained_subpath_returns_resolved_inside(tmp_path):
+    base = tmp_path / "型号A"
+    inside = base / "手控UI"
+    inside.mkdir(parents=True)
+    result = path_guard.contained_subpath(inside, tmp_path)
+    assert result == inside.resolve()
+    assert result is not None and result.is_absolute()
+
+
+def test_contained_subpath_equal_to_boundary(tmp_path):
+    assert path_guard.contained_subpath(tmp_path, tmp_path) == tmp_path.resolve()
+
+
+def test_contained_subpath_none_outside_or_dotdot(tmp_path):
+    outside = tmp_path.parent / f"{tmp_path.name}_外部"
+    outside.mkdir(exist_ok=True)
+    assert path_guard.contained_subpath(outside, tmp_path) is None
+    assert path_guard.contained_subpath(tmp_path / "..", tmp_path) is None
