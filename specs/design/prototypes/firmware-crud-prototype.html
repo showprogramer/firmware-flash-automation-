@@ -1,0 +1,2023 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>程序管理原型</title>
+<style>
+/* ============================================================
+   设计令牌
+   ============================================================ */
+:root {
+  --bg: #f3f5f6;
+  --surface: #ffffff;
+  --ink: #1e2b32;
+  --ink-2: #40535c;
+  --muted: #6b7a82;
+  --line: #dde4e8;
+  --line-strong: #c3ced4;
+  --accent: #087f82;
+  --accent-deep: #05585b;
+  --accent-soft: #e3f3f2;
+  --borrow: #2f5fa8;
+  --borrow-soft: #e6eefa;
+  --warning: #8c5a00;
+  --warning-soft: #fff5dc;
+  --danger: #b42318;
+  --danger-soft: #fdf0ee;
+  --radius: 6px;
+  --shadow: 0 12px 30px rgba(24, 47, 58, .14);
+
+  font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  font-size: 14px;
+  color: var(--ink);
+}
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; background: var(--bg); }
+button, input, select { font: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+[hidden] { display: none !important; }
+
+/* ============================================================
+   骨架：侧栏 + 主区（表格） + 详情栏
+   ============================================================ */
+.app { height: 100vh; display: grid; grid-template-columns: 224px minmax(0, 1fr); }
+
+.sidebar { display: flex; flex-direction: column; gap: 2px; padding: 16px 10px; background: #fbfcfc; border-right: 1px solid var(--line); }
+.brand { display: flex; align-items: center; gap: 9px; padding: 0 8px 14px; font-size: 15px; font-weight: 700; }
+.brand-mark { width: 26px; height: 26px; display: grid; place-items: center; color: #fff; background: var(--accent); border-radius: 5px; font: 700 11px ui-monospace, monospace; }
+.nav-group { margin: 14px 8px 6px; color: var(--muted); font-size: 11px; letter-spacing: .4px; }
+.nav-item { width: 100%; display: flex; align-items: center; gap: 8px; min-height: 34px; padding: 0 10px; color: var(--ink-2); background: transparent; border: 0; border-radius: 5px; text-align: left; font-size: 13px; }
+.nav-item:hover { background: #eef3f4; }
+.nav-item[aria-current="true"] { color: var(--accent-deep); background: var(--accent-soft); font-weight: 700; }
+.nav-item .count { margin-left: auto; color: var(--muted); font-size: 11px; font-weight: 400; }
+.nav-item[aria-current="true"] .count { color: var(--accent-deep); }
+.nav-create { margin-top: 4px; color: var(--accent-deep); border: 1px dashed var(--line-strong); }
+.nav-create:hover { border-color: var(--accent); }
+.scroll-area { min-height: 0; overflow-y: auto; }
+.sidebar-foot { margin-top: auto; padding: 12px 8px 0; color: var(--muted); border-top: 1px solid var(--line); font-size: 11px; line-height: 1.7; }
+.sidebar-foot kbd { padding: 1px 4px; background: #eef2f3; border: 1px solid var(--line); border-radius: 3px; font: 11px ui-monospace, monospace; }
+
+/* 型号：可搜索下拉 */
+.model-picker { position: relative; }
+.model-button { width: 100%; display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 0 10px; background: #fff; border: 1px solid var(--line-strong); border-radius: 5px; text-align: left; }
+.model-button:hover { border-color: var(--accent); }
+.model-button .cap { color: var(--muted); font-size: 11px; }
+.model-button b { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.model-button .caret { color: var(--muted); font-size: 10px; }
+.model-pop { position: absolute; z-index: 25; top: calc(100% + 4px); left: 0; width: 268px; padding: 8px; background: #fff; border: 1px solid var(--line-strong); border-radius: 6px; box-shadow: var(--shadow); }
+.model-pop input { width: 100%; height: 32px; padding: 0 9px; margin-bottom: 6px; border: 1px solid var(--line-strong); border-radius: 5px; }
+.model-list { max-height: 268px; overflow-y: auto; }
+.model-option { width: 100%; display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 9px; color: var(--ink-2); background: none; border: 0; border-radius: 4px; text-align: left; font-size: 13px; }
+.model-option:hover { background: var(--accent-soft); }
+.model-option[aria-selected="true"] { color: var(--accent-deep); font-weight: 700; }
+.model-option .count { margin-left: auto; color: var(--muted); font-size: 11px; font-weight: 400; }
+.model-create { margin-top: 4px; color: var(--accent-deep); border-top: 1px solid var(--line); }
+.model-create:hover { background: var(--accent-soft); }
+.model-empty { padding: 12px 9px; color: var(--muted); font-size: 12px; }
+
+.main { min-width: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); }
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; height: 54px; padding: 0 20px; background: var(--surface); border-bottom: 1px solid var(--line); }
+.crumb { color: var(--muted); font-size: 12px; }
+.crumb strong { color: var(--ink); font-size: 15px; }
+.workspace { min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; padding: 16px 20px 18px; }
+
+/* ============================================================
+   主区：筛选条 + 表格
+   ============================================================ */
+.content { min-width: 0; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 10px; }
+.toolbar { display: flex; align-items: center; gap: 8px; }
+.search { flex: 1; min-width: 160px; height: 34px; padding: 0 11px; background: #fff; border: 1px solid var(--line-strong); border-radius: 5px; }
+.history-toggle { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 9px; color: var(--ink-2); border-radius: 5px; font-size: 12px; white-space: nowrap; cursor: pointer; }
+.history-toggle:hover { background: #eef3f4; }
+.history-toggle input { width: 15px; height: 15px; margin: 0; accent-color: var(--accent); }
+.button { height: 34px; padding: 0 12px; color: var(--ink-2); background: #fff; border: 1px solid var(--line-strong); border-radius: 5px; white-space: nowrap; }
+.button:hover:not(:disabled) { background: #eef3f4; }
+.button.primary { color: #fff; background: var(--accent); border-color: var(--accent); }
+.button.primary:hover:not(:disabled) { background: var(--accent-deep); }
+.button.danger { color: #fff; background: var(--danger); border-color: var(--danger); }
+.button.small { height: 28px; padding: 0 10px; font-size: 12px; }
+.button:disabled { opacity: .45; cursor: not-allowed; }
+
+.chips { display: flex; align-items: center; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
+.chip { height: 28px; padding: 0 11px; color: var(--ink-2); background: #fff; border: 1px solid var(--line-strong); border-radius: 14px; font-size: 12px; white-space: nowrap; }
+.chip:hover { background: #eef3f4; }
+.chip[aria-pressed="true"] { color: #fff; background: var(--accent); border-color: var(--accent); }
+.chip .n { margin-left: 5px; opacity: .7; font-variant-numeric: tabular-nums; }
+
+.table-wrap { min-height: 0; overflow: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+table { width: 100%; min-width: 680px; border-collapse: collapse; table-layout: fixed; }
+th { position: sticky; top: 0; z-index: 1; padding: 0 12px; height: 32px; color: var(--muted); background: #f2f6f7; border-bottom: 1px solid var(--line); text-align: left; font-size: 11px; font-weight: 700; }
+td { height: 44px; padding: 5px 12px; border-bottom: 1px solid #eef2f4; vertical-align: middle; font-size: 13px; }
+tbody tr[data-id]:hover { background: #f4f9f9; }
+tbody tr.selected { background: var(--accent-soft) !important; box-shadow: inset 3px 0 var(--accent); }
+tbody tr.inactive td { color: #93a0a6; }
+tbody tr.inactive .name b { font-weight: 400; }
+tbody tr.broken-row { background: var(--danger-soft); }
+tbody tr.broken-row:hover { background: #f9d0cc; }
+tbody tr.broken-row.selected { background: #f9dcd9 !important; box-shadow: inset 3px 0 var(--danger); }
+tbody tr.broken-row td { color: #6b3530; }
+tr.section td { height: 26px; padding-top: 8px; color: var(--muted); background: #fafbfc; border-bottom: 1px solid var(--line); font-size: 11px; font-weight: 700; }
+tr.section td em { color: var(--borrow); font-style: normal; font-weight: 400; }
+tr.section td span { color: var(--line-strong); font-weight: 400; }
+.name { display: flex; align-items: center; gap: 7px; }
+.name b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.name .inline-rename { width: 100%; height: 32px; padding: 0 7px; font-size: 13px; }
+tbody tr.editing { background: #fff !important; box-shadow: inset 3px 0 var(--accent); }
+tbody tr.editing:hover { background: #fff; }
+.owner { color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.owner small { color: var(--muted); }
+.ver { color: var(--ink-2); font: 12px ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+.ver.none { color: #a9b4b9; font-family: inherit; }
+.files { color: var(--ink-2); font-size: 12px; }
+.files small { display: block; margin-top: 1px; color: var(--muted); font: 11px ui-monospace, monospace; }
+.badge { flex: none; padding: 1px 6px; border-radius: 3px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.badge.default { color: var(--accent-deep); background: #d3eeec; }
+.badge.borrow { color: var(--borrow); background: var(--borrow-soft); }
+.badge.lent { color: var(--warning); background: var(--warning-soft); }
+.badge.broken { color: var(--danger); background: var(--danger-soft); }
+.badge.history { color: #5a6a72; background: #e9edef; font-weight: 400; }
+.empty { padding: 48px !important; color: var(--muted); text-align: center; }
+.foot-note { display: flex; justify-content: space-between; gap: 12px; color: var(--muted); font-size: 11px; }
+
+/* ============================================================
+   详情栏
+   ============================================================ */
+.inspector { min-height: 0; overflow: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.ins-head { padding: 15px 16px 13px; border-bottom: 1px solid var(--line); }
+.ins-eyebrow { margin: 0 0 5px; color: var(--accent); font-size: 11px; font-weight: 700; }
+.ins-eyebrow.borrow { color: var(--borrow); }
+.title-line { display: flex; align-items: flex-start; gap: 6px; }
+.title-line h2 { flex: 1; margin: 0; font-size: 17px; line-height: 1.35; word-break: break-all; }
+.pencil { flex: none; width: 26px; height: 26px; display: grid; place-items: center; color: var(--muted); background: none; border: 0; border-radius: 4px; font-size: 14px; }
+.pencil:hover, .pencil:focus-visible { color: var(--accent-deep); background: var(--accent-soft); }
+.ins-meta { margin: 6px 0 0; color: var(--muted); font-size: 12px; }
+.ins-badges { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
+.ins-body { padding: 13px 16px 16px; }
+.row { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 10px; padding: 8px 0; border-bottom: 1px solid #f0f3f4; font-size: 12px; }
+.row dt { color: var(--muted); }
+.row dd { margin: 0; color: var(--ink-2); word-break: break-word; }
+.row dd ul { margin: 4px 0 0; padding-left: 16px; }
+.row dd li { line-height: 1.7; }
+.path { color: var(--ink-2); font: 11px/1.6 ui-monospace, monospace; word-break: break-all; }
+.callout { padding: 9px 11px; margin-top: 12px; border-radius: 5px; font-size: 12px; line-height: 1.6; }
+.callout.borrow { color: #24457a; background: var(--borrow-soft); }
+.callout.broken { color: #8c2219; background: var(--danger-soft); }
+.backup-summary { display: flex; align-items: center; gap: 10px; padding: 10px 11px; margin-top: 12px; background: #f7f9fa; border: 1px solid var(--line); border-radius: 6px; }
+.backup-summary-icon { width: 28px; height: 28px; display: grid; place-items: center; flex: none; color: var(--accent-deep); background: var(--accent-soft); border-radius: 6px; font-size: 14px; }
+.backup-summary-copy { flex: 1; min-width: 0; }
+.backup-summary-copy b { display: block; color: var(--ink-2); font-size: 12px; }
+.backup-summary-copy span { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; }
+.backup-open { flex: none; padding: 4px 0; color: var(--accent-deep); background: none; border: 0; font-size: 12px; font-weight: 600; }
+.backup-open:hover { color: var(--accent); text-decoration: underline; }
+.actions { display: grid; gap: 7px; margin-top: 14px; }
+.actions .button { width: 100%; }
+.ins-empty { padding: 26px 16px; color: var(--muted); font-size: 13px; line-height: 1.7; }
+.ins-empty strong { display: block; margin-bottom: 6px; color: var(--ink); font-size: 15px; }
+
+.inline-edit { margin-top: 6px; }
+.field { width: 100%; height: 34px; padding: 0 10px; background: #fff; border: 1px solid var(--line-strong); border-radius: 5px; }
+.field[aria-invalid="true"] { border-color: var(--danger); }
+.hint { margin: 5px 0 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.hint.error { color: var(--danger); }
+.inline-foot { display: flex; gap: 7px; margin-top: 9px; }
+
+/* ============================================================
+   右键菜单 / 模态 / 提示条
+   ============================================================ */
+.context { position: fixed; z-index: 30; width: 210px; padding: 4px; background: #fff; border: 1px solid var(--line-strong); border-radius: 6px; box-shadow: var(--shadow); }
+.context button { width: 100%; padding: 8px 10px; color: var(--ink-2); background: none; border: 0; border-radius: 4px; text-align: left; font-size: 13px; }
+.context button:hover { color: var(--accent-deep); background: var(--accent-soft); }
+.context button.danger:hover { color: var(--danger); background: var(--danger-soft); }
+
+.overlay { position: fixed; z-index: 40; inset: 0; display: grid; place-items: center; padding: 18px; background: rgba(18, 31, 40, .45); }
+.dialog { width: min(540px, 100%); max-height: calc(100vh - 36px); overflow: auto; background: #fff; border-radius: 8px; box-shadow: 0 20px 58px rgba(16, 30, 37, .3); }
+.dialog-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px 0; }
+.dialog-head h2 { margin: 0; font-size: 17px; }
+.close { width: 30px; height: 30px; color: var(--muted); background: none; border: 0; border-radius: 4px; font-size: 19px; }
+.close:hover { background: #eef3f4; }
+.dialog-body { padding: 12px 18px 18px; color: var(--ink-2); font-size: 13px; line-height: 1.6; }
+.dialog-body > p:first-child { margin-top: 0; }
+.dialog-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 0 18px 16px; }
+.form-row { margin-bottom: 13px; }
+label.form-label { display: block; margin-bottom: 5px; color: var(--ink-2); font-size: 12px; font-weight: 700; }
+select.field { padding: 0 8px; }
+.section-title { margin: 0 0 4px; color: var(--ink); font-size: 14px; font-weight: 700; }
+.section-title + .section-desc { margin: 0 0 10px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.dialog-body hr.split { margin: 18px 0 16px; border: 0; border-top: 1px solid var(--line); }
+.path-field { display: flex; align-items: center; gap: 9px; padding: 8px 10px; background: #f9fbfb; border: 1px solid var(--line); border-radius: 5px; }
+.path-field .path { flex: 1; min-width: 0; }
+.path-field .button { flex: none; }
+.choice-grid { display: grid; gap: 7px; }
+.choice { display: flex; align-items: flex-start; gap: 9px; padding: 11px; background: #fff; border: 1px solid var(--line); border-radius: 5px; cursor: pointer; }
+.choice:hover { background: #f7fafa; }
+.choice.selected { background: var(--accent-soft); border-color: var(--accent); }
+.choice input { margin-top: 3px; accent-color: var(--accent); }
+.choice b { display: block; font-size: 13px; }
+.choice small { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.preview-line { padding: 9px 11px; margin-top: 10px; background: #f7f9fa; border: 1px solid var(--line); border-radius: 5px; font-size: 12px; }
+.preview-line b { color: var(--ink); }
+.note { padding: 9px 11px; margin: 10px 0; background: var(--warning-soft); border-left: 3px solid #d39524; color: var(--warning); font-size: 12px; }
+.note.danger { color: #8c2219; background: var(--danger-soft); border-left-color: var(--danger); }
+.use-list { margin: 8px 0 0; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
+.use { padding: 8px 10px; border-bottom: 1px solid #eef2f4; }
+.use:last-child { border-bottom: 0; }
+.use b { display: block; color: var(--ink-2); font-size: 12px; }
+.use span { color: var(--muted); font-size: 11px; }
+.use code { color: var(--muted); font: 11px/1.6 ui-monospace, monospace; word-break: break-all; }
+.ack { display: flex; align-items: flex-start; gap: 8px; margin-top: 13px; font-size: 13px; cursor: pointer; }
+.ack input { margin-top: 3px; }
+.progress { height: 6px; overflow: hidden; margin-top: 14px; background: #e4ecee; border-radius: 3px; }
+.progress i { display: block; width: 0; height: 100%; background: var(--accent); }
+.progress-text { margin: 7px 0 0; color: var(--muted); font-size: 12px; }
+.picker { display: flex; align-items: center; gap: 9px; padding: 9px 11px; background: #f7f9fa; border: 1px dashed var(--line-strong); border-radius: 5px; font-size: 12px; }
+.picker span { flex: 1; color: var(--muted); word-break: break-all; }
+.picker span.filled { color: var(--ink-2); font-family: ui-monospace, monospace; font-size: 11px; }
+
+/* 导入：单一拖放区，文件 / 文件夹 / 压缩包都可直接放入 */
+.dropzone { display: flex; align-items: center; gap: 9px; padding: 13px 11px; background: #f7f9fa; border: 1px dashed var(--line-strong); border-radius: 5px; font-size: 12px; }
+.dropzone:hover { border-color: var(--accent); }
+.dropzone.dragover { background: var(--accent-soft); border-color: var(--accent); }
+.dropzone span { flex: 1; color: var(--muted); word-break: break-all; }
+.dropzone span.filled { color: var(--ink-2); font-family: ui-monospace, monospace; font-size: 11px; }
+.infer { margin: 6px 0 0; padding: 7px 9px; background: var(--accent-soft); border-radius: 4px; color: #05585b; font-size: 11px; line-height: 1.6; }
+.ins-danger-link { display: block; padding: 6px 0 2px; margin-top: 8px; color: var(--danger); background: none; border: 0; font-size: 12px; text-align: left; opacity: .8; }
+.ins-danger-link:hover { opacity: 1; text-decoration: underline; }
+
+.manage-list { display: flex; flex-direction: column; gap: 6px; }
+.manage-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 5px; }
+.manage-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.manage-count { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.manage-actions { display: flex; gap: 6px; }
+.manage-input { flex: 1; min-width: 0; height: 30px; padding: 0 8px; border: 1px solid var(--line-strong); border-radius: 4px; }
+
+.toasts { position: fixed; z-index: 60; right: 16px; bottom: 16px; display: grid; gap: 8px; width: min(380px, calc(100vw - 32px)); }
+.toast { display: flex; align-items: center; gap: 10px; padding: 10px 12px; color: #fff; background: #243a43; border-left: 3px solid #7bd7d5; border-radius: 6px; box-shadow: var(--shadow); font-size: 13px; }
+.toast.ok { border-left-color: #61d397; }
+.toast.warn { border-left-color: #eeb64e; }
+.toast p { flex: 1; margin: 0; line-height: 1.45; }
+.toast small { display: block; opacity: .75; font-size: 11px; }
+.toast button { flex: none; padding: 5px 10px; color: #fff; background: rgba(255, 255, 255, .16); border: 0; border-radius: 4px; font-size: 12px; font-weight: 700; }
+.toast button:hover { background: rgba(255, 255, 255, .3); }
+
+@media (max-width: 1180px) {
+  .app { grid-template-columns: 196px minmax(0, 1fr); }
+  .workspace { grid-template-columns: minmax(0, 1fr) 288px; }
+}
+@media (max-width: 920px) {
+  .app { display: block; height: auto; }
+  .sidebar { flex-direction: row; align-items: center; gap: 10px; padding: 10px 14px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .brand, .nav-group, .scroll-area, .sidebar-foot { display: none; }
+  .model-picker { flex: 1; max-width: 320px; }
+  .main { display: block; }
+  .workspace, .content { display: block; }
+  .table-wrap { max-height: 58vh; margin: 10px 0; }
+  .inspector { margin-top: 12px; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand"><span class="brand-mark">FW</span><span>程序资产</span></div>
+
+    <div class="model-picker">
+      <button class="model-button" id="modelButton" type="button" aria-haspopup="listbox" aria-expanded="false">
+        <span class="cap">型号</span><b id="modelLabel">选择型号</b><span class="caret">▾</span>
+      </button>
+      <div class="model-pop" id="modelPop" hidden>
+        <input id="modelSearch" type="search" placeholder="搜索型号…" aria-label="搜索型号">
+        <div class="model-list" id="modelList" role="listbox" aria-label="型号"></div>
+      </div>
+    </div>
+
+    <div class="scroll-area"><nav id="navScopes" aria-label="通用/定制"></nav></div>
+
+    <div class="sidebar-foot">
+      双击一行打开所在文件夹。<br>
+      把程序拖进窗口，直接新增。<br>
+      <kbd>↑</kbd><kbd>↓</kbd> 切换 · <kbd>F2</kbd> 改名 · <kbd>Del</kbd> 删除
+    </div>
+  </aside>
+
+  <section class="main">
+    <header class="topbar">
+      <div class="crumb"><strong id="crumbTitle">程序列表</strong><span id="crumbPath"></span></div>
+      <button class="button" id="btnSettings" type="button">⚙ 设置</button>
+    </header>
+
+    <div class="workspace">
+      <main class="content">
+        <div class="toolbar">
+          <input class="search" id="search" type="search" placeholder="搜索程序名称、方案或文件名" aria-label="搜索程序">
+          <button class="button primary" id="btnAdd" type="button">＋ 新增程序</button>
+        </div>
+        <div class="chips" id="chips" role="group" aria-label="程序类型筛选"></div>
+        <div class="table-wrap">
+          <table aria-label="程序列表">
+            <colgroup><col style="width:46%"><col style="width:22%"><col style="width:8%; min-width:72px"><col style="width:24%"></colgroup>
+            <thead><tr><th scope="col">程序名称</th><th scope="col">通用/定制</th><th scope="col">版本</th><th scope="col">程序文件</th></tr></thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+        <p class="foot-note"><span id="footCount"></span><span id="footHidden"></span></p>
+      </main>
+      <aside class="inspector" id="inspector" aria-live="polite"></aside>
+    </div>
+  </section>
+</div>
+
+<div class="context" id="context" hidden></div>
+<div class="overlay" id="overlay" hidden></div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script>
+"use strict";
+
+/* ============================================================
+   1. 领域模型（对齐 core 实现，勿凭直觉改）
+   ------------------------------------------------------------
+   两种“程序”：
+   1) 本型号自己的程序 —— 有真实文件，放在 通用/ 或 定制/<方案>/ 下。
+   2) 用别的型号的程序 —— 不复制任何文件，只在本型号的「型号配置」里记一条，
+      对应 core 的 shared_modules（SharedModuleRef）。要点：
+      · 粒度是「程序类型」整体，不是单个程序对单个方案；
+      · 登记写在【借入方】型号上，不是从来源那边勾选谁能用；
+      · 一个型号的一个程序类型，同时只能记一条（再记要确认覆盖）；
+      · 两种模式：static = 固定用这个程序；follow_asset = 跟随这个程序的后续更新；
+      · 登记失败/来源消失时是 shared_missing，界面必须能看出来；
+      · 已登记的类型，本型号自己的同类程序不再生效（core B4b）；
+      · 取消登记只删这条记录，不删任何程序文件。
+   ============================================================ */
+const ROOT = "D:\\按摩器程序";
+
+const PLATFORMS = ["单3D", "单2D", "双2D", "上3D下2D"];
+
+/** 型号。已清空：打开页面不预置型号，通过型号下拉底部的「＋ 新建型号」创建。 */
+const MODELS = [];
+
+const TYPES = ["主板程序", "手控UI", "蓝牙程序", "语音程序", "快捷键程序", "腿部程序", "机芯板程序", "旋钮开关", "音波板", "其他资料"];
+
+/** 程序归属厂商。预置四家，可在设置里添加；默认第一项，填错了用更新程序改。 */
+const VENDORS = ["摩众", "国瑞", "亿微", "明锐"];
+
+function vendorOptions(selected) {
+  const current = VENDORS.includes(selected) ? selected : VENDORS[0];
+  return VENDORS.map(vendor => `<option${vendor === current ? " selected" : ""}>${esc(vendor)}</option>`).join("");
+}
+
+/** 定制方案。已清空：打开页面不预置任何方案，由使用者通过「＋ 新建定制方案」创建。 */
+let SCHEMES = [];
+
+/** 本型号自己的程序。owner 为 null 表示通用，否则为方案 id。
+ *  已清空：打开页面与「重新读取程序文件夹」都不再带入演示程序。 */
+const SEED_ASSETS = [];
+
+/**
+ * 用别的型号的程序（core: shared_modules）。
+ * model + type 是主键；一个型号的一个类型只能有一条。
+ * mode = "static" / "follow_asset" 都认 fromAssetId；后者会跟随这个程序的后续更新。
+ * 已清空：打开页面与「重新读取程序文件夹」都不再带入演示借用记录。
+ */
+const SEED_BORROWS = [];
+
+/* ============================================================
+   2. 运行状态
+   ============================================================ */
+/* 程序列表初始为空；SEED_* 已清空，「重新读取程序文件夹」也只重置为空列表 */
+let assets = [];
+let borrows = [];
+let backups = [];
+
+function nextId(prefix) { return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`; }
+
+function assetFor(id) { return assets.find(asset => asset.id === id) || null; }
+
+/** 测试与脚本用：直接放进运行态的程序（模拟“从文件夹添加”落地） */
+function createAsset(fields = {}) {
+  const asset = { id: nextId("asset"), model: "l36", type: "主板程序", name: "测试程序", owner: null, vendor: VENDORS[0], files: ["test.bin"], ...fields };
+  assets.push(asset);
+  return asset;
+}
+
+function createVendor(name) {
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error("厂商名称不能为空");
+  if (VENDORS.some(vendor => vendor === trimmed)) throw new Error("已有同名厂商");
+  VENDORS.push(trimmed);
+  return trimmed;
+}
+
+function createModel(name, platform) {
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error("型号名称不能为空");
+  if (!PLATFORMS.includes(platform)) throw new Error("请选择机芯类型");
+  if (MODELS.some(model => model.name === trimmed)) throw new Error("已有同名型号");
+  const model = { id: nextId("model"), name: trimmed, platform };
+  MODELS.push(model);
+  return model;
+}
+
+function createScheme(modelId, name) {
+  const trimmed = name.trim();
+  const model = MODELS.find(item => item.id === modelId);
+  if (!model) throw new Error("找不到型号");
+  if (!trimmed) throw new Error("方案名称不能为空");
+  if (SCHEMES.some(scheme => scheme.model === modelId && scheme.name === trimmed)) throw new Error("已有同名方案");
+  const scheme = { id: nextId("scheme"), name: trimmed, model: modelId };
+  SCHEMES.push(scheme);
+  return { ...scheme, platform: model.platform };
+}
+
+function renameScheme(schemeId, name) {
+  const trimmed = name.trim();
+  const scheme = SCHEMES.find(item => item.id === schemeId);
+  if (!scheme) throw new Error("找不到方案");
+  if (!trimmed) throw new Error("方案名称不能为空");
+  if (SCHEMES.some(item => item.id !== schemeId && item.model === scheme.model && item.name === trimmed)) {
+    throw new Error("已有同名方案");
+  }
+  scheme.name = trimmed;
+  return scheme;
+}
+
+function deleteScheme(schemeId) {
+  const index = SCHEMES.findIndex(item => item.id === schemeId);
+  if (index < 0) throw new Error("找不到方案");
+  const [scheme] = SCHEMES.splice(index, 1);
+  const assetIds = new Set(assets.filter(a => a.owner === schemeId).map(a => a.id));
+  assets = assets.filter(a => a.owner !== schemeId);
+  backups = backups.filter(b => !assetIds.has(b.assetId));
+  return scheme;
+}
+
+function renameModel(modelId, name) {
+  const trimmed = name.trim();
+  const model = MODELS.find(item => item.id === modelId);
+  if (!model) throw new Error("找不到型号");
+  if (!trimmed) throw new Error("型号名称不能为空");
+  if (MODELS.some(item => item.id !== modelId && item.name.toLocaleLowerCase() === trimmed.toLocaleLowerCase())) {
+    throw new Error("已有同名型号");
+  }
+  model.name = trimmed;
+  return model;
+}
+
+function deleteModel(modelId) {
+  if (MODELS.length <= 1) throw new Error("至少保留一个型号");
+  const index = MODELS.findIndex(item => item.id === modelId);
+  if (index < 0) throw new Error("找不到型号");
+  const [model] = MODELS.splice(index, 1);
+  const schemeIds = new Set(SCHEMES.filter(scheme => scheme.model === modelId).map(scheme => scheme.id));
+  SCHEMES = SCHEMES.filter(scheme => scheme.model !== modelId);
+  assets = assets.filter(asset => asset.model !== modelId && !schemeIds.has(asset.owner));
+  borrows = borrows.filter(borrow => borrow.model !== modelId && borrow.fromModel !== modelId);
+  backups = backups.filter(backup => {
+    const asset = assetFor(backup.assetId);
+    return Boolean(asset);
+  });
+  return model;
+}
+
+function backupsFor(assetId) {
+  return backups.filter(backup => backup.assetId === assetId)
+    .sort((left, right) => right.modifiedAt.localeCompare(left.modifiedAt));
+}
+
+function makeBackup(assetId, asset) {
+  return {
+    id: nextId("backup"), assetId, asset: structuredClone(asset),
+    modifiedAt: asset.modifiedAt || "2026-08-10T07:37:00.000Z",
+    filesCount: asset.files.length,
+  };
+}
+
+function updateAsset(assetId, changes, oldProgramChoice) {
+  const asset = assetFor(assetId);
+  if (!asset) throw new Error("找不到程序");
+  if (!changes.name.trim()) throw new Error("请填写程序名称");
+  const replacing = Array.isArray(changes.files);
+  if (replacing && !changes.files.length) throw new Error("请填写程序名称并放入程序");
+  if (replacing && oldProgramChoice !== "keep" && oldProgramChoice !== "discard") {
+    throw new Error("请选择如何处理原来的程序");
+  }
+  const previous = structuredClone(asset);
+  if (replacing && oldProgramChoice === "keep") backups.push(makeBackup(assetId, previous));
+  const next = structuredClone(changes);
+  if (!replacing) {
+    delete next.files;
+    delete next.extraFiles;
+    delete next.version;
+    delete next.isHandControl;
+    delete next.modifiedAt;
+  }
+  Object.assign(asset, next);
+  if (previous.type !== asset.type) asset.isDefault = false;
+  return asset;
+}
+
+function restoreBackup(assetId, backupId) {
+  const asset = assetFor(assetId);
+  const backup = backups.find(item => item.id === backupId && item.assetId === assetId);
+  if (!asset || !backup) throw new Error("找不到备用副本");
+  const current = structuredClone(asset);
+  Object.assign(asset, structuredClone(backup.asset), { id: assetId });
+  backups = backups.filter(item => item.id !== backupId);
+  backups.push(makeBackup(assetId, current));
+  return asset;
+}
+
+function deleteBackup(assetId, backupId) {
+  const before = backups.length;
+  backups = backups.filter(item => item.id !== backupId || item.assetId !== assetId);
+  return backups.length !== before;
+}
+
+function resolveBorrow(borrow) { return assetFor(borrow.fromAssetId); }
+
+function selectedBorrowId(candidates, currentId, presetId = "") {
+  return candidates.some(candidate => candidate.id === currentId) ? currentId
+    : candidates.some(candidate => candidate.id === presetId) ? presetId
+      : candidates[0]?.id || "";
+}
+
+function prototypeDataApi() {
+  return { asset: assetFor, backupsFor, createAsset, createModel, createScheme, createVendor, deleteBackup, deleteModel, deleteScheme, renameModel, renameScheme, resolveBorrow, restoreBackup, selectedBorrowId, updateAsset };
+}
+
+const state = {
+  model: "",        // 无型号时为 ""，主区与新增按钮不可用，先「＋ 新建型号」
+  scope: "all",     // all | common | <方案 id>
+  type: "all",
+  query: "",
+  selectedId: null, // 本型号程序 → 资产 id；用别的型号的 → "borrow:<id>"
+  renaming: false,
+};
+
+/* ============================================================
+   3. 工具
+   ============================================================ */
+const $ = sel => document.querySelector(sel);
+const esc = value => String(value).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const byId = id => assets.find(a => a.id === id);
+const schemeName = id => (SCHEMES.find(s => s.id === id) || {}).name || id;
+const modelName = id => (MODELS.find(m => m.id === id) || {}).name || id;
+const schemesOf = model => SCHEMES.filter(s => s.model === model);
+
+const ownerText = a => (a.owner ? `定制 · ${schemeName(a.owner)}` : "通用");
+const folderOf = a => `${ROOT}\\${modelName(a.model)}\\${a.owner ? `定制\\${schemeName(a.owner)}` : "通用"}\\${a.type}\\${a.name}`;
+const extList = a => [...new Set(a.files.map(f => f.slice(f.lastIndexOf(".")).toLowerCase()))].join(" ");
+const countIn = model => assets.filter(a => a.model === model && !a.history).length;
+
+/** 这个型号的这个类型，有没有登记“用别的型号的程序” */
+const borrowFor = (model, type) => borrows.find(b => b.model === model && b.type === type) || null;
+
+/** 一条登记实际指向哪个程序；null 表示来源程序已被删除。 */
+function borrowTarget(b) {
+  return resolveBorrow(b);
+}
+
+function borrowProblem(b) {
+  return borrowTarget(b) ? "" : "来源程序找不到了，可能已被删除或改名";
+}
+
+/** 谁在用这个程序（删除前的反查） */
+function usersOf(a) {
+  const out = [];
+  if (a.isDefault && !a.owner) out.push({ where: `${modelName(a.model)} 的默认设置`, detail: `${a.type}默认用它` });
+  for (const b of borrows) {
+    const target = borrowTarget(b);
+    if (target && target.id === a.id) {
+      out.push({
+        where: `型号 ${modelName(b.model)}`,
+        detail: b.mode === "follow_asset" ? `${b.type}跟随它的后续更新` : `${b.type}固定用它`,
+      });
+    }
+  }
+  return out;
+}
+
+/* ---------- 主表的行 ---------- */
+function buildRows() {
+  const local = assets.filter(a => a.model === state.model)
+    .map(a => ({ kind: "asset", id: a.id, type: a.type, asset: a }));
+  const borrowed = borrows.filter(b => b.model === state.model)
+    .map(b => ({ kind: "borrow", id: `borrow:${b.id}`, type: b.type, borrow: b }));
+  return [...local, ...borrowed];
+}
+
+function rowMatches(row) {
+  if (state.type !== "all" && row.type !== state.type) return false;
+  if (row.kind === "borrow") {
+    // 用别的型号的程序不属于“通用/定制”任何一档，只在“全部程序”里出现
+    if (state.scope !== "all") return false;
+    if (state.query) {
+      const target = borrowTarget(row.borrow);
+      const haystack = [row.type, modelName(row.borrow.fromModel), target ? target.name : "", target?.vendor || ""].join(" ").toLocaleLowerCase();
+      if (!haystack.includes(state.query)) return false;
+    }
+    return true;
+  }
+  const a = row.asset;
+  if (a.history) return false;
+  if (state.scope === "common" && a.owner) return false;
+  if (state.scope !== "all" && state.scope !== "common" && a.owner !== state.scope) return false;
+  if (state.query) {
+    const haystack = [a.name, a.type, ownerText(a), a.vendor || "", a.version || "", ...a.files].join(" ").toLocaleLowerCase();
+    if (!haystack.includes(state.query)) return false;
+  }
+  return true;
+}
+
+function visibleRows() {
+  const order = new Map(TYPES.map((t, i) => [t, i]));
+  return buildRows().filter(rowMatches).sort((x, y) =>
+    (order.get(x.type) - order.get(y.type))
+    || (x.kind === "borrow" ? -1 : 0) - (y.kind === "borrow" ? -1 : 0)
+    || (x.kind === "asset" && y.kind === "asset"
+      ? x.asset.name.localeCompare(y.asset.name, "zh") || (x.asset.history ? 1 : -1)
+      : 0));
+}
+
+function selectedRow() {
+  if (!state.selectedId) return null;
+  return visibleRows().find(r => r.id === state.selectedId)
+    || buildRows().find(r => r.id === state.selectedId)
+    || null;
+}
+
+/* ============================================================
+   4. 写操作 + 撤销
+   ============================================================ */
+const snapshot = () => ({
+  assets: structuredClone(assets), borrows: structuredClone(borrows), backups: structuredClone(backups),
+  models: structuredClone(MODELS), schemes: structuredClone(SCHEMES), selectedId: state.selectedId,
+});
+
+function restore(snap) {
+  assets = snap.assets;
+  borrows = snap.borrows;
+  backups = snap.backups;
+  MODELS.splice(0, MODELS.length, ...snap.models);
+  SCHEMES.splice(0, SCHEMES.length, ...snap.schemes);
+  state.selectedId = snap.selectedId;
+  state.renaming = false;
+  render();
+  toast("info", "已撤销上一步操作");
+}
+
+function apply(mutate, message, detail = "") {
+  const snap = snapshot();
+  mutate();
+  state.renaming = false;
+  render();
+  toast("ok", message, detail, () => restore(snap));
+}
+
+/* ============================================================
+   5. 渲染
+   ============================================================ */
+function render() {
+  renderModelPicker();
+  renderScopes();
+  renderChips();
+  renderTable();
+  renderInspector();
+  $("#btnAdd").disabled = !state.model;
+  $("#crumbTitle").textContent = state.model ? modelName(state.model) : "程序列表";
+  $("#crumbPath").textContent = !state.model ? "　/　还没有型号"
+    : state.scope === "all" ? "　/　全部程序"
+    : state.scope === "common" ? "　/　通用程序"
+    : `　/　定制 · ${schemeName(state.scope)}`;
+}
+
+function renderModelPicker() {
+  $("#modelLabel").textContent = state.model ? modelName(state.model) : "选择型号";
+  const query = $("#modelSearch").value.trim().toLocaleLowerCase();
+  const list = MODELS.filter(m => !query || m.name.toLocaleLowerCase().includes(query));
+  const createButton = `<button class="model-option model-create" type="button" data-act="newModel">＋ 新建型号</button>`;
+  $("#modelList").innerHTML = (list.length
+    ? list.map(m => `<button class="model-option" type="button" role="option" data-model="${m.id}" aria-selected="${m.id === state.model}">
+        ${esc(m.name)}<span class="count">${countIn(m.id)}</span></button>`).join("")
+    : `<p class="model-empty">${MODELS.length ? "没有匹配的型号" : "还没有型号，从下方新建"}</p>`) + createButton;
+}
+
+function renderScopes() {
+  if (!state.model) { $("#navScopes").innerHTML = ""; return; }
+  const local = assets.filter(a => a.model === state.model && !a.history);
+  const scoped = id => local.filter(a => (id === "common" ? !a.owner : a.owner === id)).length;
+  const borrowCount = borrows.filter(b => b.model === state.model).length;
+  $("#navScopes").innerHTML = `
+    <button class="nav-item" type="button" data-scope="all" aria-current="${state.scope === "all"}">
+      全部程序<span class="count">${local.length + borrowCount}</span></button>
+    <button class="nav-item" type="button" data-scope="common" aria-current="${state.scope === "common"}">
+      通用程序<span class="count">${scoped("common")}</span></button>`
+    + (schemesOf(state.model).length ? `<p class="nav-group">定制</p>` : "")
+    + schemesOf(state.model).map(s => `
+      <button class="nav-item" type="button" data-scope="${s.id}" data-scheme="${s.id}" aria-current="${state.scope === s.id}">
+        ${esc(s.name)}<span class="count">${scoped(s.id)}</span></button>`).join("")
+    + `<button class="nav-item nav-create" type="button" data-act="newScheme">＋ 新建定制方案</button>`;
+}
+
+function renderChips() {
+  if (!state.model) { $("#chips").innerHTML = ""; return; }
+  const saveType = state.type;
+  state.type = "all";
+  const pool = buildRows().filter(rowMatches);
+  state.type = saveType;
+  const chip = (value, label, n) => `<button class="chip" type="button" data-type="${esc(value)}" aria-pressed="${state.type === value}">${esc(label)}<span class="n">${n}</span></button>`;
+  $("#chips").innerHTML = chip("all", "全部", pool.length)
+    + TYPES.filter(t => pool.some(r => r.type === t)).map(t => chip(t, t, pool.filter(r => r.type === t).length)).join("");
+}
+
+function renderTable() {
+  const list = visibleRows();
+  if (state.selectedId && !list.some(r => r.id === state.selectedId)) {
+    state.selectedId = null;
+    state.renaming = false;
+  }
+
+  const showSections = state.type === "all";
+  let lastType = null;
+  const html = list.flatMap(row => {
+    const out = [];
+    if (showSections && row.type !== lastType) {
+      lastType = row.type;
+      const borrow = borrowFor(state.model, row.type);
+      const note = borrow ? ` <em>· 这个类型正在用 ${esc(modelName(borrow.fromModel))} 的程序，本型号自己的不生效</em>` : "";
+      out.push(`<tr class="section"><td colspan="4">${esc(row.type)} <span>· ${list.filter(x => x.type === row.type).length}</span>${note}</td></tr>`);
+    }
+    out.push(row.kind === "borrow" ? borrowRowHtml(row) : assetRowHtml(row));
+    return out;
+  }).join("");
+
+  $("#rows").innerHTML = html || (!state.model
+    ? `<tr><td colspan="4" class="empty">还没有型号。点左上角「＋ 新建型号」创建第一个型号。</td></tr>`
+    : `<tr><td colspan="4" class="empty">没有匹配的程序。试试清空搜索，或切换左侧的通用/定制。</td></tr>`);
+
+  $("#footCount").textContent = `显示 ${list.length} 行`;
+  $("#footHidden").textContent = "备用副本不在主表显示，可在详情区查看";
+}
+
+function assetRowHtml(row) {
+  const a = row.asset;
+  const overridden = Boolean(borrowFor(state.model, a.type));
+  const badges = [
+    a.isDefault && !a.owner ? '<span class="badge default">★ 默认</span>' : "",
+    usersOf(a).some(u => u.where.startsWith("型号")) ? '<span class="badge lent">别的型号在用</span>' : "",
+    a.history ? '<span class="badge history">备用副本</span>' : "",
+  ].join("");
+  const editing = state.renaming && state.selectedId === a.id;
+  return `<tr data-id="${a.id}" class="${state.selectedId === a.id ? "selected" : ""}${overridden ? " inactive" : ""}${editing ? " editing" : ""}" tabindex="-1">
+    <td><div class="name">${editing ? `<input class="field inline-rename" value="${esc(a.name)}" data-inline-rename autocomplete="off" aria-label="程序名称">` : `<b title="${esc(a.name)}">${esc(a.name)}</b>${badges}`}</div></td>
+    <td class="owner">${a.owner ? `定制 <small>· ${esc(schemeName(a.owner))}</small>` : "通用"}</td>
+    <td class="ver ${a.version ? "" : "none"}">${a.version ? esc(a.version) : "—"}</td>
+    <td class="files">${a.files.length} 个文件<small>${esc(extList(a))}</small></td>
+  </tr>`;
+}
+
+function borrowRowHtml(row) {
+  const b = row.borrow;
+  const target = borrowTarget(b);
+  const problem = borrowProblem(b);
+  const label = b.mode === "follow_asset" ? `跟随 ${modelName(b.fromModel)} 的程序` : `来自 ${modelName(b.fromModel)}`;
+  const badge = problem
+    ? '<span class="badge broken">用不了</span>'
+    : `<span class="badge borrow">${esc(label)}</span>`;
+  return `<tr data-id="${row.id}" class="${state.selectedId === row.id ? "selected" : ""}${problem ? " broken-row" : ""}" tabindex="-1">
+    <td><div class="name"><b>${esc(target ? target.name : "（找不到程序）")}</b>${badge}</div></td>
+    <td class="owner">用别的型号的</td>
+    <td class="ver ${target && target.version ? "" : "none"}">${target && target.version ? esc(target.version) : "—"}</td>
+    <td class="files">${target ? `${target.files.length} 个文件<small>${esc(extList(target))}</small>` : "—"}</td>
+  </tr>`;
+}
+
+function renderInspector() {
+  const row = selectedRow();
+  if (!row) {
+    $("#inspector").innerHTML = `<div class="ins-empty"><strong>未选择程序</strong>
+      选中一行后，这里显示它放在哪、谁在用它，以及可以做的操作。<br><br>
+      双击一行可以直接打开所在文件夹。</div>`;
+    return;
+  }
+  $("#inspector").innerHTML = row.kind === "borrow" ? borrowInspectorHtml(row.borrow) : assetInspectorHtml(row.asset);
+}
+
+function assetInspectorHtml(a) {
+  const users = usersOf(a);
+  const overridden = borrowFor(state.model, a.type);
+  const saved = backupsFor(a.id);
+  const badges = [
+    a.isDefault && !a.owner ? '<span class="badge default">★ 本型号默认</span>' : "",
+    a.history ? '<span class="badge history">备用副本</span>' : "",
+  ].join("");
+  const canDefault = !a.owner && !a.history;
+  return `
+    <div class="ins-head">
+      ${state.renaming ? `<p class="ins-eyebrow">正在改名</p><div class="title-line"><h2>${esc(a.name)}</h2></div><p class="ins-meta">按 Enter 保存，按 Esc 取消</p>` : `
+        <p class="ins-eyebrow">已选择</p>
+        <div class="title-line"><h2>${esc(a.name)}</h2>
+          <button class="pencil" data-act="rename" type="button" title="重命名（F2）" aria-label="重命名">✎</button></div>
+        <p class="ins-meta">${esc(a.type)}　·　${esc(ownerText(a))}${a.vendor ? `　·　${esc(a.vendor)}` : ""}${a.version ? `　·　${esc(a.version)}` : ""}</p>
+        ${badges ? `<div class="ins-badges">${badges}</div>` : ""}`}
+    </div>
+    <div class="ins-body">
+      <dl style="margin:0">
+        <div class="row"><dt>位置</dt><dd class="path">${esc(folderOf(a))}</dd></div>
+        <div class="row"><dt>谁在用</dt><dd>${users.length
+          ? `${users.length} 个地方在用它<ul>${users.map(u => `<li>${esc(u.where)}</li>`).join("")}</ul>`
+          : "没有地方用它"}</dd></div>
+      </dl>
+      ${overridden ? `<div class="callout borrow">这个型号的${esc(a.type)}正在用 ${esc(modelName(overridden.fromModel))} 的程序，本型号自己的${esc(a.type)}当前都不生效。</div>` : ""}
+      ${saved.length ? `<div class="backup-summary"><div class="backup-summary-icon" aria-hidden="true">↺</div><div class="backup-summary-copy"><b>备用副本</b><span>已保留 ${saved.length} 份，可恢复或删除</span></div><button class="backup-open" data-act="backups" type="button">查看备份</button></div>` : ""}
+      <div class="actions">
+        ${!a.history ? `<button class="button primary" data-act="update" type="button">更新程序</button>` : ""}
+        ${a.isHandControl ? `<button class="button" data-act="usb" type="button">复制手控文件到 U 盘</button>` : ""}
+        ${canDefault ? `<button class="button" data-act="default" type="button" ${a.isDefault ? "disabled" : ""}>${a.isDefault ? "已是本型号默认" : "设为本型号默认"}</button>` : ""}
+      </div>
+      ${!a.history ? `<button class="ins-danger-link" data-act="delete" type="button">删除程序…</button>` : ""}
+    </div>`;
+}
+
+function borrowInspectorHtml(b) {
+  const target = borrowTarget(b);
+  const problem = borrowProblem(b);
+  const modeText = b.mode === "follow_asset"
+    ? `跟随 ${modelName(b.fromModel)} 的这个程序；对方更新、改名或更换文件夹后，这边自动同步。`
+    : `固定用 ${modelName(b.fromModel)} 的这个程序，来源后续更新不影响这里。`;
+  return `
+    <div class="ins-head">
+      <p class="ins-eyebrow borrow">用别的型号的程序</p>
+      <div class="title-line"><h2>${esc(target ? target.name : "（找不到程序）")}</h2></div>
+      <p class="ins-meta">${esc(b.type)}　·　${b.mode === "follow_asset" ? `跟随 ${esc(modelName(b.fromModel))} 的程序` : `来自 ${esc(modelName(b.fromModel))}`}${target?.vendor ? `　·　${esc(target.vendor)}` : ""}</p>
+      <div class="ins-badges">${problem ? '<span class="badge broken">用不了</span>' : `<span class="badge borrow">${b.mode === "follow_asset" ? "自动同步" : "固定版本"}</span>`}</div>
+    </div>
+    <div class="ins-body">
+      <dl style="margin:0">
+        <div class="row"><dt>来源</dt><dd>${esc(modelName(b.fromModel))}${target ? ` · ${esc(target.name)}` : ""}</dd></div>
+        <div class="row"><dt>位置</dt><dd class="path">${target ? esc(folderOf(target)) : "—"}</dd></div>
+      </dl>
+      ${problem
+        ? `<div class="callout broken"><b>现在用不了：</b>${esc(problem)}。请重新选一个来源，或者给这个型号自己加一个${esc(b.type)}。</div>`
+        : `<div class="callout borrow">${esc(modeText)}<br>没有复制任何文件，用的就是对方那份。</div>`}
+      <div class="actions">
+        <button class="button" data-act="editBorrow" type="button">换一个来源</button>
+        <button class="button" data-act="stopBorrow" type="button">不再用别的型号的程序</button>
+      </div>
+    </div>`;
+}
+
+/* ---------- 行内重命名（只对本型号自己的程序） ---------- */
+function renameError(value, a) {
+  if (!value) return "名称不能为空。";
+  if (/[\\/:*?"<>|]/.test(value)) return '名称不能包含 \\ / : * ? " < > |';
+  if (value === "." || value === "..") return "名称不能是 . 或 ..";
+  if (assets.some(x => x.id !== a.id && x.model === a.model && x.type === a.type && x.owner === a.owner && x.name === value)) return "同一个通用/定制分类下已经有同名程序。";
+  return "";
+}
+
+function cancelRename() {
+  state.renaming = false;
+  render();
+}
+
+function focusInlineRename() {
+  const input = document.querySelector("[data-inline-rename]");
+  if (input) { input.focus(); input.select(); }
+}
+
+function commitRename() {
+  const input = document.querySelector("[data-inline-rename]");
+  const row = selectedRow();
+  if (!input || !row || row.kind !== "asset") return;
+  const a = row.asset;
+  const next = input.value.trim();
+  const error = renameError(next, a);
+  if (error) { toast("warn", error); return; }
+  if (next === a.name) { state.renaming = false; render(); return; }
+  const users = usersOf(a).length;
+  apply(() => { byId(a.id).name = next; }, `已改名为「${next}」`, users ? `正在用它的 ${users} 个地方已同步` : "");
+}
+
+/* ---------- 设为本型号默认 ---------- */
+function setDefault(a) {
+  apply(() => {
+    assets.filter(x => x.model === a.model && x.type === a.type && !x.owner).forEach(x => { x.isDefault = x.id === a.id; });
+  }, `「${a.name}」已设为本型号默认`, `${modelName(a.model)} 的${a.type}会优先用它`);
+}
+
+/* ============================================================
+   6. 提示条
+   ============================================================ */
+let undoLast = null;
+
+function toast(kind, message, detail = "", undo = null) {
+  const node = document.createElement("div");
+  node.className = `toast ${kind}`;
+  node.innerHTML = `<p>${esc(message)}${detail ? `<small>${esc(detail)}</small>` : ""}</p>`;
+  if (undo) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = "撤销";
+    button.addEventListener("click", () => { if (undoLast) undoLast.run(); });
+    node.append(button);
+    undoLast = { node, run: () => { node.remove(); undo(); undoLast = null; } };
+  }
+  $("#toasts").append(node);
+  setTimeout(() => {
+    node.remove();
+    if (undoLast && undoLast.node === node) undoLast = null;
+  }, undo ? 5000 : 3000);
+}
+
+/* ============================================================
+   7. 模态
+   ============================================================ */
+function closeModal() { $("#overlay").hidden = true; $("#overlay").innerHTML = ""; }
+
+/* ---------- 导入来源：程序文件 / 文件夹 / 压缩包 同一入口 ----------
+   拖入或点「选择…」都可以，不弹二选一菜单。
+   文件夹直接读；压缩包先解压再读；单个或多个程序文件直接作为程序文件。
+   Qt 落地：主窗口与对话框 acceptDrops（三种都能放）。
+   「选择…」打开可选多文件的对话框（含压缩包）；系统对话框通常不能同时选文件夹，
+   文件夹靠拖入，不要为此再做一个选项菜单。
+   程序类型由使用者自己选，不按文件内容推导。
+   介绍文件随程序一起保存，但不在界面展示。
+*/
+const DEMO_SOURCES = [
+  { path: "D:\\待入库\\厂商包\\L36主板更新", kind: "folder", files: ["YJ_3DMain_Foot_16_MA82G5C64_V41.bin", "L36升级说明.docx", "适用机型清单.pdf"] },
+  { path: "D:\\待入库\\定制\\葡萄牙-凡强\\手控UI\\以色列-V2", kind: "folder", files: ["ITE_NOR_yj_massage_120.3.1.ROM", "ITE_NOR_yj_massage_120.3.1.pkg", "以色列-使用说明.pdf"] },
+  { path: "D:\\待入库\\厂商压缩包\\蓝牙_2026-08.zip", kind: "archive", files: ["YJ_Bt_Chn_Massage_Pro_V16.mot", "蓝牙连接教程.pdf", "注意事项.txt"] },
+  { path: "D:\\待入库\\厂商压缩包\\日文_V88.1.2.zip", kind: "archive", files: ["ITE_NOR_jp_massage_88.1.2.ROM", "ITE_NOR_jp_massage_88.1.2.pkg", "日文说明.docx"] },
+  { path: "D:\\待入库\\YJ_3DMain_Foot_16_MA82G5C64_V41.bin", kind: "file", files: ["YJ_3DMain_Foot_16_MA82G5C64_V41.bin"] },
+  { path: "D:\\待入库\\ITE_NOR_jp_massage_88.1.2.ROM", kind: "file", files: ["ITE_NOR_jp_massage_88.1.2.ROM", "ITE_NOR_jp_massage_88.1.2.pkg"] },
+];
+let demoPickIndex = 0;
+
+function demoSource() {
+  const source = DEMO_SOURCES[demoPickIndex % DEMO_SOURCES.length];
+  demoPickIndex += 1;
+  return { ...source };
+}
+
+function classifySource(pathOrName) {
+  const value = (pathOrName || "").trim();
+  if (!value) return null;
+  const last = value.split(/[\\/]/).pop() || "";
+  if (/\.(zip|rar|7z)$/i.test(last)) return "archive";
+  if (/\.[a-z0-9]{1,8}$/i.test(last)) return "file";
+  return "folder";
+}
+
+/** 从路径推断：定制方案 / 通用与否 / 程序名称。类型不推断，由使用者自选。 */
+function inferFromPath(pathOrName) {
+  const raw = (pathOrName || "").trim();
+  if (!raw) return null;
+  const kind = classifySource(raw);
+  const clean = kind === "archive" ? raw.replace(/\.(zip|rar|7z)$/i, "") : raw.replace(/[\\/]+$/, "");
+  const segments = clean.split(/[\\/]+/).filter(Boolean);
+  let name = segments[segments.length - 1] || "";
+  if (kind === "file") name = name.replace(/\.[^.]+$/, "");
+  const out = { schemeName: "", common: segments.includes("通用"), name };
+  const customIndex = segments.indexOf("定制");
+  if (customIndex >= 0 && segments[customIndex + 1]) out.schemeName = segments[customIndex + 1];
+  return out;
+}
+
+/** 程序文件与介绍文件分开：界面只展示程序文件，介绍文件随文件夹保存（双击开文件夹能看到） */
+const EXTRA_EXTS = [".pdf", ".doc", ".docx", ".txt", ".md", ".xls", ".xlsx", ".ppt", ".pptx", ".png", ".jpg", ".jpeg"];
+
+function splitScanned(files) {
+  const program = [];
+  const extra = [];
+  for (const file of files || []) {
+    const value = String(file);
+    const ext = value.slice(value.lastIndexOf(".")).toLowerCase();
+    if (EXTRA_EXTS.includes(ext) || /说明|介绍|教程|清单|readme/i.test(value)) extra.push(value);
+    else program.push(value);
+  }
+  return { program, extra };
+}
+
+/** 从资源管理器拖入时没有文件清单，按名字模拟一次扫描结果 */
+function simulateScan(source) {
+  if (source.files?.length) return source.files;
+  if (source.kind === "file") {
+    const base = source.path.split(/[\\/]/).pop() || source.path;
+    return [base];
+  }
+  const name = source.path.toLowerCase();
+  if (/手控|ui|rom/.test(name)) return [`${source.path}_V1.0.0.ROM`, `${source.path}_V1.0.0.pkg`];
+  if (/蓝牙|bt|bluetooth/.test(name)) return [`${source.path}.mot`];
+  if (/电机|motor/.test(name)) return ["Motor_Main_V1.bin", "Motor_Param.bin"];
+  if (/语音|voice/.test(name)) return ["Voice_CN_V1.bin"];
+  return [`${source.path}.bin`];
+}
+
+/** 手控 UI 的版本按 .rom 文件名解析（类型是使用者选的，这里只负责展示版本） */
+function romVersion(programFiles) {
+  const rom = (programFiles || []).find(f => /\.rom$/i.test(String(f)));
+  const match = rom && String(rom).match(/(\d+(?:\.\d+)+)[^\\/]*\.rom$/i);
+  return match ? `V${match[1]}` : "V1.0.0";
+}
+
+/** 新增/更新对话框的单一放入区：程序文件、文件夹、压缩包都可以 */
+function pickerHtml(prefix) {
+  return `
+    <div class="dropzone" id="${prefix}Drop">
+      <span id="${prefix}Path">拖到这里，或点选择</span>
+      <button class="button" id="${prefix}Pick" type="button">选择…</button>
+    </div>
+    <p class="infer" id="${prefix}Infer" hidden></p>`;
+}
+
+function sourceFromDrop(event) {
+  const list = event.dataTransfer?.files;
+  if (list && list.length > 1) {
+    const names = Array.from(list).map(file => file.name);
+    return { path: names[0], kind: "file", files: names };
+  }
+  const name = list?.[0]?.name
+    || (() => { try { return event.dataTransfer?.getData("text/plain") || ""; } catch { return ""; } })();
+  const kind = classifySource(name) || "folder";
+  return { path: name, kind };
+}
+
+function wireSourcePicker(overlay, prefix, onPick) {
+  const pickButton = overlay.querySelector(`#${prefix}Pick`);
+  const dropzone = overlay.querySelector(`#${prefix}Drop`);
+
+  pickButton.addEventListener("click", () => { onPick(demoSource()); });
+  ["dragover", "dragenter"].forEach(type => dropzone.addEventListener(type, event => {
+    event.preventDefault();
+    dropzone.classList.add("dragover");
+  }));
+  ["dragleave", "drop"].forEach(type => dropzone.addEventListener(type, event => {
+    event.preventDefault();
+    dropzone.classList.remove("dragover");
+  }));
+  dropzone.addEventListener("drop", event => {
+    event.preventDefault();
+    event.stopPropagation();
+    const source = sourceFromDrop(event);
+    if (source.path) onPick(source);
+  });
+}
+
+/** 选择/拖入来源后：展示识别结果并预填范围与名称（类型由使用者自选，不推导） */
+function applyPicked(overlay, prefix, source, fillName) {
+  const pathEl = overlay.querySelector(`#${prefix}Path`);
+  const inferEl = overlay.querySelector(`#${prefix}Infer`);
+  pathEl.textContent = source.path;
+  pathEl.classList.add("filled");
+  const scanned = splitScanned(source.files || simulateScan(source));
+  const inferred = inferFromPath(source.path);
+  const parts = [];
+  if (inferred?.schemeName) parts.push(`定制方案 ${inferred.schemeName}`);
+  else if (inferred?.common) parts.push("通用");
+  parts.push(`名称 ${inferred?.name || (source.kind === "file" ? "（用文件名）" : "（用文件夹名）")}`);
+  if (scanned.extra.length) parts.push(`${scanned.extra.length} 个介绍文件会一起保存`);
+  inferEl.hidden = false;
+  const kindLabel = source.kind === "archive" ? "压缩包" : source.kind === "file" ? "文件" : "文件夹";
+  inferEl.textContent = `已按${kindLabel}自动识别：${parts.join(" · ")}，可以修改。`;
+  const ownerEl = overlay.querySelector(`#${prefix}Owner`);
+  if (ownerEl && inferred) {
+    if (inferred.schemeName) {
+      const scheme = SCHEMES.find(item => item.model === state.model && item.name === inferred.schemeName);
+      if (scheme) ownerEl.value = scheme.id;
+    } else if (inferred.common) {
+      ownerEl.value = "";
+    }
+  }
+  const schemeRow = overlay.querySelector(`#${prefix}SchemeRow`);
+  if (schemeRow) schemeRow.hidden = ownerEl.value !== "__new__";
+  const nameEl = overlay.querySelector(`#${prefix}Name`);
+  if (fillName && nameEl && inferred?.name && !nameEl.value.trim()) nameEl.value = inferred.name;
+  return scanned;
+}
+
+function modal(title, body, footer) {
+  const overlay = $("#overlay");
+  overlay.innerHTML = `<section class="dialog" role="dialog" aria-modal="true" aria-label="${esc(title)}">
+    <div class="dialog-head"><h2>${esc(title)}</h2><button class="close" data-close type="button" aria-label="关闭">×</button></div>
+    <div class="dialog-body">${body}</div>
+    <div class="dialog-foot">${footer}</div>
+  </section>`;
+  overlay.hidden = false;
+  overlay.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", closeModal));
+  return overlay;
+}
+
+function runProgress(title, steps, onDone) {
+  const overlay = modal(title, `<p>正在处理，请不要拔出设备或关闭窗口。</p>
+    <div class="progress"><i id="bar"></i></div><p class="progress-text" id="progressText">${esc(steps[0][1])}</p>`, "");
+  let i = 0;
+  const timer = setInterval(() => {
+    const [value, text] = steps[i++];
+    overlay.querySelector("#bar").style.width = `${value}%`;
+    overlay.querySelector("#progressText").textContent = text;
+    if (i >= steps.length) {
+      clearInterval(timer);
+      setTimeout(() => { closeModal(); onDone(); }, 260);
+    }
+  }, 300);
+}
+
+function newModelDialog() {
+  const overlay = modal("新建型号", `
+    <div class="form-row"><label class="form-label" for="modelName">型号名称</label><input class="field" id="modelName" autocomplete="off"></div>
+    <div class="form-row"><label class="form-label" for="modelPlatform">机芯类型</label>
+      <select class="field" id="modelPlatform">${PLATFORMS.map(platform => `<option>${platform}</option>`).join("")}</select></div>
+    <p class="hint" id="modelHint"></p>`,
+    `<button class="button" data-close type="button">取消</button><button class="button primary" id="confirmModel" type="button" disabled>新建型号</button>`);
+  const name = overlay.querySelector("#modelName");
+  const confirm = overlay.querySelector("#confirmModel");
+  const refresh = () => {
+    const error = !name.value.trim() ? "请输入型号名称。" : MODELS.some(model => model.name === name.value.trim()) ? "已有同名型号。" : "";
+    overlay.querySelector("#modelHint").textContent = error;
+    overlay.querySelector("#modelHint").className = error ? "hint error" : "hint";
+    confirm.disabled = Boolean(error);
+  };
+  name.addEventListener("input", refresh);
+  confirm.addEventListener("click", () => {
+    const modelNameInput = name.value;
+    const platform = overlay.querySelector("#modelPlatform").value;
+    closeModal();
+    apply(() => {
+      const model = createModel(modelNameInput, platform);
+      state.model = model.id; state.scope = "all"; state.type = "all"; state.selectedId = null;
+    }, `已新建型号「${modelNameInput.trim()}」`, "可以继续新增程序，或用别的型号已有的程序");
+  });
+  name.focus();
+}
+
+function renameModelDialog(model) {
+  const overlay = modal("重命名型号", `
+    <p>修改型号名称不会改变它下面的程序。</p>
+    <div class="form-row"><label class="form-label" for="renameModelName">型号名称</label><input class="field" id="renameModelName" value="${esc(model.name)}" autocomplete="off"><p class="hint" id="renameModelHint"></p></div>`,
+    `<button class="button" data-close type="button">取消</button><button class="button primary" id="confirmRenameModel" type="button" disabled>保存</button>`);
+  const name = overlay.querySelector("#renameModelName");
+  const confirm = overlay.querySelector("#confirmRenameModel");
+  const refresh = () => {
+    const value = name.value.trim();
+    const error = !value ? "请输入型号名称。" : MODELS.some(item => item.id !== model.id && item.name.toLocaleLowerCase() === value.toLocaleLowerCase()) ? "已有同名型号。" : "";
+    const hint = overlay.querySelector("#renameModelHint");
+    hint.textContent = error;
+    hint.className = error ? "hint error" : "hint";
+    confirm.disabled = Boolean(error);
+  };
+  name.addEventListener("input", refresh);
+  name.addEventListener("keydown", event => { if (event.key === "Enter" && !confirm.disabled) confirm.click(); });
+  confirm.addEventListener("click", () => {
+    const value = name.value.trim();
+    closeModal();
+    apply(() => renameModel(model.id, value), `型号已重命名为「${value}」`);
+  });
+  name.focus();
+  name.select();
+}
+
+function deleteModelDialog(model) {
+  const count = countIn(model.id);
+  const borrowCount = borrows.filter(borrow => borrow.model === model.id || borrow.fromModel === model.id).length;
+  const overlay = modal("删除型号", `
+    ${count ? `<div class="note danger">这个型号下有 ${count} 个程序。</div>` : ""}
+    ${borrowCount ? `<div class="note danger">有 ${borrowCount} 个地方正在用这个型号的程序，删除后会一并取消。</div>` : ""}
+    <label class="ack"><input type="checkbox" id="ackDeleteModel"><span>我确认删除这个型号及其相关内容。</span></label>`,
+    `<button class="button" data-close type="button">取消</button><button class="button danger" id="confirmDeleteModel" type="button" disabled>删除型号</button>`);
+  const ack = overlay.querySelector("#ackDeleteModel");
+  const confirm = overlay.querySelector("#confirmDeleteModel");
+  ack.addEventListener("change", () => { confirm.disabled = !ack.checked; });
+  confirm.addEventListener("click", () => {
+    closeModal();
+    apply(() => {
+      deleteModel(model.id);
+      if (state.model === model.id) {
+        state.model = MODELS[0]?.id || "";
+        state.scope = "all";
+        state.type = "all";
+        state.selectedId = null;
+      }
+    }, `型号「${model.name}」已删除`, count || borrowCount ? "相关程序和使用关系已同步清理" : "");
+  });
+}
+
+function runModelAction(action, modelId) {
+  const model = MODELS.find(item => item.id === modelId);
+  if (!model) return;
+  if (action === "renameModel") renameModelDialog(model);
+  if (action === "deleteModel") {
+    if (MODELS.length <= 1) toast("至少保留一个型号");
+    else deleteModelDialog(model);
+  }
+}
+
+function runSchemeAction(action, schemeId) {
+  const scheme = SCHEMES.find(item => item.id === schemeId);
+  if (!scheme) return;
+  if (action === "renameScheme") renameSchemeDialog(scheme);
+  if (action === "deleteScheme") deleteSchemeDialog(scheme);
+}
+
+function newSchemeDialog() {
+  if (!state.model) return;
+  const platform = MODELS.find(model => model.id === state.model).platform;
+  const overlay = modal("新建定制方案", `
+    <div class="form-row"><label class="form-label" for="schemeName">方案名称</label><input class="field" id="schemeName" autocomplete="off"></div>
+    <div class="preview-line">机芯类型：<b>${esc(platform)}</b>（随型号确定）</div><p class="hint" id="schemeHint"></p>`,
+    `<button class="button" data-close type="button">取消</button><button class="button primary" id="confirmScheme" type="button" disabled>新建方案</button>`);
+  const name = overlay.querySelector("#schemeName");
+  const confirm = overlay.querySelector("#confirmScheme");
+  const refresh = () => {
+    const error = !name.value.trim() ? "请输入方案名称。" : SCHEMES.some(scheme => scheme.model === state.model && scheme.name === name.value.trim()) ? "已有同名方案。" : "";
+    overlay.querySelector("#schemeHint").textContent = error;
+    overlay.querySelector("#schemeHint").className = error ? "hint error" : "hint";
+    confirm.disabled = Boolean(error);
+  };
+  name.addEventListener("input", refresh);
+  confirm.addEventListener("click", () => {
+    const schemeNameInput = name.value;
+    closeModal();
+    apply(() => {
+      const scheme = createScheme(state.model, schemeNameInput);
+      state.scope = scheme.id; state.selectedId = null;
+    }, `已新建方案「${schemeNameInput.trim()}」`, `机芯类型为 ${platform}`);
+  });
+  name.focus();
+}
+
+/* ---------- 定制方案：重命名 / 删除（右键菜单） ---------- */
+function renameSchemeDialog(scheme) {
+  const overlay = modal("重命名方案", `
+    <p>修改方案名称不会改变它下面的程序。</p>
+    <div class="form-row"><label class="form-label" for="renameSchemeName">方案名称</label><input class="field" id="renameSchemeName" value="${esc(scheme.name)}" autocomplete="off"><p class="hint" id="renameSchemeHint"></p></div>`,
+    `<button class="button" data-close type="button">取消</button><button class="button primary" id="confirmRenameScheme" type="button" disabled>保存</button>`);
+  const name = overlay.querySelector("#renameSchemeName");
+  const confirm = overlay.querySelector("#confirmRenameScheme");
+  const refresh = () => {
+    const value = name.value.trim();
+    const error = !value ? "请输入方案名称。" : SCHEMES.some(item => item.id !== scheme.id && item.model === scheme.model && item.name === value) ? "已有同名方案。" : "";
+    const hint = overlay.querySelector("#renameSchemeHint");
+    hint.textContent = error;
+    hint.className = error ? "hint error" : "hint";
+    confirm.disabled = Boolean(error);
+  };
+  name.addEventListener("input", refresh);
+  name.addEventListener("keydown", event => { if (event.key === "Enter" && !confirm.disabled) confirm.click(); });
+  confirm.addEventListener("click", () => {
+    const value = name.value.trim();
+    closeModal();
+    apply(() => renameScheme(scheme.id, value), `方案已重命名为「${value}」`, "它下面的程序位置已同步更新");
+  });
+  name.focus();
+  name.select();
+}
+
+function deleteSchemeDialog(scheme) {
+  const ownAssets = assets.filter(a => a.owner === scheme.id && !a.history);
+  const count = ownAssets.length;
+  const users = ownAssets.flatMap(a => usersOf(a));
+  const body = `
+    ${count ? `<div class="note danger">方案里有 ${count} 个程序，会一起放进回收站。</div>` : ""}
+    ${users.length ? `<div class="note danger">有 ${users.length} 个地方正在用这些程序，删除后它们会找不到程序。</div>
+      <div class="use-list">${users.map(u => `<div class="use"><b>${esc(u.where)}</b><span>${esc(u.detail)}</span></div>`).join("")}</div>` : ""}
+    ${count ? `<label class="ack"><input type="checkbox" id="ack"><span>我看过上面的影响，还是要删除。</span></label>`
+      : `<p class="hint">这个方案里没有程序，删除不影响其他内容。</p>`}`;
+  const overlay = modal("删除方案", body,
+    `<button class="button" data-close type="button">取消</button><button class="button danger" id="confirmDeleteScheme" type="button" ${count ? "disabled" : ""}>放进回收站</button>`);
+  const ack = overlay.querySelector("#ack");
+  if (ack) ack.addEventListener("change", () => { overlay.querySelector("#confirmDeleteScheme").disabled = !ack.checked; });
+  overlay.querySelector("#confirmDeleteScheme").addEventListener("click", () => {
+    closeModal();
+    apply(() => {
+      deleteScheme(scheme.id);
+      if (state.scope === scheme.id) { state.scope = "all"; state.type = "all"; }
+      state.selectedId = null;
+    }, `方案「${scheme.name}」已放进回收站`, count ? `${count} 个程序一起删除` : "");
+  });
+}
+
+/* ---------- 新增程序：添加文件 / 用别的型号的 ---------- */
+function addDialog(presetMode = "", presetBorrow = null, presetSource = null) {
+  let source = presetMode || "file";   // file | borrow
+  let picked = "";
+  let pickedKind = "";
+  let pickedProgram = [];
+  let pickedExtra = [];
+
+  const overlay = modal(presetBorrow ? "换一个来源" : "新增程序", `
+    ${presetBorrow ? "" : `<div class="form-row">
+      <div class="choice-grid" id="sourceChoice">
+        <label class="choice selected"><input type="radio" name="source" value="file" checked>
+          <span><b>添加文件</b></span></label>
+        <label class="choice"><input type="radio" name="source" value="borrow">
+          <span><b>选择别的型号已有程序</b></span></label>
+      </div>
+    </div>`}
+    <div id="fileForm" ${presetBorrow ? "hidden" : ""}>
+      <div class="form-row">${pickerHtml("new")}</div>
+      <div class="form-row">
+        <label class="form-label" for="newType">程序类型</label>
+        <select class="field" id="newType">${TYPES.map(t => `<option>${esc(t)}</option>`).join("")}</select>
+      </div>
+      <div class="form-row">
+        <label class="form-label" for="newVendor">归属厂商</label>
+        <select class="field" id="newVendor">${vendorOptions("")}</select>
+      </div>
+      <div class="form-row">
+        <label class="form-label" for="newOwner">通用/定制</label>
+        <select class="field" id="newOwner"><option value="">通用</option>${schemesOf(state.model).map(s => `<option value="${s.id}">定制：${esc(s.name)}</option>`).join("")}<option disabled>──────────</option><option value="__new__">＋ 新建定制方案…</option></select>
+      </div>
+      <div class="form-row" id="newSchemeRow" hidden><label class="form-label" for="newSchemeName">新方案名称</label><input class="field" id="newSchemeName" autocomplete="off"><p class="hint">机芯类型：${esc(MODELS.find(model => model.id === state.model).platform)}（随型号确定）</p></div>
+      <div class="form-row">
+        <label class="form-label" for="newName">程序名称</label>
+        <input class="field" id="newName" autocomplete="off">
+        <p class="hint" id="newHint"></p>
+      </div>
+    </div>
+    <div id="borrowForm" ${presetBorrow ? "" : "hidden"}>
+      <div class="form-row">
+        <label class="form-label" for="borrowType">哪个程序类型</label>
+        <select class="field" id="borrowType">${TYPES.map(t => `<option ${presetBorrow && presetBorrow.type === t ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>
+      </div>
+      <div class="form-row">
+        <label class="form-label" for="borrowModel">用哪个型号的</label>
+        <select class="field" id="borrowModel">${MODELS.filter(m => m.id !== state.model)
+          .map(m => `<option value="${m.id}" ${presetBorrow && presetBorrow.fromModel === m.id ? "selected" : ""}>${esc(m.name)}</option>`).join("")}</select>
+      </div>
+      <div class="form-row">
+        <label class="form-label">怎么跟</label>
+        <div class="choice-grid" id="modeChoice">
+          <label class="choice"><input type="radio" name="mode" value="static">
+            <span><b>固定用这个程序</b><small>选定哪个就一直是哪个，来源后续更新不影响这里。</small></span></label>
+          <label class="choice"><input type="radio" name="mode" value="follow_asset">
+            <span><b>跟随这个程序</b><small>来源更新、改名或更换文件夹后，这个型号自动同步。</small></span></label>
+        </div>
+      </div>
+      <div class="form-row" id="pickProgramRow">
+        <label class="form-label" for="borrowAsset">用哪个程序</label>
+        <select class="field" id="borrowAsset"></select>
+      </div>
+      <div class="preview-line" id="borrowPreview"></div>
+      <div class="note" id="borrowConflict" hidden></div>
+    </div>`,
+    `<button class="button" data-close type="button">取消</button><button class="button primary" id="confirmAdd" type="button" disabled>保存</button>`);
+
+  const confirm = overlay.querySelector("#confirmAdd");
+  const typeEl = overlay.querySelector("#newType");
+  const vendorEl = overlay.querySelector("#newVendor");
+  const nameEl = overlay.querySelector("#newName");
+  const ownerEl = overlay.querySelector("#newOwner");
+  const newSchemeNameEl = overlay.querySelector("#newSchemeName");
+  const hint = overlay.querySelector("#newHint");
+  const bTypeEl = overlay.querySelector("#borrowType");
+  const bModelEl = overlay.querySelector("#borrowModel");
+  const bAssetEl = overlay.querySelector("#borrowAsset");
+  const preview = overlay.querySelector("#borrowPreview");
+  const conflict = overlay.querySelector("#borrowConflict");
+  let mode = presetBorrow ? presetBorrow.mode : "static";
+
+  const markChoice = (container, value) => {
+    overlay.querySelectorAll(`${container} .choice`).forEach(label => {
+      const input = label.querySelector("input");
+      input.checked = input.value === value;
+      label.classList.toggle("selected", input.value === value);
+    });
+  };
+  markChoice("#modeChoice", mode);
+
+  /* 来源型号里，这个类型可选的程序（只列通用、非历史程序） */
+  const candidates = () => assets.filter(a =>
+    a.model === bModelEl.value && a.type === bTypeEl.value && !a.owner && !a.history);
+
+  function refreshBorrow() {
+    const list = candidates();
+    const selectedId = selectedBorrowId(list, bAssetEl.value, presetBorrow?.fromAssetId);
+    bAssetEl.innerHTML = list.map(a => `<option value="${a.id}" ${selectedId === a.id ? "selected" : ""}>${esc(a.name)}</option>`).join("")
+      || `<option value="">（这个型号没有可用的${esc(bTypeEl.value)}）</option>`;
+
+    const chosen = byId(bAssetEl.value);
+    const ok = Boolean(chosen);
+    if (chosen) preview.innerHTML = mode === "follow_asset"
+      ? `会用到：<b>${esc(modelName(bModelEl.value))} · ${esc(chosen.name)}</b>（来源更新时自动同步）`
+      : `会用到：<b>${esc(modelName(bModelEl.value))} · ${esc(chosen.name)}</b>（固定不变）`;
+    else preview.innerHTML = `<b>${esc(modelName(bModelEl.value))}</b> 里没有可用的${esc(bTypeEl.value)}。`;
+
+    // 一个型号的一个类型只能记一条；已有记录要提示会被换掉。
+    // 另外 core B4b：已登记的类型，本型号自己的同类程序不再生效，必须提前说清楚。
+    const warnings = [];
+    const existing = borrowFor(state.model, bTypeEl.value);
+    const isSelf = presetBorrow && existing && existing.id === presetBorrow.id;
+    if (existing && !isSelf) {
+      warnings.push(`${bTypeEl.value}现在用的是 ${modelName(existing.fromModel)} 的程序，保存后会换成上面这个。`);
+    }
+    const localSame = assets.filter(a => a.model === state.model && a.type === bTypeEl.value && !a.history);
+    if (localSame.length) {
+      warnings.push(`这个型号自己有 ${localSame.length} 个${bTypeEl.value}，保存后它们都不生效。`);
+    }
+    conflict.hidden = warnings.length === 0;
+    conflict.textContent = warnings.join(" ");
+
+    confirm.disabled = !ok;
+  }
+
+  function refreshFile() {
+    const value = nameEl.value.trim();
+    const owner = ownerEl.value || null;
+    const handControl = typeEl.value === "手控UI";
+    let error = "";
+    if (value && /[\\/:*?"<>|]/.test(value)) error = "名称不能包含特殊符号。";
+    else if (owner === "__new__" && !newSchemeNameEl.value.trim()) error = "请输入新方案名称。";
+    else if (owner === "__new__" && SCHEMES.some(s => s.model === state.model && s.name === newSchemeNameEl.value.trim())) error = "已有同名方案。";
+    else if (value && owner !== "__new__" && assets.some(x => x.model === state.model && x.type === typeEl.value && x.owner === owner && x.name === value)) error = "这个范围下已经有同名程序。";
+    hint.className = error ? "hint error" : "hint";
+    hint.textContent = error || (handControl ? "手控 UI 需要同时有 .rom 和 .pkg 两个文件，版本按 .rom 的文件名显示。" : "");
+    confirm.disabled = Boolean(error) || !value || !picked;
+  }
+
+  const refresh = () => (source === "file" ? refreshFile() : refreshBorrow());
+
+  if (!presetBorrow) {
+    overlay.querySelectorAll('input[name="source"]').forEach(input => input.addEventListener("change", e => {
+      source = e.target.value;
+      markChoice("#sourceChoice", source);
+      overlay.querySelector("#fileForm").hidden = source !== "file";
+      overlay.querySelector("#borrowForm").hidden = source !== "borrow";
+      refresh();
+    }));
+    wireSourcePicker(overlay, "new", sourceInfo => {
+      picked = sourceInfo.path;
+      pickedKind = sourceInfo.kind;
+      const scanned = applyPicked(overlay, "new", sourceInfo, true);
+      pickedProgram = scanned.program;
+      pickedExtra = scanned.extra;
+      refresh();
+    });
+    if (presetSource) {
+      picked = presetSource.path;
+      pickedKind = presetSource.kind;
+      const scanned = applyPicked(overlay, "new", presetSource, true);
+      pickedProgram = scanned.program;
+      pickedExtra = scanned.extra;
+    }
+    [nameEl, typeEl, vendorEl, ownerEl, newSchemeNameEl].forEach(el => el.addEventListener("input", refresh));
+    typeEl.addEventListener("change", refresh);
+    vendorEl.addEventListener("change", refresh);
+    ownerEl.addEventListener("change", () => { overlay.querySelector("#newSchemeRow").hidden = ownerEl.value !== "__new__"; refresh(); });
+  }
+
+  overlay.querySelectorAll('input[name="mode"]').forEach(input => input.addEventListener("change", e => {
+    mode = e.target.value;
+    markChoice("#modeChoice", mode);
+    refreshBorrow();
+  }));
+  [bTypeEl, bModelEl, bAssetEl].forEach(el => el.addEventListener("change", refreshBorrow));
+  refresh();
+
+  confirm.addEventListener("click", () => {
+    if (source === "file") {
+      const type = typeEl.value;
+      const vendor = vendorEl.value;
+      const selectedOwner = ownerEl.value;
+      const name = nameEl.value.trim();
+      const handControl = type === "手控UI";
+      closeModal();
+      apply(() => {
+        const id = `new-${Date.now()}`;
+        const owner = selectedOwner === "__new__" ? createScheme(state.model, newSchemeNameEl.value).id : selectedOwner || null;
+        assets.push({
+          id, model: state.model, type, vendor: vendor || "", name, owner,
+          version: handControl ? romVersion(pickedProgram) : undefined,
+          isHandControl: handControl,
+          files: pickedProgram,
+          extraFiles: pickedExtra.length ? pickedExtra : undefined,
+        });
+        state.selectedId = id;
+        state.type = "all";
+        state.scope = owner || "all";
+      }, `「${name}」已加进程序库`, pickedKind === "archive" ? "压缩包已解压，程序文件已识别" : "文件已复制，列表已更新");
+      return;
+    }
+
+    const type = bTypeEl.value;
+    const fromModel = bModelEl.value;
+    const fromAssetId = bAssetEl.value;
+    const target = byId(fromAssetId);
+    closeModal();
+    apply(() => {
+      borrows = borrows.filter(b => !(b.model === state.model && b.type === type));
+      const id = presetBorrow ? presetBorrow.id : `br-${Date.now()}`;
+      borrows.push({ id, model: state.model, type, fromModel, fromAssetId, mode });
+      state.selectedId = `borrow:${id}`;
+      state.type = "all";
+      state.scope = "all";
+    }, `${type}现在用 ${modelName(fromModel)} 的程序`,
+      `${target ? target.name : ""}${mode === "follow_asset" ? "（来源更新时自动同步）" : "（固定版本）"} · 没有复制文件`);
+  });
+}
+
+function updateDialog(asset) {
+  let picked = "";
+  let pickedModifiedAt = "";
+  let pickedKind = "";
+  let pickedProgram = [];
+  let pickedExtra = [];
+  let choice = "";
+  const overlay = modal("更新程序", `
+    <p>正在更新：<b>${esc(asset.name)} · ${esc(asset.type)} · ${esc(ownerText(asset))}</b></p>
+    <p class="section-title">新的程序</p>
+    <div class="form-row">${pickerHtml("update")}</div>
+    <div class="form-row"><label class="form-label" for="updateType">程序类型</label><select class="field" id="updateType">${TYPES.map(type => `<option ${type === asset.type ? "selected" : ""}>${esc(type)}</option>`).join("")}</select></div>
+    <div class="form-row"><label class="form-label" for="updateVendor">归属厂商</label><select class="field" id="updateVendor">${vendorOptions(asset.vendor)}</select></div>
+    <div class="form-row"><label class="form-label" for="updateOwner">通用/定制</label><select class="field" id="updateOwner"><option value="">通用</option>${schemesOf(asset.model).map(scheme => `<option value="${scheme.id}" ${scheme.id === asset.owner ? "selected" : ""}>定制：${esc(scheme.name)}</option>`).join("")}<option disabled>──────────</option><option value="__new__">＋ 新建定制方案…</option></select></div>
+    <div class="form-row" id="updateSchemeRow" hidden><label class="form-label" for="updateSchemeName">新方案名称</label><input class="field" id="updateSchemeName" autocomplete="off"><p class="hint" id="updateSchemeHint">机芯类型：${esc(MODELS.find(model => model.id === asset.model).platform)}（随型号确定）</p></div>
+    <div class="form-row"><label class="form-label" for="updateName">程序名称</label><input class="field" id="updateName" value="${esc(asset.name)}" autocomplete="off"><p class="hint" id="updateHint"></p></div>
+    <div id="updateOldBlock" hidden>
+    <hr class="split"><p class="section-title">原来的程序怎么办</p><p class="section-desc">请明确选择，避免误把旧程序放进回收站。</p>
+    <div class="choice-grid" id="updateChoice">
+      <label class="choice"><input type="radio" name="oldProgram" value="discard"><span><b>放进回收站，不保留</b><small>原程序不再出现在列表中。</small></span></label>
+      <label class="choice"><input type="radio" name="oldProgram" value="keep"><span><b>保留为备用副本</b><small>新程序成为当前使用的程序；原程序可在详情区恢复。</small></span></label>
+    </div></div><div class="note" id="updateImpact" hidden></div><label class="ack" id="updateAck" hidden><input type="checkbox"><span>我已了解上面的影响。</span></label>`,
+    `<button class="button" data-close type="button">取消</button><button class="button primary" id="confirmUpdate" type="button" disabled>更新</button>`);
+  const name = overlay.querySelector("#updateName");
+  const type = overlay.querySelector("#updateType");
+  const vendor = overlay.querySelector("#updateVendor");
+  const owner = overlay.querySelector("#updateOwner");
+  const updateSchemeRow = overlay.querySelector("#updateSchemeRow");
+  const updateSchemeName = overlay.querySelector("#updateSchemeName");
+  const confirm = overlay.querySelector("#confirmUpdate");
+  const refresh = () => {
+    const invalid = !name.value.trim() || /[\\/:*?"<>|]/.test(name.value.trim());
+    const nameError = invalid ? "请填写不含特殊符号的程序名称。" : "";
+    overlay.querySelector("#updateHint").textContent = nameError || (type.value === "手控UI" ? "手控 UI 需要同时有 .rom 和 .pkg 两个文件，版本按 .rom 的文件名显示。" : "");
+    overlay.querySelector("#updateHint").className = nameError ? "hint error" : "hint";
+    const replacing = Boolean(picked);
+    overlay.querySelector("#updateOldBlock").hidden = !replacing;
+    const impacts = [];
+    if (asset.isDefault && type.value !== asset.type) impacts.push(`类型从${asset.type}改为${type.value}后，原类型不再有默认程序。`);
+    if (replacing && usersOf(asset).length) impacts.push(`有 ${usersOf(asset).length} 个地方正在使用当前程序，更新后会同步改用新程序。`);
+    const impact = overlay.querySelector("#updateImpact");
+    const ack = overlay.querySelector("#updateAck");
+    const schemeNameValue = updateSchemeName.value.trim();
+    const duplicateScheme = SCHEMES.some(scheme => scheme.model === asset.model && scheme.name === schemeNameValue);
+    const schemeInvalid = owner.value === "__new__" && (!schemeNameValue || duplicateScheme);
+    updateSchemeRow.hidden = owner.value !== "__new__";
+    if (owner.value === "__new__") {
+      const schemeHint = overlay.querySelector("#updateSchemeHint");
+      schemeHint.textContent = !schemeNameValue ? "请输入方案名称。" : duplicateScheme ? "已有同名方案。" : `机芯类型：${MODELS.find(model => model.id === asset.model).platform}（随型号确定）`;
+      schemeHint.className = schemeInvalid ? "hint error" : "hint";
+    }
+    const selectedOwner = owner.value === "__new__" ? "__new__" : owner.value || null;
+    const metaChanged = name.value.trim() !== asset.name || type.value !== asset.type
+      || (vendor.value || "") !== (asset.vendor || "") || selectedOwner !== (asset.owner || null);
+    confirm.disabled = Boolean(nameError) || invalid || schemeInvalid
+      || (replacing ? !choice : !metaChanged)
+      || (impacts.length > 0 && !ack.querySelector("input").checked);
+  };
+  wireSourcePicker(overlay, "update", sourceInfo => {
+    picked = sourceInfo.path;
+    pickedKind = sourceInfo.kind;
+    pickedModifiedAt = "2026-08-11T07:37:00.000Z";
+    const scanned = applyPicked(overlay, "update", sourceInfo, false);
+    pickedProgram = scanned.program;
+    pickedExtra = scanned.extra;
+    refresh();
+  });
+  overlay.querySelectorAll('input[name="oldProgram"]').forEach(input => input.addEventListener("change", event => {
+    choice = event.target.value;
+    overlay.querySelectorAll("#updateChoice .choice").forEach(label => label.classList.toggle("selected", label.querySelector("input").checked));
+    refresh();
+  }));
+  [name, type, vendor, owner, updateSchemeName].forEach(element => element.addEventListener("input", refresh));
+  type.addEventListener("change", refresh);
+  vendor.addEventListener("change", refresh);
+  owner.addEventListener("change", refresh);
+  overlay.querySelector("#updateAck input").addEventListener("change", refresh);
+  refresh();
+  confirm.addEventListener("click", () => {
+    const isHandControl = type.value === "手控UI";
+    const updateSchemeNameValue = updateSchemeName.value.trim();
+    const selectedOwner = owner.value === "__new__" ? createScheme(asset.model, updateSchemeNameValue).id : owner.value || null;
+    const replacing = Boolean(picked);
+    const changes = { name: name.value.trim(), type: type.value, vendor: vendor.value || "", owner: selectedOwner };
+    if (replacing) {
+      changes.isHandControl = isHandControl;
+      changes.modifiedAt = pickedModifiedAt;
+      changes.version = isHandControl ? romVersion(pickedProgram) : undefined;
+      changes.files = pickedProgram;
+      changes.extraFiles = pickedExtra.length ? pickedExtra : undefined;
+    }
+    const followers = replacing ? borrows.filter(borrow => borrow.mode === "follow_asset" && borrow.fromAssetId === asset.id).length : 0;
+    closeModal();
+    apply(() => { updateAsset(asset.id, changes, replacing ? choice : ""); state.selectedId = asset.id; }, `「${changes.name}」已更新`,
+      followers ? `${followers} 个使用这个程序的型号已自动同步`
+        : replacing ? (pickedKind === "archive" ? "压缩包已解压，程序文件已识别" : "列表和索引已更新")
+          : (changes.vendor ? `归属厂商：${changes.vendor}` : "归属厂商已清空"));
+  });
+}
+
+function backupsDialog(asset) {
+  const renderBackups = () => {
+    const query = overlay.querySelector("#backupSearch").value.trim().toLocaleLowerCase();
+    const list = backupsFor(asset.id).filter(backup => (!query || `${backup.asset.files.join(" ")} ${backup.modifiedAt}`.toLocaleLowerCase().includes(query)));
+    overlay.querySelector("#backupList").innerHTML = list.length ? list.map(backup => `<div class="use"><b>程序文件名</b><span class="path">${backup.asset.files.map(file => esc(file)).join("<br>")}</span><small>${esc(ownerText(backup.asset))} · 文件最后修改：${esc(backup.modifiedAt.slice(0, 16).replace("T", " "))}</small><div class="inline-foot"><button class="button" data-restore="${backup.id}" type="button">恢复这份</button><button class="button" data-delete-backup="${backup.id}" type="button">删除副本</button></div></div>`).join("") : `<p class="hint">没有匹配的备用副本。</p>`;
+  };
+  const overlay = modal("备用副本", `<p>这里只显示当前程序保留的备用副本。</p>
+    <div class="form-row"><input class="field" id="backupSearch" placeholder="按文件名或最后修改时间查找" aria-label="查找备用副本"></div>
+    <div class="use-list" id="backupList"></div>`, `<button class="button" data-close type="button">关闭</button>`);
+  overlay.querySelector("#backupSearch").addEventListener("input", renderBackups);
+  overlay.querySelector("#backupList").addEventListener("click", event => {
+    const restoreId = event.target.closest("[data-restore]")?.dataset.restore;
+    const deleteId = event.target.closest("[data-delete-backup]")?.dataset.deleteBackup;
+    if (restoreId) {
+      const backup = backupsFor(asset.id).find(item => item.id === restoreId);
+      if (!backup) return;
+      const differs = backup.asset.type !== asset.type || backup.asset.owner !== asset.owner;
+      closeModal();
+      const impact = differs ? `<div class="note danger">备份类型与当前程序不同，恢复后会改为${esc(backup.asset.type)} · ${esc(ownerText(backup.asset))}。</div>` : "";
+      const confirm = modal("恢复备用副本", `${impact}<p>恢复后，所选文件会成为当前程序。</p>`, `<button class="button" data-close type="button">取消</button><button class="button primary" id="confirmRestore" type="button">恢复这份</button>`);
+      confirm.querySelector("#confirmRestore").addEventListener("click", () => { closeModal(); apply(() => { restoreBackup(asset.id, restoreId); }, "已恢复备用副本"); });
+    }
+    if (deleteId) {
+      closeModal();
+      const confirm = modal("删除备用副本", `<p>删除后，这份备用副本不能再恢复。</p>`, `<button class="button" data-close type="button">取消</button><button class="button danger" id="confirmDeleteBackup" type="button">删除副本</button>`);
+      confirm.querySelector("#confirmDeleteBackup").addEventListener("click", () => { closeModal(); apply(() => { deleteBackup(asset.id, deleteId); }, "已删除备用副本"); });
+    }
+  });
+  renderBackups();
+}
+
+/* ---------- 取消“用别的型号的程序” ---------- */
+function stopBorrowDialog(b) {
+  const localSame = assets.filter(a => a.model === state.model && a.type === b.type && !a.history);
+  const overlay = modal("不再用别的型号的程序", `
+    <p>「${esc(modelName(state.model))}」的${esc(b.type)}不再用 ${esc(modelName(b.fromModel))} 的程序。</p>
+    <div class="note">只是取消这条记录，<b>不会删除任何程序文件</b>，${esc(modelName(b.fromModel))} 那边完全不受影响。</div>
+    ${localSame.length
+      ? `<p class="hint">取消后，这个型号自己的 ${localSame.length} 个${esc(b.type)}会重新生效。</p>`
+      : `<div class="note danger">这个型号自己没有${esc(b.type)}，取消后就没有${esc(b.type)}可用了。</div>`}`,
+    `<button class="button" data-close type="button">取消</button><button class="button primary" id="confirmStop" type="button">确定</button>`);
+  overlay.querySelector("#confirmStop").addEventListener("click", () => {
+    closeModal();
+    apply(() => {
+      borrows = borrows.filter(x => x.id !== b.id);
+      state.selectedId = null;
+    }, `${b.type}不再用 ${modelName(b.fromModel)} 的程序`, "没有删除任何文件");
+  });
+}
+
+/* ---------- 删除 ---------- */
+function deleteDialog(a) {
+  const users = usersOf(a);
+  const body = `<p class="path">${esc(folderOf(a))}</p>
+    ${users.length ? `<div class="note danger">有 ${users.length} 个地方正在用它，删除后这些地方会找不到程序。</div>
+      <div class="use-list">${users.map(u => `<div class="use"><b>${esc(u.where)}</b><span>${esc(u.detail)}</span></div>`).join("")}</div>
+      <label class="ack"><input type="checkbox" id="ack"><span>我看过上面的影响，还是要删除。</span></label>`
+      : `<p class="hint">没有其他地方用它，删除不会影响别的型号。</p>`}`;
+  const overlay = modal("删除程序", body,
+    `<button class="button" data-close type="button">取消</button><button class="button danger" id="confirmDelete" type="button" ${users.length ? "disabled" : ""}>放进回收站</button>`);
+  const ack = overlay.querySelector("#ack");
+  if (ack) ack.addEventListener("change", () => { overlay.querySelector("#confirmDelete").disabled = !ack.checked; });
+  overlay.querySelector("#confirmDelete").addEventListener("click", () => {
+    closeModal();
+    apply(() => {
+      assets = assets.filter(x => x.id !== a.id);
+      state.selectedId = null;
+    }, `「${a.name}」已放进回收站`, users.length ? `${users.length} 个地方现在找不到它了` : "");
+  });
+}
+
+/* ---------- 复制手控文件到 U 盘 ---------- */
+function usbDialog(a) {
+  const overlay = modal("复制手控文件到 U 盘", `
+    <p>把配套的两个手控文件复制到 U 盘。只是复制文件，不会格式化 U 盘，也不会烧录。</p>
+    <div class="use-list">${a.files.map(f => `<div class="use"><b>${esc(f)}</b><code>${esc(folderOf(a))}</code></div>`).join("")}</div>
+    <div class="form-row" style="margin-top:14px">
+      <label class="form-label" for="drive">复制到哪个 U 盘</label>
+      <select class="field" id="drive"><option>U:\\ 手控文件盘（还剩 14.2 GB）</option><option>V:\\ 备用 U 盘（还剩 6.8 GB）</option></select>
+    </div>`,
+    `<button class="button" data-close type="button">取消</button><button class="button primary" id="confirmUsb" type="button">开始复制</button>`);
+  overlay.querySelector("#confirmUsb").addEventListener("click", () => {
+    const drive = overlay.querySelector("#drive").value.slice(0, 2);
+    runProgress("复制手控文件到 U 盘", [
+      [20, "正在检查 U 盘…"], [55, "正在复制第 1 个文件…"], [90, "正在复制第 2 个文件…"], [100, "正在核对…"],
+    ], () => toast("ok", `2 个手控文件已复制到 ${drive}`, a.version || ""));
+  });
+}
+
+/* ---------- 设置：程序文件夹 + 归属厂商 + 软件修复 ---------- */
+function settingsDialog() {
+  const overlay = modal("设置", `
+    <div class="form-row">
+      <label class="form-label" for="rootPath">程序文件夹</label>
+      <div class="path-field">
+        <span class="path" id="rootPath">${esc(ROOT)}</span>
+        <button class="button" id="changeRoot" type="button">更改</button>
+      </div>
+    </div>
+    <div class="form-row">
+      <label class="form-label" for="vendorName">归属厂商</label>
+      <div class="use-list" id="vendorList"></div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <input class="field" id="vendorName" autocomplete="off" style="flex:1;width:auto">
+        <button class="button" id="addVendor" type="button">添加</button>
+      </div>
+      <p class="hint" id="vendorHint"></p>
+    </div>
+    <div class="form-row" style="margin-bottom:0">
+      <button class="button" id="maintain" type="button" style="width:100%">软件修复</button>
+    </div>`,
+    `<button class="button" data-close type="button">关闭</button>`);
+  const renderVendors = () => {
+    overlay.querySelector("#vendorList").innerHTML = VENDORS.map(vendor => `<div class="use"><b>${esc(vendor)}</b></div>`).join("");
+  };
+  const addVendor = () => {
+    const input = overlay.querySelector("#vendorName");
+    const hint = overlay.querySelector("#vendorHint");
+    try {
+      const name = createVendor(input.value);
+      input.value = "";
+      hint.textContent = "";
+      hint.className = "hint";
+      renderVendors();
+      toast("ok", `已添加厂商「${name}」`);
+    } catch (error) {
+      hint.textContent = error.message === "厂商名称不能为空" ? "请输入厂商名称。" : "已有同名厂商。";
+      hint.className = "hint error";
+    }
+  };
+  renderVendors();
+  overlay.querySelector("#addVendor").addEventListener("click", addVendor);
+  overlay.querySelector("#vendorName").addEventListener("keydown", event => {
+    if (event.key === "Enter") { event.preventDefault(); addVendor(); }
+  });
+  overlay.querySelector("#changeRoot").addEventListener("click", () => toast("info", "选择程序文件夹（模拟）", ROOT));
+  overlay.querySelector("#maintain").addEventListener("click", () => runProgress("软件修复", [
+    [20, "正在查看文件夹…"], [45, "正在识别程序类型…"], [70, "正在读取设置…"], [85, "正在核对列表和文件…"], [100, "正在更新列表…"],
+  ], () => {
+    assets = structuredClone(SEED_ASSETS);
+    borrows = structuredClone(SEED_BORROWS);
+    state.selectedId = null;
+    render();
+    const broken = borrows.filter(b => borrowProblem(b));
+    if (broken.length) {
+      toast("warn", "修复完成", `发现 ${broken.length} 处用不了的来源：${broken.map(b => `${modelName(b.model)} 的${b.type}`).join("、")}`);
+    } else {
+      toast("ok", "修复完成，没有发现问题", `一共 ${assets.length} 个程序`);
+    }
+  }));
+}
+
+/* ============================================================
+   8. 事件
+   ============================================================ */
+function openFolder(row) {
+  const a = row.kind === "borrow" ? borrowTarget(row.borrow) : row.asset;
+  if (!a) { toast("warn", "打不开", "来源程序找不到了"); return; }
+  const total = a.files.length + (a.extraFiles?.length || 0);
+  toast("info", "已打开文件夹（模拟）", a.extraFiles?.length
+    ? `${folderOf(a)} · 文件夹里共 ${total} 个文件（含 ${a.extraFiles.length} 个介绍文件）`
+    : folderOf(a));
+}
+
+function runAction(action) {
+  const row = selectedRow();
+  if (!row) return;
+  if (row.kind === "borrow") {
+    if (action === "editBorrow") addDialog("borrow", row.borrow);
+    else if (action === "stopBorrow") stopBorrowDialog(row.borrow);
+    return;
+  }
+  const a = row.asset;
+  if (action === "default") setDefault(a);
+  else if (action === "rename") { state.renaming = true; renderTable(); renderInspector(); focusInlineRename(); }
+  else if (action === "update") updateDialog(a);
+  else if (action === "backups") backupsDialog(a);
+  else if (action === "delete") deleteDialog(a);
+  else if (action === "usb") usbDialog(a);
+}
+
+function select(id) {
+  if (state.selectedId === id) return;
+  state.selectedId = id;
+  state.renaming = false;
+  renderTable();
+  renderInspector();
+}
+
+let modelContextId = null;
+let schemeContextId = null;
+
+function showModelContext(event, modelId) {
+  const model = MODELS.find(item => item.id === modelId);
+  if (!model) return;
+  event.preventDefault();
+  modelContextId = modelId;
+  const menu = $("#context");
+  menu.innerHTML = `<button type="button" data-act="renameModel">重命名型号</button>
+    <button class="danger" type="button" data-act="deleteModel">删除型号</button>`;
+  menu.hidden = false;
+  menu.style.left = `${Math.min(event.clientX, innerWidth - 218)}px`;
+  menu.style.top = `${Math.min(event.clientY, innerHeight - 76)}px`;
+}
+
+/* 定制方案右键：重命名 / 删除 */
+function showSchemeContext(event, schemeId) {
+  const scheme = SCHEMES.find(item => item.id === schemeId);
+  if (!scheme) return;
+  event.preventDefault();
+  schemeContextId = schemeId;
+  const menu = $("#context");
+  menu.innerHTML = `<button type="button" data-act="renameScheme">重命名方案</button>
+    <button class="danger" type="button" data-act="deleteScheme">删除方案</button>`;
+  menu.hidden = false;
+  menu.style.left = `${Math.min(event.clientX, innerWidth - 218)}px`;
+  menu.style.top = `${Math.min(event.clientY, innerHeight - 90)}px`;
+}
+
+/* 型号下拉 */
+function openModelPop(open) {
+  $("#modelPop").hidden = !open;
+  $("#modelButton").setAttribute("aria-expanded", String(open));
+  if (open) {
+    $("#modelSearch").value = "";
+    renderModelPicker();
+    $("#modelSearch").focus();
+  }
+}
+$("#modelButton").addEventListener("click", () => openModelPop($("#modelPop").hidden));
+$("#modelSearch").addEventListener("input", renderModelPicker);
+$("#modelSearch").addEventListener("keydown", e => {
+  if (e.key === "Escape") { openModelPop(false); $("#modelButton").focus(); }
+  if (e.key === "Enter") {
+    const first = $("#modelList .model-option");
+    if (first) first.click();
+  }
+});
+$("#modelList").addEventListener("click", e => {
+  if (e.target.closest("[data-act='newModel']")) { openModelPop(false); newModelDialog(); return; }
+  const option = e.target.closest("[data-model]");
+  if (!option) return;
+  state.model = option.dataset.model;
+  state.scope = "all";
+  state.type = "all";
+  state.selectedId = null;
+  openModelPop(false);
+  render();
+});
+
+$("#modelList").addEventListener("contextmenu", e => {
+  const option = e.target.closest("[data-model]");
+  if (!option) return;
+  showModelContext(e, option.dataset.model);
+});
+
+/* 通用/定制 */
+$("#navScopes").addEventListener("click", e => {
+  if (e.target.closest('[data-act="newScheme"]')) { newSchemeDialog(); return; }
+  const button = e.target.closest("[data-scope]");
+  if (!button) return;
+  state.scope = button.dataset.scope;
+  state.type = "all";
+  render();
+});
+$("#navScopes").addEventListener("contextmenu", e => {
+  const button = e.target.closest("[data-scheme]");
+  if (!button) return;
+  showSchemeContext(e, button.dataset.scheme);
+});
+
+/* 筛选 */
+$("#chips").addEventListener("click", e => {
+  const chip = e.target.closest("[data-type]");
+  if (!chip) return;
+  state.type = chip.dataset.type;
+  render();
+});
+$("#search").addEventListener("input", e => { state.query = e.target.value.trim().toLocaleLowerCase(); renderTable(); renderInspector(); });
+$("#btnAdd").addEventListener("click", () => { if (state.model) addDialog(); });
+$("#btnSettings").addEventListener("click", settingsDialog);
+
+/* 表格 */
+$("#rows").addEventListener("click", e => {
+  const tr = e.target.closest("[data-id]");
+  if (tr) select(tr.dataset.id);
+});
+$("#rows").addEventListener("dblclick", e => {
+  const tr = e.target.closest("[data-id]");
+  if (!tr) return;
+  select(tr.dataset.id);
+  const row = selectedRow();
+  if (row) openFolder(row);
+});
+$("#rows").addEventListener("contextmenu", e => {
+  const tr = e.target.closest("[data-id]");
+  if (!tr) return;
+  e.preventDefault();
+  select(tr.dataset.id);
+  const row = selectedRow();
+  if (!row) return;
+  const menu = $("#context");
+  modelContextId = null;
+  menu.innerHTML = row.kind === "borrow"
+    ? `<button type="button" data-act="editBorrow">换一个来源</button>
+       <button type="button" data-act="stopBorrow">不再用别的型号的程序</button>`
+    : `<button type="button" data-act="update">更新程序</button>
+       <button class="danger" type="button" data-act="delete">删除程序</button>`;
+  menu.hidden = false;
+  menu.style.left = `${Math.min(e.clientX, innerWidth - 218)}px`;
+  const menuHeight = row.kind === "borrow" ? 90 : 90;
+  menu.style.top = `${Math.min(e.clientY, innerHeight - menuHeight)}px`;
+});
+$("#rows").addEventListener("keydown", e => {
+  if (!e.target.dataset.inlineRename) return;
+  if (e.key === "Enter") { e.preventDefault(); commitRename(); }
+  if (e.key === "Escape") { e.preventDefault(); cancelRename(); }
+});
+$("#rows").addEventListener("focusout", e => {
+  if (!e.target.dataset.inlineRename) return;
+  commitRename();
+});
+$("#context").addEventListener("click", e => {
+  const button = e.target.closest("[data-act]");
+  if (!button) return;
+  $("#context").hidden = true;
+  if (schemeContextId && (button.dataset.act === "renameScheme" || button.dataset.act === "deleteScheme")) {
+    runSchemeAction(button.dataset.act, schemeContextId);
+    schemeContextId = null;
+    return;
+  }
+  if (modelContextId && (button.dataset.act === "renameModel" || button.dataset.act === "deleteModel")) {
+    runModelAction(button.dataset.act, modelContextId);
+    modelContextId = null;
+    openModelPop(false);
+    return;
+  }
+  runAction(button.dataset.act);
+});
+
+/* 详情栏 */
+$("#inspector").addEventListener("click", e => {
+  const action = e.target.closest("[data-act]");
+  if (action) runAction(action.dataset.act);
+});
+
+/* 全局 */
+document.addEventListener("click", e => {
+  if (!$("#context").contains(e.target)) {
+    $("#context").hidden = true;
+    modelContextId = null;
+    schemeContextId = null;
+  }
+  if (!$("#modelPop").hidden && !$(".model-picker").contains(e.target)) openModelPop(false);
+});
+
+/* 拖进主窗口任意位置 → 直接打开新增程序（Qt 落地：主窗口 setAcceptDrops） */
+["dragover", "dragenter"].forEach(type => document.addEventListener(type, e => {
+  if (e.dataTransfer) e.preventDefault();
+}));
+document.addEventListener("drop", e => {
+  if (!e.dataTransfer) return;
+  const source = sourceFromDrop(e);
+  if (!source.path) return;
+  if ($("#overlay").hidden) {
+    e.preventDefault();
+    addDialog("file", null, source);
+  }
+});
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") {
+    $("#context").hidden = true;
+    modelContextId = null;
+    schemeContextId = null;
+    openModelPop(false);
+    closeModal();
+    if (state.renaming) { state.renaming = false; render(); }
+    return;
+  }
+  if (e.target.matches("input, select, textarea") || !$("#overlay").hidden) return;
+
+  const list = visibleRows();
+  if ((e.key === "ArrowDown" || e.key === "ArrowUp") && list.length) {
+    e.preventDefault();
+    const index = list.findIndex(r => r.id === state.selectedId);
+    const next = e.key === "ArrowDown" ? Math.min(index + 1, list.length - 1) : Math.max(index - 1, 0);
+    select(list[index === -1 ? 0 : next].id);
+    const row = $(`tr[data-id="${state.selectedId}"]`);
+    if (row) row.scrollIntoView({ block: "nearest" });
+    return;
+  }
+  const row = selectedRow();
+  if (!row) return;
+  if (e.key === "Enter") { e.preventDefault(); openFolder(row); }
+  if (row.kind !== "asset") return;
+  if (e.key === "F2") { e.preventDefault(); runAction("rename"); }
+  if (e.key === "Delete") { e.preventDefault(); runAction("delete"); }
+});
+
+render();
+</script>
+</body>
+</html>
