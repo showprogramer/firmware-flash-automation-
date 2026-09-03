@@ -171,7 +171,7 @@
 - 已知平台差异：无（纯 Windows，WSL 不再使用）。
 - 提交：`5e55c9f`
 
-### 人工验证（待执行）
+### 人工验证（已完成）
 
 - 平台：Windows（按「无 UI 的人工验证等效规则」，以一次性隔离脚本驱动）。
 - 方式：`uv run python scripts\verify_r8_reference_integrity.py`（隔离现场 `.scenario/r8/`，四类场景：反查 / 迁移 / 级联 / 收口）。

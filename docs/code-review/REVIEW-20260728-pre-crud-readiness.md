@@ -10,7 +10,7 @@
 | 类型 | 准入审查 / 架构边界 |
 | 模块 | `core/asset_index.py`、`core/reference_lookup.py`、`core/services/reference_service.py`、`core/path_guard.py`、`core/file_scan.py`、`core/services/*`、`ui_common/workbench_helpers.py`、`ui_qt/workbench_window.py` |
 | 状态 | 🔄 进行中（4 项基础 gate 已关闭；CRUD 写语义 gate 阻断真实写入） |
-| 相关 TASK | ✅ TASK-20260803-r5-path-guard、✅ TASK-20260806-r1-r10-write-gate、✅ TASK-20260806-independent-crud-web-prototype、✅ TASK-20260901-r3-index-write-api、🔨 TASK-20260901-r8-reference-integrity（实现完成，等待人工验证）、⏳ 正式 CRUD TASK（待立项） |
+| 相关 TASK | ✅ TASK-20260803-r5-path-guard、✅ TASK-20260806-r1-r10-write-gate、✅ TASK-20260806-independent-crud-web-prototype、✅ TASK-20260901-r3-index-write-api、✅ TASK-20260901-r8-reference-integrity（实现审查与人工验证通过）、⏳ 正式 CRUD TASK（待立项） |
 | 基线 | `feature/pyside6-migration`；`uv run python -m pytest -q` → 574 passed，coverage 94.56%（门禁 80%） |
 
 ## 审查目标
@@ -69,7 +69,7 @@ CRUD 的交互与产品语义由 `specs/design/prototypes/firmware-crud-prototyp
 - `file_scan` 重构共享扫描核心并新增 `scan_firmware_subtree(workspace_root, subtree_root)`；`asset_reconcile.reconcile_subtree` 提供失败后按磁盘真相重扫的冷接口。
 - 「路径变化不能只改 path、须重扫生成完整新行」与「先动文件、再动库、失败重扫子树」策略已在接口契约与测试中固化。验证：Windows 477 passed / 95.18%（当时基线），codex 两轮实现审查通过，`scripts/verify_r3_write_api.py` 四类场景人工验证通过。
 
-### R8 ✅ 引用反查与级联完整性（TASK-20260901-r8-reference-integrity，实现完成待人工验证）
+### R8 ✅ 引用反查与级联完整性（TASK-20260901-r8-reference-integrity，实现审查与人工验证通过）
 
 - **反查**：`core/reference_lookup.py` 的 `find_references_to`（static/follow 类借用 + 平台默认，四种 target_kind，owner 限定与联合身份）与 `find_dangling_anchors`（路径身份复用预检）；严格 TOML 冷读，损坏/非法条目进 issues 不静默。
 - **借用语义**：`SharedModuleRef.mode` 扩为 `static` / `follow_default`（兼容读）/ `follow_asset`（跟随来源具体程序）；`migrate_follow_default_refs` 幂等迁移存量数据（详见 `docs/migrations/MIGRATION-20260901-r8-follow-asset.md`）。
