@@ -461,9 +461,15 @@ class WorkbenchInterface(QWidget):
                 self._log(f"读取过程中有 {len(errors)} 个错误")
 
         root = (self.root_dir or "").strip()
-        if not root:
+        configured_root: str | None = None
+        if root:
+            # 配置根存在：型号 id 自动写入走门闩（R8 规则 6）
+            configured_root = root
+        else:
             # 本机未配置 DEFAULT_ROOT 时，从最近一次扫描的 scan_meta 恢复扫描根，
             # 避免绑定到 "." 后型号列表退化成文件名解析的噪声假型号。
+            # 注意：恢复出的根不得当作配置根——此时 configured_root 保持 None，
+            # 型号 id 只读、不自动创建。
             meta = payload.get("scan_meta") or []
             if meta:
                 root = str(meta[0].get("root_dir", "")).strip()
@@ -471,7 +477,7 @@ class WorkbenchInterface(QWidget):
                     self.root_dir = root
                     self._log(f"使用上次读取的程序文件夹: {root}")
         root_dir = Path(root) if root else Path(".")
-        self.workbench_model.bind(None, root_dir)
+        self.workbench_model.bind(None, root_dir, configured_root)
 
         models = self.workbench_model.load_all_models()
         self._refresh_model_selector(models)

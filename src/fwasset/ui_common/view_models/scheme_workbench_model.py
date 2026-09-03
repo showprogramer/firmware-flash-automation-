@@ -143,6 +143,9 @@ class SchemeWorkbenchModel:
     def __init__(self):
         self.db_path: Path | None = None
         self.root_dir: Path | None = None
+        # R8 规则 6：设置中的权威配置根；仅 scan_meta 兜底恢复出的根不得当作
+        # 配置根（此时保持 None，型号 id 只读、不自动创建）。
+        self.configured_root: Path | None = None
         self._platforms: list[PlatformDefaults] = []
         self._model_root_paths: dict[str, str] = {}  # model_name → model_directory_path
         # 布局模式：True = 扫描根本身是一个型号目录（含 通用/定制）；
@@ -165,9 +168,15 @@ class SchemeWorkbenchModel:
         """True once bind() has populated the asset cache."""
         return bool(self._all_assets)
 
-    def bind(self, db_path: Path | None, root_dir: Path) -> None:
+    def bind(
+        self,
+        db_path: Path | None,
+        root_dir: Path,
+        configured_root: Path | str | None = None,
+    ) -> None:
         self.db_path = db_path
         self.root_dir = root_dir
+        self.configured_root = Path(configured_root) if configured_root else None
         # Load once. Any view method on the hot path reads from this list.
         self._all_assets = list(query_assets(path=self.db_path))
         self._single_model_root = self._detect_single_model_root()
@@ -248,10 +257,20 @@ class SchemeWorkbenchModel:
         if not roots:
             return
         try:
-            ensure_model_ids(roots, log_fn=lambda _m: None)
+            result = ensure_model_ids(
+                roots,
+                self.configured_root,
+                log_fn=lambda _m: None,
+            )
         except Exception:  # noqa: BLE001
             # 不因 id 服务异常阻断工作台
-            pass
+            result = None
+        if result is not None and not result["ok"]:
+            code = str(result.get("code", ""))
+            if code in ("out_of_workspace", "invalid_root"):
+                # 门闩拒绝：不进入成功流程（也不建立 id 映射）
+                return
+            # not_configured / parse_error：只读降级，继续读取盘上已有 id
         for root in roots:
             try:
                 mid, status, _err = load_model_config(root)
@@ -267,12 +286,15 @@ class SchemeWorkbenchModel:
             self._root_by_model_id[mid] = root
 
     def ensure_model_id(self, model_root: str | Path) -> str:
-        """返回型号根持久 id；缺失时触发写入后返回。"""
+        """返回型号根持久 id；缺失时触发写入后返回（失败只读降级返回空）。"""
         root = Path(model_root)
         mid, status, _ = load_model_config(root)
         if status == "ok" and mid:
             return mid
-        ensure_model_ids([root], log_fn=lambda _m: None)
+        result = ensure_model_ids([root], self.configured_root, log_fn=lambda _m: None)
+        if not result["ok"] and result["code"] not in ("not_configured",):
+            # 写入门闩拒绝（越界/非法根等）：不进入成功流程
+            return ""
         mid, status, _ = load_model_config(root)
         if status == "ok" and mid:
             dir_name = root.name

@@ -65,7 +65,7 @@ def _bind_model(root: Path, tmp_path: Path) -> SchemeWorkbenchModel:
     assets, _errors = scan_firmware_assets(str(root))
     save_assets(assets, str(root), path=db)
     model = SchemeWorkbenchModel()
-    model.bind(db, root)
+    model.bind(db, root, root)
     return model
 
 
@@ -359,6 +359,7 @@ def test_scheme_modules_ignore_shared_refs(tmp_path: Path) -> None:
     scheme = root / "定制" / "西班牙"
     _write(scheme / "方案配置.toml", 'name = "西班牙"\nplatform = "标准单机芯3D"\n')
     _write(scheme / "手控UI" / "ui.rom")
+    _write(scheme / "手控UI" / "ui.pkg")  # 手控 UI 硬约束：.rom + .pkg 成对
 
     model = _bind_model(root, tmp_path)
     cards = model.get_scheme_modules("L36", "西班牙")
@@ -753,7 +754,8 @@ def test_first_set_default_without_toml_uses_scheme_platform_names(
     _write(root / "通用" / "腿部程序" / "leg.hex")
     scheme = root / "定制" / "西班牙"
     _write(scheme / "方案配置.toml", 'name = "西班牙"\nplatform = "标准单机芯3D"\n')
-    _write(scheme / "手控UI" / "ui.rom")  # 有定制手控，缺主板 → 回源主板
+    _write(scheme / "手控UI" / "ui.rom")
+    _write(scheme / "手控UI" / "ui.pkg")  # 手控 UI 硬约束；有定制手控，缺主板 → 回源主板
 
     model = _bind_model(root, tmp_path)
     assert model._platforms_for("L36") == []
@@ -797,6 +799,7 @@ def test_unique_common_module_inferred_as_fallback_without_defaults_key(
     scheme = root / "定制" / "西班牙"
     _write(scheme / "方案配置.toml", 'name = "西班牙"\nplatform = "标准单机芯3D"\n')
     _write(scheme / "手控UI" / "ui.rom")
+    _write(scheme / "手控UI" / "ui.pkg")  # 手控 UI 硬约束：.rom + .pkg 成对
 
     model = _bind_model(root, tmp_path)
     cards = model.get_scheme_modules("L36", "西班牙")

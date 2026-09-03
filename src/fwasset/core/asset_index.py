@@ -13,6 +13,7 @@ from fwasset.core.path_guard import (
     contained_subpath,
     is_same_or_under,
     normalize_workspace_path,
+    same_path_identity,
 )
 from fwasset.core.settings import ASSET_INDEX_PATH
 from fwasset.core.sort_config import SortKey, apply_sort
@@ -362,20 +363,17 @@ def _validate_asset_payload(asset: FirmwareAsset) -> None:
 def _find_equivalent_asset_path(conn: sqlite3.Connection, target: str) -> str | None:
     """定位与 ``target`` 物理等价的现存资产 path 主键。
 
-    先精确匹配，再按 normcase 归一身份匹配（Windows 大小写 / 分隔符差异，
-    防止同一路径两种写法产生重复行或漏删目标）。
+    先精确匹配，再按统一身份判定匹配（R8 起复用 ``path_guard.same_path_identity``：
+    Windows 大小写 / 分隔符 / junction 折叠，防止同一路径两种写法产生重复行或漏删目标）。
     """
     row = conn.execute(
         "SELECT path FROM assets WHERE path = ? LIMIT 1", (target,)
     ).fetchone()
     if row is not None:
         return str(row["path"])
-    target_norm = normalize_workspace_path(target)
-    if not target_norm:
-        return None
     for row in conn.execute("SELECT path FROM assets").fetchall():
         stored = str(row["path"])
-        if normalize_workspace_path(stored) == target_norm:
+        if same_path_identity(stored, target):
             return stored
     return None
 

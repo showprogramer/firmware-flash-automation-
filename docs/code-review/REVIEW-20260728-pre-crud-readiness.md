@@ -1,16 +1,17 @@
 # REVIEW-20260728: CRUD 准入审查（Pre-CRUD Readiness）
 
-> **2026-09-01 重构更新**：本文按当前源码（`705fe60`）与 HTML 网页原型（TASK-20260806）整体重写。
-> 已关闭项（R1/R10、R5）压缩为现状摘要；已撤销/不适用项（R2、R4、R6b/R6c/R6d/R6e、R7、R12）的历史分析不再保留，需要时查本文件在 `705fe60` 之前的 git 版本。
-> 文中所有行号与 API 名以 `feature/pyside6-migration` @ `705fe60` 为准。
+> **2026-09-01 状态更新**：原 4 项基础 gate（R1/R10、R5、R3、R8）已全部完成；
+> 「CRUD 写语义 gate」（改类型/改范围迁移、型号/方案创建删除事务语义、路径身份
+> 不复用预检等）仍阻断真实写入，正式 CRUD TASK 立项时必须先行定稿。
+> 历史初稿（2026-07-28）与 `705fe60` 基线分析见 git 历史。
 
 | 项 | 内容 |
 | --- | --- |
 | 类型 | 准入审查 / 架构边界 |
-| 模块 | `core/asset_index.py`、`core/path_guard.py`、`core/file_scan.py`、`core/services/*`、`ui_common/workbench_helpers.py`、`ui_qt/workbench_window.py` |
-| 状态 | 🔄 进行中（R1/R10、R5 已关闭；R3、R8 未开始；产品交互规则已由 HTML 原型定稿） |
-| 相关 TASK | ✅ TASK-20260803-r5-path-guard（已完成）、✅ TASK-20260806-r1-r10-write-gate（已完成）、✅ TASK-20260806-independent-crud-web-prototype（人工验证通过，待提交）、⏳ 正式 CRUD TASK（待立项，本审查为其前置） |
-| 基线 | `feature/pyside6-migration` @ `705fe60`；`uv run python -m pytest -m "not ui" -q` → 394 passed, 31 deselected，coverage 88.82%（门禁 80%） |
+| 模块 | `core/asset_index.py`、`core/reference_lookup.py`、`core/services/reference_service.py`、`core/path_guard.py`、`core/file_scan.py`、`core/services/*`、`ui_common/workbench_helpers.py`、`ui_qt/workbench_window.py` |
+| 状态 | 🔄 进行中（4 项基础 gate 已关闭；CRUD 写语义 gate 阻断真实写入） |
+| 相关 TASK | ✅ TASK-20260803-r5-path-guard、✅ TASK-20260806-r1-r10-write-gate、✅ TASK-20260806-independent-crud-web-prototype、✅ TASK-20260901-r3-index-write-api、🔨 TASK-20260901-r8-reference-integrity（实现完成，等待人工验证）、⏳ 正式 CRUD TASK（待立项） |
+| 基线 | `feature/pyside6-migration`；`uv run python -m pytest -q` → 574 passed，coverage 94.56%（门禁 80%） |
 
 ## 审查目标
 
@@ -30,16 +31,16 @@ CRUD 的交互与产品语义由 `specs/design/prototypes/firmware-crud-prototyp
 
 ## 准入结论
 
-### 🟡 Conditional Go（gate 已关闭 2/4，仍不允许真实目录写入）
+### 🟡 Conditional Go（4 项基础 gate 已全部关闭；CRUD 写语义 gate 仍阻断真实写入）
 
-**可以立正式 CRUD TASK；但对「新增 CRUD 写入口」仍要求先关闭 R3、R8。** 现有元数据写入口（设为默认、共享登记/取消登记）已被统一门闩和路径守卫覆盖，这是相对 2026-07-28 初稿的主要进展。
+**可以立正式 CRUD TASK；但真实目录写入开放前，必须先按原型定稿「CRUD 写语义 gate」各项**（见前置条件清单 #4 备注）。
 
 理由摘要：
 
-- **写入口已收口（有一处缺口）**：R5 路径守卫（`core/path_guard.py`）+ R1/R10 写入门闩（`ui_common/workbench_helpers.write_gate_check` + `ui_qt/workbench_window._write_gate`）已实现并经 Windows 实机验证；既有交互式 TOML 写入口均已接入，唯一例外是 `ensure_model_ids` 的自动写入（详见「已关闭项」的覆盖缺口）。
-- **TOML 写语义成熟**：`model_config._merge_write_model_config()` 读全量 dict → 局部 mutate → 原子写回且解析失败拒绝当空 dict 覆盖；`atomic_write_text()` 同目录临时文件 + `fsync` + `os.replace`。注意 `platform_config.save_platform_config()` 按「应用托管文件」契约整体重写、不承诺保留未知键，不能把 `model_config` 的合并语义泛化到所有 TOML。
-- **阻断点仍在索引层与引用层**：`assets` 仍只有全量替换 `save_assets()` 和对账式 `delete_missing_assets()`，没有定点 upsert / replace / delete / 子树重建 API（R3）；文件操作会打断 TOML 引用且无写前反查（R8）。
-- **原型扩大了 CRUD 面**：型号/方案成为可新建、删除的一等单元，「更新程序」会产生 `旧版本/` 备用副本与默认/借用迁移问题——这些都落在 R3/R8 的能力范围内，但具体动作语义要在正式 TASK 中按原型逐条定稿。
+- **写入口已收口**：R5 路径守卫 + R1/R10 写入门闩覆盖全部写入口；R3 附带补齐了 `ensure_model_ids` 的门闩缺口（配置根必填、未配置零写盘）。
+- **索引层就绪（R3）**：`upsert_asset` / `replace_asset` / `delete_asset` / `bulk_reindex_subtree` 定点写 + `scan_firmware_subtree` 子树扫描 + `reconcile_subtree` 对账兜底，单事务含 hidden_items 同步。
+- **引用层就绪（R8）**：`reference_lookup.find_references_to` / `find_dangling_anchors` 反查（严格 TOML 冷读）、`follow_asset` 借用语义与 `follow_default` 存量迁移、`build/apply_rewrite_plan` 级联改写（preimage CAS 回滚）、删除零 TOML 改写（可逆）。
+- **剩余阻断**：更新程序改类型/改范围的默认与借用迁移、型号/方案创建删除的事务/撤销编排、路径身份不复用预检、`旧版本/` 备用副本作为借用来源——这些是产品语义决策，不是架构缺口。
 
 **不是 No-Go 的原因**：缺口都是可加固的，不是架构性错误。领域模型（通用/定制/共享）对 CRUD 自洽，不需要推倒重来；原型也未推翻「目录树 + TOML 是真源、SQLite 是搜索缓存」的结构派生原则。
 
@@ -56,82 +57,37 @@ CRUD 的交互与产品语义由 `specs/design/prototypes/firmware-crud-prototyp
 - 纯函数 `ui_common/workbench_helpers.write_gate_check(configured_root, scanned_root, target_path) -> ServiceResult`，三检查依次：配置根为空 → `not_configured`；已读工作区根 ≠ 配置根 → `root_changed`；路径守卫拒绝 → `out_of_workspace`。所有路径比较经 `Path.resolve()` + `os.path.normcase`。
 - UI 包装 `ui_qt/workbench_window._write_gate()`（`:852-868`）叠加任务态检查：扫描中（`scan_state_model.is_scanning`）与烧录任务中（`_busy`）一律禁写。
 - 三层权威来源已落实：配置文件 `root_dir` 是写操作权威；`scan_meta`（`active_workspace_root()`）仅作缓存恢复；配置为空或根不一致时只读浏览 + 前往设置。
-- **⚠️ 已知覆盖缺口（2026-09-01 codex 复核发现）**：`core/services/model_id_service.ensure_model_ids()` → `save_model_id()` 会为缺 id 的型号根直接写 `型号配置.toml`（`model_id_service.py:60-64`），未接门闩也未接守卫；它由工作台 `_load_model_ids` / `ensure_model_id` 自动触发（`scheme_workbench_model.py:251,275`），且 scan_meta 兜底恢复路径（`workbench_window.py:463-469`）也会走到。该自动写入须在正式 CRUD 前接入 #1/#2，或改为受控的显式迁移动作。
+- **✅ 覆盖缺口已收口（R8，TASK-20260901）**：`ensure_model_ids()` 增加 `configured_root` 必填门闩——未配置零写盘（model_id 只读降级）、整批先校验归属（越界/非法根整批 `out_of_workspace`/`invalid_root` 零写）、scan_meta 兜底恢复路径不再被当作配置根；既有重复 model_id 计入报告。
 
 ---
 
-## 未关闭 gate
+## 已关闭项（R3/R8 现状摘要）
 
-### R3（P1·阻断）：`assets` 以 `path` 为主键且缺少 CRUD 定点写接口  `complexity: high`
+### R3 ✅ 索引行级写 API + 子树扫描/对账（TASK-20260901-r3-index-write-api）
 
-**文件：** `src/fwasset/core/asset_index.py:75-98`（schema v3）、`:184-228`（`save_assets`）、`:308-323`（`delete_missing_assets`）
+- `asset_index` 新增 `upsert_asset` / `replace_asset` / `delete_asset` / `bulk_reindex_subtree` 四个行级写接口：单事务含 `hidden_items` 同步、整批原子校验、单工作区根一致性校验、normcase 身份匹配；顺带修复 `prune_missing_hidden_items` 的 `startswith` A/AB 前缀混淆缺陷。
+- `file_scan` 重构共享扫描核心并新增 `scan_firmware_subtree(workspace_root, subtree_root)`；`asset_reconcile.reconcile_subtree` 提供失败后按磁盘真相重扫的冷接口。
+- 「路径变化不能只改 path、须重扫生成完整新行」与「先动文件、再动库、失败重扫子树」策略已在接口契约与测试中固化。验证：Windows 477 passed / 95.18%（当时基线），codex 两轮实现审查通过，`scripts/verify_r3_write_api.py` 四类场景人工验证通过。
 
-当前公开函数列表（`705fe60` 实测；另有公开常量/类型 `AssetIndexError`、`SCHEMA_VERSION`、`HiddenItemType`）：
+### R8 ✅ 引用反查与级联完整性（TASK-20260901-r8-reference-integrity，实现完成待人工验证）
 
-```text
-active_workspace_root  connect_asset_index  count_assets  default_index_path
-delete_missing_assets  hide_item  init_asset_index  load_assets  load_hidden_items
-load_scan_meta  prune_missing_hidden_items  query_assets  save_assets  schema_version
-unhide_item
-```
-
-`delete_missing_assets(existing_paths)` 是全库对账式删除（keep 集合之外全删），不能替代 CRUD 所需的定点写；`save_assets` 仍是 `DELETE FROM assets` + `executemany` 的全量冷路径。`upsert_asset` / `replace_asset` / `delete_asset` / `bulk_reindex_subtree` 均不存在。
-
-后果：
-
-1. **重命名/更新/删除缺少可直接复用的 CRUD 表达**。原型中的「更新程序」（换文件夹）与「重命名」会连带改变多个从路径推导的字段，需要「删旧行 + 插入重扫生成的完整新行 + 同步 `hidden_items`」在同一 SQLite 事务内完成。
-2. **`hidden_items` 以 `path` 为键**，路径变化会让隐藏状态静默失效（`prune_missing_hidden_items` 当作悬空项删掉）。
-3. **没有文件系统动作与索引提交之间的一致性编排**。SQLite 事务包不住文件系统操作；必须显式实现「文件成功 → 提交索引事务；任一步失败 → 按磁盘真相重扫受影响子树」的恢复策略。
-
-#### 建议方案（供 TASK 立项时定夺）
-
-**不引入 UUID 型 asset ID**（真相源是目录树 + TOML，UUID 必须落盘才能跨扫描存活，成本高于收益）。保留 `path` 主键，补齐行级写 API：
-
-| 新接口 | 语义 |
-| --- | --- |
-| `upsert_asset(asset)` | 新增/覆盖单行（新建、编辑后重扫单目录） |
-| `replace_asset(old_path, new_asset)` | 单事务内：按 `old_path` 删旧行 → 写入**重新扫描生成的完整** `new_asset` → 同步 `hidden_items` 旧路径。不是只 UPDATE path |
-| `delete_asset(path)` | 删单行 + 关联 hidden |
-| `bulk_reindex_subtree(workspace_root, subtree_root, assets)` | 子树重扫后替换该子树的行；必须同时保留「工作区根」和「遍历子树」两个参数，路径归属用 `Path.relative_to()` 判断，不能用裸 `startswith` |
-
-**⚠️ 路径变化时不能只更新 `path`**（2026-07-28 实测，见 git 历史）：同模块重命名会变 `path`/`directory_name`/`version`/`label`；跨归属移动会变 `category`/`platform`/`scheme_name`/`scheme_path`/`model_directory_path`。正确流程四步：① 动真实目录 → ② **保留工作区上下文的局部扫描**生成完整新 `FirmwareAsset` → ③ 事务内删旧行 + 插完整新行 → ④ 同事务同步 `hidden_items`。第 2 步必须复用扫描器推导，不得在 CRUD 里手写字段映射。
-
-**扫描器现状（`705fe60`）**：入口已扩为 `scan_firmware_assets(root, catalog_path=None, last_scan_at=None, cancel_event=None)`（`file_scan.py:172-177`）——新增了扫描器级的增量跳过（`last_scan_at`，仅扫描器内跳过旧目录，`scan_service` 目前并未传该参数、结果仍整库覆盖）与取消（`cancel_event`）支持，但 `root` 仍是唯一遍历起点兼工作区根，**仍无保留上下文的局部子树扫描入口**。R3 实现时应新增 `scan_firmware_subtree(workspace_root, subtree_root)` 类入口，或先全根扫描再筛选受影响子树；不能直接 `scan_firmware_assets(new_variant_dir)` 写库。
-
-**一致性策略**：先动文件、再动库、失败则重扫子树（文件系统不可回滚，库可从磁盘重建）。配套 `reconcile_subtree(path)` 冷接口兜底。v3 schema 无需迁移即可承载上述全部接口（schema 升级仅在有扫描不可推导的持久化字段需求时按需触发）。
-
-### R8（P1·阻断）：文件操作会使 TOML 引用失效，但无级联校验  `complexity: high`
-
-**文件：** `core/model_config.py:52-66`（`SharedModuleRef`）、`core/shared_module_resolver.py:118-209`、`core/platform_config.py`
-
-两类 TOML 引用会被文件操作打断，现状没有写前反查：
-
-1. **`平台配置.toml` 的 `[platform.defaults]`**：`module_dir → variant_name`。删除/重命名/更新一个通用变体目录会让平台默认指向不存在的变体，依赖回源的定制方案该模块变空。
-2. **`型号配置.toml` 的 `shared_modules`**：`source_relative_path` 指向另一型号的具体路径。移动/删除/更新源型号目录会让引用方解析成 `missing`。解析器会优雅降级（`status="missing"` + `reason`），但用户在源型号侧操作时得不到任何警告。
-
-当前 `SharedModuleRef.mode` 只有 `static` / `follow_default`（后者经显式或自动检测的 `source_platform` 跟随源型号的平台默认，`shared_module_resolver.py:181-209`）。**原型要求的 `follow_asset`（跟随指定程序）尚不存在**——正式落地需给来源程序一个跨重命名/更新的稳定标识并迁移语义（原型任务已标注此点），这会直接影响 R8 反查的实现方式。
-
-**建议**（CRUD 前置）：
-
-- 新增 `find_references_to(path, workspace_root) -> list[Reference]`：反查平台默认 + 跨型号共享（借用）引用。区分 static 引用的具体变体路径与 follow 类引用的模块/来源语义，正确处理祖先/后代路径关系。
-- **删除**前调用：命中则二次确认，列出受影响的型号与模块（原型规则：有借用时必须勾选确认）。
-- **重命名/更新**前调用：命中时级联改写平台默认变体名与引用路径，或阻止操作；不能只警告后留断链。TOML 写入失败时按磁盘真相对账并报告未完成项。
-- **原型扩面带来的新级联场景**（正式 TASK 定稿）：删除型号/方案 = 级联删除其下全部程序（逐个走反查）；「更新程序」改类型时原类型默认失效、借用来源失效的提示与迁移；新建型号 = 新建目录 + `型号配置.toml`（写入口同样接入门闩 + 守卫）。
-- 「复制为本型号私有」不在当前范围；`clear_shared_module()`（`shared_module_service.py:339-350`）已存在且幂等，将来可直接复用。
+- **反查**：`core/reference_lookup.py` 的 `find_references_to`（static/follow 类借用 + 平台默认，四种 target_kind，owner 限定与联合身份）与 `find_dangling_anchors`（路径身份复用预检）；严格 TOML 冷读，损坏/非法条目进 issues 不静默。
+- **借用语义**：`SharedModuleRef.mode` 扩为 `static` / `follow_default`（兼容读）/ `follow_asset`（跟随来源具体程序）；`migrate_follow_default_refs` 幂等迁移存量数据（详见 `docs/migrations/MIGRATION-20260901-r8-follow-asset.md`）。
+- **级联**：`core/services/reference_service.py` 的 `build_rewrite_plan` / `apply_rewrite_plan`——结构化 `RewriteRequest`、preimage 双 SHA-256、统一配置根 gate、`stale_plan`/`invalid_operation`/`unsupported_semantic_change` 等阻止码、CAS 回滚（恢复到当前物理位置）；删除**零 TOML 改写**（借用条目保留、解析自然 missing、回收站撤销即恢复）。
+- **门闩收口**：`ensure_model_ids` 见上。
+- **仍阻断真实写入（CRUD 写语义 gate）**：改类型/改范围迁移（build 以 `unsupported_semantic_change` 阻止）、型号/方案创建删除事务语义、路径身份不复用预检（`path_identity_conflict`）、`旧版本/` 备用副本作为借用来源。
 
 ---
 
 ## 原型与当前 core 的差异清单（正式 TASK 立项前逐项定稿）
 
-原型交互已人工验证，但以下各点在 core 层尚无对应实现，立项时必须写死：
-
 | # | 差异点 | 现状 | 待定稿 |
 | --- | --- | --- | --- |
-| 1 | 借用 `follow_asset`（跟随指定程序） | `SharedModuleRef` 只有 `static`/`follow_default` | 来源程序的稳定标识与持久化方式；`follow_default` 存量数据的迁移 |
+| 1 | 借用 `follow_asset`（跟随指定程序） | ✅ 已实现（R8）：锚定 `source_relative_path` + 操作矩阵级联保证跟随；`follow_default` 存量提供幂等迁移 | 无（稳定标识采用「路径 + 级联 + 身份不复用约束」方案，不引入 UUID） |
 | 2 | 机芯类型枚举（`单3D`/`单2D`/`双2D`/`上3D下2D`） | `platform` 是方案/平台 TOML 里的自由文本块 | 枚举与 `[[platform]]` 块的映射；多个平台块并存时默认写哪一块 |
-| 3 | 归属厂商名单（设置内可添加） | 生产源码无 vendor 配置或资产字段（`types.py`/schema 均无；原型 HTML 已有 `VENDORS` 演示逻辑） | 名单存放位置（`config.toml` 或独立 TOML）；程序资产上厂商字段的落盘与派生 |
-| 4 | 新建/删除型号、新建/删除方案 | 只有扫描发现；无型号/方案的创建、重命名、删除服务。`型号配置.toml` 可由 `ensure_model_ids()` 自动创建（见 R1/R10 覆盖缺口），型号目录本身仍由外部产生 | 目录与 TOML 的创建/删除事务语义；删除型号的级联范围 |
-| 5 | 更新程序 → `旧版本/` 备用副本 | 无此概念 | `旧版本/` 的落点（型号内还是变体内）；扫描器排除确认；`usb_ops.copy_directory_to_usb` 目前整目录 `copytree`（`usb_ops.py:83-93`，无 ignore），副本目录若在变体内会被拷进 U 盘 |
+| 3 | 归属厂商名单（设置内可添加） | 生产源码无 vendor 配置或资产字段 | 名单存放位置（`config.toml` 或独立 TOML）；程序资产上厂商字段的落盘与派生 |
+| 4 | 新建/删除型号、新建/删除方案 | 只有扫描发现；无型号/方案的创建、重命名、删除服务（删除的引用侧级联已由 R8 零改写语义覆盖） | 目录与 TOML 的创建/删除事务语义；删除型号的级联范围（CRUD 写语义 gate） |
+| 5 | 更新程序 → `旧版本/` 备用副本 | 无此概念 | `旧版本/` 的落点；扫描器排除确认；`usb_ops.copy_directory_to_usb` 整目录 copytree（无 ignore），副本目录若在变体内会被拷进 U 盘 |
 | 6 | UI 术语（借用、程序文件、机芯类型…） | Qt 界面仍是「共享模块/登记共享来源」等旧术语 | 术语映射表，含右键菜单改造（原型：右键只保留上下文相关操作） |
 
 ---
@@ -153,43 +109,42 @@ unhide_item
 
 | # | 前置项 | 对应 Issue | 复杂度 | 状态 |
 | --- | --- | --- | --- | --- |
-| 1 | 配置根作为写操作权威 + scan_meta 一致性校验 + 未配置时禁用写入口 | R1、R10 | medium | ✅ 已完成（TASK-20260806-r1-r10-write-gate）；⚠️ 覆盖缺口：`ensure_model_ids` 自动写入未接入，须补 |
-| 2 | 统一路径守卫 `assert_within_workspace` | R5 | medium | ✅ 已完成（TASK-20260803-r5-path-guard，Windows 实机验证通过）；⚠️ 同上覆盖缺口 |
-| 3 | CRUD 定点写 API + 保留工作区上下文的局部扫描/子树对账 + SQLite 事务 + 文件/索引失败恢复策略（不含 schema 迁移；SQLite 事务不包含文件系统动作） | R3 | high | ✅ 已完成（TASK-20260901-r3-index-write-api：4 行级写 API + `scan_firmware_subtree` + `asset_reconcile.reconcile_subtree`；Windows 全量 477 passed / 95.18%；经 codex 两轮实现审查「实现合格，无阻断问题」；人工验证按无 UI 等效规则以 `scripts/verify_r3_write_api.py` 四类场景通过 + 用户确认；含 `hidden_items` A/AB 前缀缺陷修复） |
-| 4 | TOML 引用反查 + 删除二次确认 + 重命名/更新时级联改写或阻止断链（含原型差异清单 #1、#4 的语义定稿） | R8 | high | ⏳ 未开始 |
+| 1 | 配置根作为写操作权威 + scan_meta 一致性校验 + 未配置时禁用写入口 | R1、R10 | medium | ✅ 已完成（TASK-20260806-r1-r10-write-gate）；✅ `ensure_model_ids` 覆盖缺口已由 R8 收口（配置根必填门闩） |
+| 2 | 统一路径守卫 `assert_within_workspace` | R5 | medium | ✅ 已完成（TASK-20260803-r5-path-guard，Windows 实机验证通过） |
+| 3 | CRUD 定点写 API + 保留工作区上下文的局部扫描/子树对账 + SQLite 事务 + 文件/索引失败恢复策略（不含 schema 迁移；SQLite 事务不包含文件系统动作） | R3 | high | ✅ 已完成（TASK-20260901-r3-index-write-api：4 行级写 API + `scan_firmware_subtree` + `asset_reconcile.reconcile_subtree`；经 codex 两轮实现审查「实现合格，无阻断问题」；人工验证按无 UI 等效规则以 `scripts/verify_r3_write_api.py` 四类场景通过 + 用户确认；含 `hidden_items` A/AB 前缀缺陷修复） |
+| 4 | TOML 引用反查 + 删除二次确认 + 重命名/更新时级联改写或阻止断链（含原型差异清单 #1、#4 的语义定稿） | R8 | high | ✅ 引用基础能力完成（TASK-20260901-r8-reference-integrity：`reference_lookup` 反查 + `follow_asset` 语义与存量迁移 + `build/apply_rewrite_plan` preimage CAS 回滚级联 + `ensure_model_ids` 门闩收口；Windows 574 passed / 94.56%）。⚠️ **CRUD 写语义 gate 仍阻断真实写入**：改类型/改范围迁移（原型规则 50）、型号/方案创建删除事务语义（差异 #4）、路径身份不复用预检（`path_identity_conflict`）与「备用副本作为可用借用来源」未定稿——正式 CRUD TASK 立项时必须先行定稿 |
 
-**以上 4 项即本审查的完整 gate。** 未列入的一律不阻断当前范围 CRUD 立项。「原型差异清单」不单独构成 gate，但其中影响写语义的条目（#1、#4）必须并入 #3/#4 的 TASK；其余条目在对应 CRUD 子 TASK 中定稿。R1/R10 与 R5 的 `ensure_model_ids` 覆盖缺口不改变其「已关闭」判定（缺口是既有自动迁移行为，非 CRUD 入口），但正式 CRUD 开放写操作前必须收口。
+**基础 gate 4 项已全部关闭。** 「CRUD 写语义 gate」（规则 7 各项 + 差异清单 #4）仍阻断真实写入；其余差异清单条目在对应 CRUD 子 TASK 中定稿。
 
-**建议实施顺序**：R3（索引行级写 + 局部扫描能力，含失败恢复子树重扫）→ R8（引用反查与级联，含借用语义迁移）→ 按原型范围实现新增、更新、重命名、删除、型号/方案管理。
+**建议实施顺序**：~~R3 → R8~~（已完成）→ 正式 CRUD TASK（先定稿 CRUD 写语义 gate，再按原型范围实现新增、更新、重命名、删除、型号/方案管理）。
 
 ---
 
 ## 验证记录
 
-### 自动化验证（2026-09-01，HEAD `705fe60`）
+### 自动化验证（2026-09-01，R8 实现完成）
 
 ```text
-uv run python -m pytest -m "not ui" -q
-→ 394 passed, 31 deselected；coverage 88.82%（门禁 80%）
+uv run python -m pytest -q
+→ 574 passed；coverage 94.56%（门禁 80%）
+uv run ruff check src scripts / uv run mypy → 通过
+uv run python scripts\verify_r8_reference_integrity.py → 四类场景全部通过
 ```
 
-- 静态枚举确认 gate 现状：`asset_index` 无 `upsert_asset` / `replace_asset` / `delete_asset` / `bulk_reindex_subtree`；`file_scan.scan_firmware_assets` 已扩为 4 参但仍无局部子树扫描入口；生产源码无 vendor 配置。
-- `path_guard.py` 契约逐条复核通过（空根拒绝、`..` 拒绝、normcase + 斜杠归一比较、允许等于根），测试覆盖 100%。
-- 写入门闩复核：`write_gate_check` 三检查（`not_configured` / `root_changed` / `out_of_workspace`）+ UI 层扫描/烧录任务态检查；service 层既有交互式写入口均接入路径守卫（`ensure_model_ids` 缺口见上）。
-- `SharedModuleRef.mode` 当前为 `static` / `follow_default`（+ 可选 `source_platform`），无 `follow_asset`。
-- 原型自动化验证：`node specs\design\prototypes\firmware-crud-prototype.test.js` → 122 项断言通过（TASK-20260806 记录）。
-- **codex 独立复核（2026-09-01，read-only）**：逐项判定 R3/R8 未实现、`follow_asset` 缺失、差异清单 #1/#2/#5/#6 正确；发现 `ensure_model_ids()` 自动写 `型号配置.toml` 绕过门闩与守卫（已核实并补入 R1/R10 与 gate 表），并指出 API 列表范围、`last_scan_at` 未接线、vendor 表述、`型号配置.toml` 可内部创建四处措辞偏差（均已修正）。总体判定：Conditional Go 方向成立，条件清单已补全。
+- R3 验证（历史基线）：477 passed / 95.18%；`scripts/verify_r3_write_api.py` 四类场景通过 + 用户确认。
+- codex 实现审查（七轮）最终结论：「实现合格，无阻断问题」；历轮发现的 P0/P1/P2 全部修复并补回归测试。
+- 历史初稿验证（394 passed / 88.82% 基线、静态枚举、codex 初次复核）见 git 历史 @705fe60 时的本文版本。
 
-### 历史实测证据（不再重复执行，详见 git 历史 @705fe60 之前的本文版本）
+### 历史实测证据（详见 git 历史 @705fe60 之前的本文版本）
 
 - v3 schema 单事务行级写能力验证；路径变化的连带字段实测（重命名 4 字段 / 跨归属移动 5 字段）；回收站删除实测（`SHFileOperationW` + `FOF_ALLOWUNDO`）；切根面板残留判定更正（R2，已结案为 UX 清理项）；版本解析放宽实测（R6e，已撤销）。
 
 ### 人工验证
 
-- ⏳ 待用户复核本审查结论与前置条件清单。
+- ✅ R8：人工验证已完成——`uv run python scripts\verify_r8_reference_integrity.py` 四类场景通过 + 用户确认（2026-09-01）。
 
 ## 相关 Commit
 
 - `77cbbd0` feat(core,ui): R5 统一工作区路径守卫（TASK-20260803-r5-path-guard）
 - `4d4d3c8` feat(core,ui): R1/R10 统一写入门闩（TASK-20260806-r1-r10-write-gate）
-- 基线：`a4c6fdc` docs: 归档 PySide6 迁移总 TASK；本审查初稿：`b4250f0`
+- R3 / R8 实现 commit 见对应 TASK 的「完成 commit」字段。

@@ -86,6 +86,9 @@ def _match_catalog_type(
             has_pkg = _files_match_extensions(filenames, SCAN_PKG_EXTENSIONS)
             if has_rom and has_pkg:
                 return cfg
+            # 仓库硬约束：handcontrol_ui 必须同时有 .rom 与 .pkg；缺任一不得
+            # 落入通用扩展名分支误认（R8 第五轮审查 P1-1）
+            continue
         if keywords and not any(
             keyword in part for keyword in keywords for part in lower_parts
         ):

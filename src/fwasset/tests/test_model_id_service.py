@@ -20,7 +20,7 @@ def test_assigns_two_fresh_roots(tmp_path: Path):
     r2 = tmp_path / "L50程序"
     r1.mkdir()
     r2.mkdir()
-    result = ensure_model_ids([r1, r2], log_fn=_silent)
+    result = ensure_model_ids([r1, r2], tmp_path, log_fn=_silent)
     assert result["ok"] is True
     assert result["code"] == "ok"
     assert load_model_config(r1)[0] == "l36"
@@ -32,9 +32,9 @@ def test_assigns_two_fresh_roots(tmp_path: Path):
 def test_second_call_keeps_ids(tmp_path: Path):
     r1 = tmp_path / "L36程序"
     r1.mkdir()
-    ensure_model_ids([r1], log_fn=_silent)
+    ensure_model_ids([r1], tmp_path, log_fn=_silent)
     mid1 = load_model_config(r1)[0]
-    result = ensure_model_ids([r1], log_fn=_silent)
+    result = ensure_model_ids([r1], tmp_path, log_fn=_silent)
     assert result["ok"] is True
     assert load_model_config(r1)[0] == mid1
     assert result["payload"]["existing"]["L36程序"] == mid1
@@ -44,11 +44,11 @@ def test_second_call_keeps_ids(tmp_path: Path):
 def test_rename_keeps_id(tmp_path: Path):
     r1 = tmp_path / "L36程序"
     r1.mkdir()
-    ensure_model_ids([r1], log_fn=_silent)
+    ensure_model_ids([r1], tmp_path, log_fn=_silent)
     assert load_model_config(r1)[0] == "l36"
     renamed = tmp_path / "L36改名程序"
     r1.rename(renamed)
-    result = ensure_model_ids([renamed], log_fn=_silent)
+    result = ensure_model_ids([renamed], tmp_path, log_fn=_silent)
     assert result["ok"] is True
     assert load_model_config(renamed)[0] == "l36"
     assert result["payload"]["existing"]["L36改名程序"] == "l36"
@@ -60,7 +60,7 @@ def test_collision_respects_existing_first(tmp_path: Path):
     a.mkdir()
     b.mkdir()
     save_model_id(a, "l36")
-    result = ensure_model_ids([a, b], log_fn=_silent)
+    result = ensure_model_ids([a, b], tmp_path, log_fn=_silent)
     assert result["ok"] is True
     assert load_model_config(a)[0] == "l36"
     assert load_model_config(b)[0] == "l36-2"
@@ -73,7 +73,7 @@ def test_collision_suffix_stable_after_other_removed(tmp_path: Path):
     b = tmp_path / "L36"
     a.mkdir()
     b.mkdir()
-    ensure_model_ids([a, b], log_fn=_silent)
+    ensure_model_ids([a, b], tmp_path, log_fn=_silent)
     id_a = load_model_config(a)[0]
     id_b = load_model_config(b)[0]
     assert {id_a, id_b} == {"l36", "l36-2"}
@@ -86,7 +86,7 @@ def test_collision_suffix_stable_after_other_removed(tmp_path: Path):
         b.rename(tmp_path / "_gone")
         remain = a
         expected = "l36-2"
-    result = ensure_model_ids([remain], log_fn=_silent)
+    result = ensure_model_ids([remain], tmp_path, log_fn=_silent)
     assert result["ok"] is True
     assert load_model_config(remain)[0] == expected
 
@@ -98,7 +98,7 @@ def test_damaged_root_skipped_others_continue(tmp_path: Path):
     bad.mkdir()
     (bad / "型号配置.toml").write_text("[[broken\n", encoding="utf-8")
     original = (bad / "型号配置.toml").read_bytes()
-    result = ensure_model_ids([good, bad], log_fn=_silent)
+    result = ensure_model_ids([good, bad], tmp_path, log_fn=_silent)
     assert result["ok"] is False
     assert result["code"] == "parse_error"
     assert "L36程序" in result["payload"]["damaged"]
@@ -114,8 +114,69 @@ def test_write_failed_stops(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         raise OSError("replace failed")
 
     monkeypatch.setattr(config_io.os, "replace", boom)
-    result = ensure_model_ids([r1], log_fn=_silent)
+    result = ensure_model_ids([r1], tmp_path, log_fn=_silent)
     assert result["ok"] is False
     assert result["code"] == "write_failed"
     assert not (r1 / "型号配置.toml").exists()
     assert list(r1.glob(".型号配置.toml.*.tmp")) == []
+
+
+# ---------------------------------------------------------------------------
+# R8 规则 6：门闩收口
+# ---------------------------------------------------------------------------
+
+
+def test_not_configured_writes_nothing(tmp_path: Path):
+    r1 = tmp_path / "L36程序"
+    r1.mkdir()
+    result = ensure_model_ids([r1], None, log_fn=_silent)
+    assert result["ok"] is False and result["code"] == "not_configured"
+    assert not (r1 / "型号配置.toml").exists()
+    result = ensure_model_ids([r1], "", log_fn=_silent)
+    assert result["code"] == "not_configured"
+    assert not (r1 / "型号配置.toml").exists()
+
+
+def test_out_of_workspace_root_zero_writes_whole_batch(tmp_path: Path):
+    good = tmp_path / "L36程序"
+    good.mkdir(parents=True)
+    outside = tmp_path.parent / f"{tmp_path.name}_外部" / "L50程序"
+    outside.mkdir(parents=True)
+    result = ensure_model_ids([good, outside], tmp_path, log_fn=_silent)
+    assert result["ok"] is False and result["code"] == "out_of_workspace"
+    assert result["payload"]["rejected_roots"], result["payload"]
+    # 整批零写：合法根也不写
+    assert not (good / "型号配置.toml").exists()
+    assert not (outside / "型号配置.toml").exists()
+
+
+def test_invalid_root_not_a_directory_zero_writes(tmp_path: Path):
+    good = tmp_path / "L36程序"
+    good.mkdir()
+    file_root = tmp_path / "file-root"
+    file_root.write_text("x", encoding="utf-8")
+    result = ensure_model_ids([good, file_root], tmp_path, log_fn=_silent)
+    assert result["ok"] is False and result["code"] == "invalid_root"
+    assert result["payload"]["rejected_roots"][0]["reason"] == "not_a_directory"
+    assert not (good / "型号配置.toml").exists()
+
+
+def test_relative_root_rejected(tmp_path: Path):
+    good = tmp_path / "L36程序"
+    good.mkdir()
+    result = ensure_model_ids([good, "L50程序"], tmp_path, log_fn=_silent)
+    assert result["ok"] is False
+    reasons = {r["reason"] for r in result["payload"]["rejected_roots"]}
+    assert "not_absolute" in reasons
+
+
+def test_duplicate_existing_ids_reported(tmp_path: Path):
+    a = tmp_path / "L36程序"
+    b = tmp_path / "L36"
+    a.mkdir()
+    b.mkdir()
+    save_model_id(a, "l36")
+    save_model_id(b, "l36")
+    result = ensure_model_ids([a, b], tmp_path, log_fn=_silent)
+    assert result["payload"]["duplicates"] == ["l36"]
+    assert result["payload"]["assigned"] == {}

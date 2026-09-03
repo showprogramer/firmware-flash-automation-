@@ -217,8 +217,8 @@ def set_shared_module(
             "payload": {"source_root": str(src_root)},
         }
 
-    # follow_default：派生模块目录路径；其余模式沿用 rel（固定版本）
-    clean_mode = mode if mode in ("static", "follow_default") else "static"
+    # follow_default：派生模块目录路径；follow_asset/static 沿用 rel（锚定具体程序）
+    clean_mode = mode if mode in ("static", "follow_default", "follow_asset") else "static"
     if clean_mode == "follow_default":
         final_rel = _module_dir_rel(asset_path, ws)
         if final_rel is None:

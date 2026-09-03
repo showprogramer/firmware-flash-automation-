@@ -96,3 +96,39 @@ def contained_subpath(path: str | Path, boundary: str | Path) -> Path | None:
     except (OSError, ValueError):
         return None
     return resolved
+
+
+def is_within_boundary(path: str | Path, boundary: str | Path) -> bool:
+    """祖先/后代判定（R8）：词法（normcase）或 resolved 归属任一命中。
+
+    junction 经 resolve 指向的真实后代也能命中；与 R3 asset_index 的
+    ``_within_boundary`` 语义一致。引用反查、级联改写与锚点检查统一使用，
+    禁止业务代码只用词法 ``is_same_or_under`` 自行判断。
+    """
+    if is_same_or_under(path, boundary):
+        return True
+    return contained_subpath(path, boundary) is not None
+
+
+def same_path_identity(a: str | Path, b: str | Path) -> bool:
+    """物理/词法身份判定：``a`` 与 ``b`` 是否指同一路径（R8）。
+
+    两层任一命中即同一身份：
+    1. 词法层：原始串 normcase + 分隔符归一后相等（大小写/``/`` vs ``\\`` 变体）；
+    2. resolved 层：resolve 后 normcase 归一相等（junction/符号链接折叠）。
+
+    纯函数，不依赖数据库；asset_index 的等价 path 匹配与引用反查共用，
+    禁止业务代码各写第三套路径比较。
+    """
+    raw_a = str(a or "").strip()
+    raw_b = str(b or "").strip()
+    if not raw_a or not raw_b:
+        return False
+    if _normalize_for_compare(Path(raw_a)) == _normalize_for_compare(Path(raw_b)):
+        return True
+    try:
+        res_a = _normalize_for_compare(Path(raw_a).resolve())
+        res_b = _normalize_for_compare(Path(raw_b).resolve())
+    except OSError:
+        return False
+    return bool(res_a) and res_a == res_b

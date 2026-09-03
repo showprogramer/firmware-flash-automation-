@@ -192,3 +192,39 @@ def test_contained_subpath_none_outside_or_dotdot(tmp_path):
     outside.mkdir(exist_ok=True)
     assert path_guard.contained_subpath(outside, tmp_path) is None
     assert path_guard.contained_subpath(tmp_path / "..", tmp_path) is None
+
+
+def test_same_path_identity_case_and_separator_variants(tmp_path):
+    """大小写与分隔符变体 → 同一身份（R8 公开 helper）。"""
+    target = tmp_path / "L36程序" / "通用"
+    assert path_guard.same_path_identity(target, tmp_path / "l36程序" / "通用") is True
+    assert (
+        path_guard.same_path_identity(
+            str(target).replace("\\", "/"), str(target)
+        )
+        is True
+    )
+
+
+def test_same_path_identity_lexical_dotdot(tmp_path):
+    """含 ``..`` 的串经 resolve 折叠后与折叠目标同一身份。"""
+    assert (
+        path_guard.same_path_identity(
+            tmp_path / "型号A" / ".." / "型号B", tmp_path / "型号B"
+        )
+        is True
+    )
+
+
+def test_same_path_identity_different_paths(tmp_path):
+    a = tmp_path / "型号A"
+    b = tmp_path / "型号AB"
+    assert path_guard.same_path_identity(a, b) is False
+
+
+def test_same_path_identity_empty_or_nonexistent(tmp_path):
+    assert path_guard.same_path_identity("", tmp_path) is False
+    assert path_guard.same_path_identity(tmp_path, "") is False
+    # 不存在的路径仍可做词法/resolved 比较（悬空锚点检查依赖）
+    ghost = tmp_path / "不存在" / "目录"
+    assert path_guard.same_path_identity(ghost, tmp_path / "不存在" / "目录") is True

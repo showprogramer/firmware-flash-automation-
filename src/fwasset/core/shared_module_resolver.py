@@ -86,7 +86,12 @@ def resolve_shared_module(
         )
 
     first = parts[0]
-    source_dir = (ws / first).resolve()
+    # R8：支持单型号布局——首段为 通用/定制 时型号根即工作区根（与
+    # reference_lookup/_source_model_root 同一归属规则），否则首段为型号目录。
+    if first in ("通用", "定制"):
+        source_dir = ws
+    else:
+        source_dir = (ws / first).resolve()
 
     if not source_dir.is_dir():
         # id 映射若存在但路径段不在工作区 → 仍按源未导入（路径指向的型号根不存在）
@@ -118,6 +123,21 @@ def resolve_shared_module(
     # --- 按 mode 分支 ---
     if ref.mode == "follow_default":
         return _resolve_follow_default(ref, source_dir, abs_path)
+
+    if ref.mode == "follow_asset":
+        # R8：跟随来源具体程序——锚定路径存在即命中；resolved_path 即锚点，
+        # variants 不展开（固定指向该程序，不做子目录展开）。
+        if not abs_path.exists():
+            return SharedModuleResolution(
+                ref=ref, status="missing", reason="path_not_found"
+            )
+        return SharedModuleResolution(
+            ref=ref,
+            status="hit",
+            reason="",
+            resolved_path=abs_path,
+            variants=[abs_path],
+        )
 
     # static（默认）：固定版本，Phase B 行为
     if not abs_path.exists():

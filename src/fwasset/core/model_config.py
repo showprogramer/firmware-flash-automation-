@@ -51,10 +51,11 @@ _SHARED_FIELDS = (
 
 @dataclass
 class SharedModuleRef:
-    """目标型号上的一条共享引用（Phase B/C）。
+    """目标型号上的一条共享引用（Phase B/C/R8）。
 
-    mode 默认 ``"static"``（固定版本，Phase B 行为）；``"follow_default"`` 自动跟随源默认。
-    ``source_platform`` 仅 follow_default 有效。
+    mode：``"static"``（固定版本，Phase B 行为）；``"follow_default"`` 自动跟随源默认
+    （Phase C，存量兼容，新登记不再产生）；``"follow_asset"`` 跟随来源具体程序（R8）。
+    ``source_platform`` 仅 follow_default 有效，其余 mode 恒为空串。
     """
 
     module_key: str
@@ -62,7 +63,7 @@ class SharedModuleRef:
     source_group: str
     source_module: str
     source_relative_path: str
-    mode: Literal["static", "follow_default"] = "static"
+    mode: Literal["static", "follow_default", "follow_asset"] = "static"
     source_platform: str = ""
 
 
@@ -135,36 +136,84 @@ def load_shared_modules(model_root: Path) -> list[SharedModuleRef]:
         return []
     out: list[SharedModuleRef] = []
     for raw_key, entry in shared.items():
-        if not isinstance(entry, dict):
-            continue
-        module_key = canonical_module_dir(str(raw_key))
-        if not module_key:
-            continue
-        fields = {k: str(entry.get(k, "") or "").strip() for k in _SHARED_FIELDS}
-        if any(not fields[k] for k in _SHARED_FIELDS):
-            continue
-        # Phase C 可选字段：缺失或无效值容错回退
-        raw_mode = str(entry.get("mode", "") or "").strip()
-        mode: Literal["static", "follow_default"] = (
-            raw_mode  # type: ignore[assignment]
-            if raw_mode in ("static", "follow_default")
-            else "static"
-        )
-        source_platform = str(entry.get("source_platform", "") or "").strip()
-        out.append(
-            SharedModuleRef(
-                module_key=module_key,
-                source_model_id=fields["source_model_id"],
-                source_group=fields["source_group"],
-                source_module=canonical_module_dir(fields["source_module"])
-                or fields["source_module"],
-                source_relative_path=fields["source_relative_path"],
-                mode=mode,
-                source_platform=source_platform,
-            )
-        )
+        ref = _parse_shared_entry(raw_key, entry)
+        if ref is not None:
+            out.append(ref)
     out.sort(key=lambda r: r.module_key)
     return out
+
+
+def load_shared_modules_strict(
+    model_root: Path,
+) -> tuple[list[tuple[str, SharedModuleRef]], list[str], ModelConfigStatus, str]:
+    """严格读取共享引用（R8 反查/级联专用）。
+
+    返回 ``(pairs, invalid_raw_keys, status, error)``，``pairs`` 保留 raw key
+    供级联改写定位原始条目：
+    - ``status`` 为文件级状态（missing / parse_error / parser_missing，no_id 由调用方经
+      :func:`load_model_config` 判定）；
+    - 条目缺字段、结构非法、键为空、mode 非法、source_platform 与 mode 组合非法
+      → raw key 记入 ``invalid_raw_keys``，不当空数据吞掉。
+    """
+    data, status, error = _load_raw_dict(model_root)
+    if status != "ok":
+        return [], [], status, error
+    shared = data.get("shared_modules")
+    if shared is None:
+        return [], [], "ok", ""
+    if not isinstance(shared, dict):
+        return [], [], "parse_error", "shared_modules 必须是 table"
+    pairs: list[tuple[str, SharedModuleRef]] = []
+    invalid: list[str] = []
+    for raw_key, entry in shared.items():
+        ref = _parse_shared_entry(raw_key, entry, strict=True)
+        if ref is None:
+            invalid.append(str(raw_key))
+        else:
+            pairs.append((str(raw_key), ref))
+    pairs.sort(key=lambda p: p[1].module_key)
+    return pairs, invalid, "ok", ""
+
+
+def _parse_shared_entry(
+    raw_key: Any, entry: Any, strict: bool = False
+) -> SharedModuleRef | None:
+    """单条 shared 条目解析；结构非法/缺字段返回 None。
+
+    容错模式（默认）：mode 非法回退 static；strict 模式（R8 反查/级联）：
+    mode 非法、``source_platform`` 与非 follow_default mode 组合（含 static、
+    follow_asset 携带 source_platform）均视为结构非法返回 None。
+    """
+    if not isinstance(entry, dict):
+        return None
+    module_key = canonical_module_dir(str(raw_key))
+    if not module_key:
+        return None
+    fields = {k: str(entry.get(k, "") or "").strip() for k in _SHARED_FIELDS}
+    if any(not fields[k] for k in _SHARED_FIELDS):
+        return None
+    raw_mode = str(entry.get("mode", "") or "").strip()
+    source_platform = str(entry.get("source_platform", "") or "").strip()
+    if strict:
+        if raw_mode and raw_mode not in ("static", "follow_default", "follow_asset"):
+            return None  # 拼错的 mode 不得静默当 static（审查 P1-3）
+        if source_platform and raw_mode != "follow_default":
+            return None  # source_platform 仅 follow_default 有效（审查第二轮 P1-4）
+    mode: Literal["static", "follow_default", "follow_asset"] = (
+        raw_mode  # type: ignore[assignment]
+        if raw_mode in ("static", "follow_default", "follow_asset")
+        else "static"
+    )
+    return SharedModuleRef(
+        module_key=module_key,
+        source_model_id=fields["source_model_id"],
+        source_group=fields["source_group"],
+        source_module=canonical_module_dir(fields["source_module"])
+        or fields["source_module"],
+        source_relative_path=fields["source_relative_path"],
+        mode=mode,
+        source_platform=source_platform,
+    )
 
 
 def _serialize_model_config(data: dict[str, Any]) -> str:
@@ -173,6 +222,11 @@ def _serialize_model_config(data: dict[str, Any]) -> str:
     if body and not body.endswith("\n"):
         body += "\n"
     return MODEL_CONFIG_HEADER + "\n" + body if body else MODEL_CONFIG_HEADER
+
+
+def serialize_model_config(data: dict[str, Any]) -> str:
+    """公开序列化入口（R8 级联改写计划用）：固定文件头 + tomli-w dumps。"""
+    return _serialize_model_config(data)
 
 
 def _merge_write_model_config(

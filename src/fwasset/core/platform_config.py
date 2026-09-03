@@ -22,6 +22,8 @@ PlatformConfigStatus = Literal[
     "parser_missing",
 ]
 
+PLATFORM_CONFIG_FILENAME = "平台配置.toml"
+
 _MODULE_KEY_ALIASES = {
     "快捷键": "快捷键程序",
     "快捷按键": "快捷键程序",
@@ -98,6 +100,34 @@ def load_platform_config_with_status(
     return results, "ok", ""
 
 
+def load_platform_config_strict(
+    model_root: Path,
+) -> tuple[list[PlatformDefaults], PlatformConfigStatus, str]:
+    """R8 反查/级联专用严格读取：无 name 的 platform 块按 parse_error 处理。
+
+    与 :func:`load_platform_config_with_status` 的区别：后者容忍无名块
+    （静默跳过），严格版把结构异常显式暴露给删除预检与级联，防止少查。
+    """
+    platforms, status, error = load_platform_config_with_status(model_root)
+    if status != "ok":
+        return platforms, status, error
+    toml_path = Path(model_root) / PLATFORM_CONFIG_FILENAME
+    if not toml_path.exists():
+        return platforms, status, error
+    try:
+        with open(toml_path, "rb") as f:
+            data = tomllib.load(f)
+    except Exception as exc:  # noqa: BLE001
+        return [], "parse_error", f"平台配置 TOML 解析失败: {exc}"
+    platform_raw = data.get("platform")
+    if platform_raw is None:
+        return platforms, status, error
+    for entry in platform_raw:
+        if isinstance(entry, dict) and not str(entry.get("name", "") or "").strip():
+            return [], "parse_error", "platform 块缺少 name"
+    return platforms, status, error
+
+
 def load_platform_config(model_root: Path) -> list[PlatformDefaults]:
     """
     读取型号根目录下的 `平台配置.toml`。
@@ -144,12 +174,8 @@ def _toml_str(value: str) -> str:
     return f'"{escaped}"'
 
 
-def save_platform_config(model_root: Path, platforms: list[PlatformDefaults]) -> Path:
-    """把平台默认配置写回型号根目录下的 `平台配置.toml`。
-
-    以规范格式整体重写（应用托管该文件）；经同目录临时文件 + os.replace 原子落盘。
-    写入失败向上抛异常，由服务层包装为 ServiceResult。返回写入的文件路径。
-    """
+def serialize_platform_config(platforms: list[PlatformDefaults]) -> str:
+    """平台配置规范格式序列化（R8 级联改写计划用）：只输出头注释 + 平台块。"""
     lines: list[str] = [
         "# 本文件由 fwasset 管理（工作台「设为平台默认」会改写它）。",
         "# defaults 键 = 通用区模块目录名，值 = 默认变体子目录名（空串表示该模块唯一）。",
@@ -161,6 +187,15 @@ def save_platform_config(model_root: Path, platforms: list[PlatformDefaults]) ->
         lines.append("[platform.defaults]")
         for module_dir, variant_name in p.defaults.items():
             lines.append(f"{_toml_str(module_dir)} = {_toml_str(variant_name)}")
+    return "\n".join(lines) + "\n"
+
+
+def save_platform_config(model_root: Path, platforms: list[PlatformDefaults]) -> Path:
+    """把平台默认配置写回型号根目录下的 `平台配置.toml`。
+
+    以规范格式整体重写（应用托管该文件）；经同目录临时文件 + os.replace 原子落盘。
+    写入失败向上抛异常，由服务层包装为 ServiceResult。返回写入的文件路径。
+    """
     toml_path = Path(model_root) / "平台配置.toml"
-    atomic_write_text(toml_path, "\n".join(lines) + "\n")
+    atomic_write_text(toml_path, serialize_platform_config(platforms))
     return toml_path

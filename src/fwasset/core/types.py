@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, Literal, TypedDict
 
 FirmwareType = Literal[
@@ -113,3 +114,43 @@ class FirmwareAsset(TypedDict):
     platform: str  # 整机平台，如 "双机芯-上3D-下2D"；默认平台留 ""
     scheme_name: str  # 定制方案名，如 "以色列-Royal-Z9"；通用区为 ""
     scheme_path: str  # 定制方案根目录绝对路径；通用区为 ""
+
+
+# ---------------------------------------------------------------------------
+# R8 引用反查与级联改写（TASK-20260901-r8-reference-integrity）
+# ---------------------------------------------------------------------------
+
+ReferenceTargetKind = Literal["model", "scheme", "module", "asset"]
+ReferenceOperation = Literal["rename", "update"]
+
+
+@dataclass
+class ReferenceSemantics:
+    """程序的身份语义快照：update 级联用其判定「身份不变」。
+
+    ``module_key`` 为 canonical 模块键（``canonical_module_dir`` 之后的值）；
+    ``scheme_name`` 为定制方案名，通用区为空串。
+    """
+
+    model_id: str
+    module_key: str
+    source_group: str
+    scheme_name: str = ""
+
+
+@dataclass
+class RewriteRequest:
+    """级联改写请求（R8 规则 4，单一请求类型）。
+
+    rename：``old_path`` → ``new_path``（target_kind 可为 model/scheme/module/asset）。
+    update：``old_path`` 程序退位、``replacement_path`` 上岗（target_kind 固定 asset），
+    携带新旧语义快照，由 build 派生权威语义交叉校验。
+    """
+
+    operation: ReferenceOperation
+    target_kind: ReferenceTargetKind
+    old_path: str
+    new_path: str = ""  # rename 必填
+    replacement_path: str = ""  # update 必填
+    old_semantics: ReferenceSemantics | None = None  # update 必填
+    new_semantics: ReferenceSemantics | None = None  # update 必填
