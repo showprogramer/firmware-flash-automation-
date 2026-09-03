@@ -9,7 +9,7 @@
 | 前置 | REVIEW-20260728 前置条件清单 **#4**（R8，P1·阻断）——本任务完成 = 引用基础能力 gate 关闭；「CRUD 写语义 gate」（规则 7 + 差异清单 #4）另立且仍阻断真实写入 |
 | 依赖 | ✅ TASK-20260901-r3-index-write-api；✅ R5 路径守卫；✅ R1/R10 写入门闩 |
 | 分支 | `feature/pyside6-migration` |
-| 完成 commit | 本次提交 |
+| 完成 commit | `5e55c9f` |
 | 复杂度 | `high`（见下） |
 
 **复杂度理由：** 新增引用反查与级联改写两条公共能力，触碰 `model_config`、`shared_module_resolver`、`platform_config`、`shared_module_service`、`model_id_service`、`core/types.py`、`path_guard.py`（公开身份判定 helper，`asset_index` 内部复用不改行为）与两个 UI 调用点；借用语义迁移是行为变更；多文件 TOML 改写带 preimage CAS 回滚。不含 schema 迁移、不含「排除目录资产消费链」、不含 UI 新面板与正式 CRUD 编排，维持 `high`；若实施中被迫引入上述排除项，须另拆子 Task 并重新评估。
@@ -169,7 +169,7 @@
 
 - codex 实现审查（七轮，read-only）最终结论：「实现合格，无阻断问题」；历轮发现的 P0/P1/P2 全部修复并补回归测试（`test_r8_review_fixes.py` 31 例，含 plan token 防伪造、post-path 回滚、catalog 语义对齐 scanner、casefold 一致性等）。
 - 已知平台差异：无（纯 Windows，WSL 不再使用）。
-- 提交：待提交
+- 提交：`5e55c9f`
 
 ### 人工验证（待执行）
 
