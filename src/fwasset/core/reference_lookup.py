@@ -136,12 +136,17 @@ def _ref_source_root(ref: SharedModuleRef, ws: Path) -> Path | None:
 
 
 def _has_model_marker(root: Path) -> bool:
-    """型号根领域标志：通用/定制 目录或两份 TOML 任一存在。"""
+    """型号根领域标志：通用/定制 目录或两份 TOML 任一存在。
+
+    配置按 ``is_file()`` 判定——同名**目录**不是有效标志（后续配置读取用不了
+    它）。与 ``managed_paths._has_model_marker`` 保持同一语义，两处不一致会让
+    布局判定与引用反查对同一目录给出不同归属。
+    """
     return (
         (root / "通用").is_dir()
         or (root / "定制").is_dir()
-        or (root / MODEL_CONFIG_FILENAME).exists()
-        or (root / PLATFORM_CONFIG_FILENAME).exists()
+        or (root / MODEL_CONFIG_FILENAME).is_file()
+        or (root / PLATFORM_CONFIG_FILENAME).is_file()
     )
 
 
@@ -162,7 +167,7 @@ def enumerate_model_roots(workspace_root: Path) -> list[Path]:
     for child in children:
         if not child.is_dir():
             continue
-        if _is_excluded_dir(str(child)):
+        if _is_excluded_dir(str(child), root):
             continue
         if _has_model_marker(child):
             out.append(child)

@@ -6,6 +6,8 @@ from pathlib import Path
 
 import psutil
 
+from fwasset.core.managed_paths import should_exclude_managed_path
+
 _PERMISSION_HINTS = [
     "access is denied",
     "requires elevation",
@@ -67,10 +69,30 @@ def copy_to_usb(
         return False
 
 
+def _ignore_managed_entries(directory: str, names: list[str]) -> set[str]:
+    """copytree 回调：过滤受管路径（``旧版本/``、``程序信息.toml``）。
+
+    父规格 D4.5：这些是应用内部内容，不应随程序目录进入 U 盘。判定统一走
+    :func:`fwasset.core.managed_paths.should_exclude_managed_path`，不在此处
+    复制字符串规则。这里不传 ``workspace_root``——来源可能已脱离工作区，只需
+    按目录段与文件名判定的两类规则生效。
+    """
+    base = Path(directory)
+    ignored: set[str] = set()
+    for name in names:
+        entry = base / name
+        if should_exclude_managed_path(entry, is_dir=entry.is_dir()):
+            ignored.add(name)
+    return ignored
+
+
 def copy_directory_to_usb(
     source_dir: str, drive: str, log_fn: Callable[..., None] = print
 ) -> bool:
-    """Copy one directory to USB root. If target exists, replace it."""
+    """Copy one directory to USB root, excluding managed paths (D4.5).
+
+    If target exists, replace it.
+    """
     src = Path(source_dir)
     root = Path(drive)
     if not src.exists() or not src.is_dir():
@@ -85,7 +107,7 @@ def copy_directory_to_usb(
         if target.exists():
             shutil.rmtree(target)
             log_fn(f"  已移除旧目录: {target.name}")
-        shutil.copytree(src, target)
+        shutil.copytree(src, target, ignore=_ignore_managed_entries)
         log_fn(f"  已复制目录: {src.name}")
         return True
     except Exception as e:

@@ -458,3 +458,97 @@ def test_scan_without_last_scan_at_finds_all(tmp_path: Path):
 
     assets, errors = scan_firmware_assets(str(tmp_path))
     assert len(assets) == 1
+
+
+# ---------------------------------------------------------------------------
+# D4.3：受管路径统一判定接入扫描（TASK-20260905）
+# ---------------------------------------------------------------------------
+
+
+def test_scan_excludes_retired_versions_directory(tmp_path: Path):
+    """旧版本/ 内的程序不进索引：它是备用副本，不是可选中的资产。"""
+    current = tmp_path / "语音板"
+    current.mkdir()
+    (current / "voice_v2.0.0.bin").write_text("voice", encoding="utf-8")
+
+    retired = tmp_path / "语音板" / "旧版本" / "语音-V1.0"
+    retired.mkdir(parents=True)
+    (retired / "voice_v1.0.0.bin").write_text("old", encoding="utf-8")
+
+    assets, errors = scan_firmware_assets(str(tmp_path))
+
+    assert errors == []
+    paths = [item["path"] for item in assets]
+    assert str(current) in paths
+    assert all("旧版本" not in path for path in paths)
+
+
+def test_scan_does_not_exclude_retired_versions_prefix_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """旧版本说明/ 是普通用户目录，精确段比较不得误排。
+
+    需临时移除 legacy 泛化关键词 "旧"（它会先一步整枝排除），才能观察受管
+    路径判定自身的行为；泛化关键词现状另有测试固化。
+    """
+    monkeypatch.setattr(file_scan, "SCAN_EXCLUDE_DIR_KEYWORDS", ["CH341SER"])
+    target = tmp_path / "旧版本说明" / "语音板"
+    target.mkdir(parents=True)
+    (target / "voice_v2.0.0.bin").write_text("voice", encoding="utf-8")
+
+    assets, errors = scan_firmware_assets(str(tmp_path))
+
+    assert errors == []
+    assert [item["path"] for item in assets] == [str(target)]
+
+
+def test_scan_filters_asset_metadata_from_files(tmp_path: Path):
+    """程序信息.toml 是内部元数据，不得作为程序文件展示在详情里。"""
+    asset_dir = tmp_path / "语音板"
+    asset_dir.mkdir()
+    (asset_dir / "voice_v2.0.0.bin").write_text("voice", encoding="utf-8")
+    (asset_dir / "程序信息.toml").write_text("vendor = 'x'", encoding="utf-8")
+
+    assets, errors = scan_firmware_assets(str(tmp_path))
+
+    assert errors == []
+    assert len(assets) == 1
+    assert assets[0]["files"] == ["voice_v2.0.0.bin"]
+
+
+def test_legacy_generic_old_keyword_still_excludes_real_model_dir(tmp_path: Path):
+    """固化现状：泛化关键词 "旧" 会静默排除 旧款L36 这类真实型号目录。
+
+    这是既存隐患（父规格 D4.3③），退役归子任务 7；此处固化行为，避免在
+    受管路径改造中被无意改变。
+    """
+    legacy = tmp_path / "旧款L36" / "语音板"
+    legacy.mkdir(parents=True)
+    (legacy / "voice_v2.0.0.bin").write_text("voice", encoding="utf-8")
+
+    assets, errors = scan_firmware_assets(str(tmp_path))
+
+    assert errors == []
+    assert assets == []
+
+
+def test_scan_excludes_internal_managed_roots(tmp_path: Path):
+    """staging / 候选区 / 状态目录里的固件不得被扫描成正式资产。
+
+    Codex 审查 P1：helper 未传 workspace_root 时内部区域规则完全失效。
+    """
+    from fwasset.core.managed_paths import managed_root
+
+    normal = tmp_path / "语音板"
+    normal.mkdir()
+    (normal / "voice_v2.0.0.bin").write_text("voice", encoding="utf-8")
+
+    for kind in ("staging", "incomplete_candidate", "workspace_state"):
+        hidden = managed_root(tmp_path, kind) / "语音板"
+        hidden.mkdir(parents=True)
+        (hidden / "voice_v9.9.9.bin").write_text("hidden", encoding="utf-8")
+
+    assets, errors = scan_firmware_assets(str(tmp_path))
+
+    assert errors == []
+    assert [item["path"] for item in assets] == [str(normal)]

@@ -9,6 +9,7 @@ from fwasset.core.firmware_catalog import (
     FirmwareTypeConfig,
     enabled_firmware_types,
 )
+from fwasset.core.managed_paths import should_exclude_managed_path
 from fwasset.core.path_guard import assert_within_workspace
 from fwasset.core.scheme_config import discover_schemes, scheme_for_path
 from fwasset.core.settings import (
@@ -52,11 +53,40 @@ def _has_allowed_extension(filename: str, extensions: list[str]) -> bool:
     return any(lower_name.endswith(ext) for ext in extensions)
 
 
-def _is_excluded_dir(dirpath: str) -> bool:
+def _is_excluded_dir(dirpath: str, workspace_root: Path | None = None) -> bool:
+    """目录是否跳过：受管路径（D4.3）+ legacy 关键词。
+
+    受管判定走公共 helper，不在此复制字符串规则。``workspace_root`` 必须传入，
+    否则 staging / 候选区 / 隔离区等**内部受管根无法被识别**，其中的固件会被
+    扫描成正式资产。legacy ``SCAN_EXCLUDE_DIR_KEYWORDS`` 的泛化子串匹配作为
+    短期兼容保留（含泛化的 ``"旧"``，会连带排除 ``旧款L36`` 这类真实型号
+    目录——既存隐患，退役见父规格 D4.3③）。
+    """
+    if should_exclude_managed_path(
+        dirpath, is_dir=True, workspace_root=workspace_root
+    ):
+        return True
     lower_path = str(dirpath or "").lower()
     return any(
         keyword and str(keyword).lower() in lower_path
         for keyword in SCAN_EXCLUDE_DIR_KEYWORDS
+    )
+
+
+def _visible_asset_files(
+    dirpath: str, filenames: list[str], workspace_root: Path | None = None
+) -> list[str]:
+    """过滤掉受管元数据文件，返回排序后的程序文件名。
+
+    ``程序信息.toml`` 是应用内部元数据，不得作为程序文件出现在详情里（D4.3）。
+    """
+    base = Path(dirpath)
+    return sorted(
+        name
+        for name in filenames
+        if not should_exclude_managed_path(
+            base / name, is_dir=False, workspace_root=workspace_root
+        )
     )
 
 
@@ -274,7 +304,7 @@ def _scan_assets(
             except OSError:
                 pass
 
-        if _is_excluded_dir(dirpath):
+        if _is_excluded_dir(dirpath, root_path):
             # 排除目录整棵子树可剪（排除语义是整枝不要，与 mtime 无关）
             dirnames[:] = []
             continue
@@ -290,7 +320,7 @@ def _scan_assets(
             root_path, folder_path, model, str(cfg["key"])
         )
         series = guess_series_from_model_or_path(model, str(model_directory))
-        files = sorted(filenames)
+        files = _visible_asset_files(dirpath, filenames, root_path)
         label = f"{model}  {version or '-'}  [{folder_path.name}]  {cfg['label']}"
 
         # --- 推断 category / platform / scheme ---

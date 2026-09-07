@@ -28,6 +28,26 @@ FirmwareType = Literal[
 FlashMode = Literal["auto_usb", "tool_launch", "manual_doc", "disabled"]
 UsbFlow = Literal["paired_files", "directory_copy", ""]
 
+# ---------------------------------------------------------------------------
+# 受管路径与工作区布局（TASK-20260905，父规格 D4.3 / D8.2 / D9.0）
+# ---------------------------------------------------------------------------
+
+ManagedPathReason = Literal[
+    "retired_versions",  # 资产内部 旧版本/ 备用副本
+    "asset_metadata",  # 程序信息.toml
+    "staging",  # 导入与写操作暂存区
+    "quarantine",  # 删除隔离区（撤销窗口）
+    "incomplete_candidate",  # 待补齐候选区
+    "workspace_state",  # generation / 操作日志 / 隔离清单
+]
+
+WorkspaceLayout = Literal[
+    "single_model",  # 旧布局：工作区根本身就是型号
+    "multi_model",  # 工作区/型号 结构，含一个或多个型号
+    "empty",  # 合法工作区，暂无型号
+    "invalid",  # 不可读，或混合/无法归类的内容
+]
+
 
 class ServiceResult(TypedDict):
     ok: bool

@@ -252,3 +252,62 @@ def test_format_usb_timeout(monkeypatch: pytest.MonkeyPatch):
 
     assert ok is False
     assert any("格式化超时" in msg for msg in logs)
+
+
+# ---------------------------------------------------------------------------
+# D4.5：受管路径不得拷进 U 盘（TASK-20260905）
+# ---------------------------------------------------------------------------
+
+
+def test_copy_directory_to_usb_excludes_managed_paths(tmp_path: Path):
+    drive = tmp_path / "usb"
+    drive.mkdir()
+    src = tmp_path / "主板程序-V1.0"
+    (src / "子目录").mkdir(parents=True)
+    (src / "firmware.bin").write_text("fw", encoding="utf-8")
+    (src / "子目录" / "extra.bin").write_text("extra", encoding="utf-8")
+    (src / "程序信息.toml").write_text("vendor = 'x'", encoding="utf-8")
+    (src / "旧版本" / "主板-V0.9").mkdir(parents=True)
+    (src / "旧版本" / "主板-V0.9" / "old.bin").write_text("old", encoding="utf-8")
+
+    messages, log = _logs()
+    assert copy_directory_to_usb(str(src), str(drive), log) is True
+
+    target = drive / src.name
+    assert (target / "firmware.bin").read_text(encoding="utf-8") == "fw"
+    assert (target / "子目录" / "extra.bin").read_text(encoding="utf-8") == "extra"
+    assert not (target / "旧版本").exists()
+    assert not (target / "程序信息.toml").exists()
+
+
+def test_copy_directory_to_usb_excludes_nested_retired_versions(tmp_path: Path):
+    drive = tmp_path / "usb"
+    drive.mkdir()
+    src = tmp_path / "程序"
+    (src / "变体A" / "旧版本" / "v1").mkdir(parents=True)
+    (src / "变体A" / "旧版本" / "v1" / "old.bin").write_text("old", encoding="utf-8")
+    (src / "变体A" / "cur.bin").write_text("cur", encoding="utf-8")
+
+    messages, log = _logs()
+    assert copy_directory_to_usb(str(src), str(drive), log) is True
+
+    target = drive / src.name
+    assert (target / "变体A" / "cur.bin").exists()
+    assert not (target / "变体A" / "旧版本").exists()
+
+
+def test_copy_directory_to_usb_keeps_lookalike_names(tmp_path: Path):
+    """前缀目录与同名文件不得误排。"""
+    drive = tmp_path / "usb"
+    drive.mkdir()
+    src = tmp_path / "程序"
+    (src / "旧版本说明").mkdir(parents=True)
+    (src / "旧版本说明" / "readme.txt").write_text("doc", encoding="utf-8")
+    (src / "旧版本").write_text("这是文件不是目录", encoding="utf-8")
+
+    messages, log = _logs()
+    assert copy_directory_to_usb(str(src), str(drive), log) is True
+
+    target = drive / src.name
+    assert (target / "旧版本说明" / "readme.txt").exists()
+    assert (target / "旧版本").is_file()
