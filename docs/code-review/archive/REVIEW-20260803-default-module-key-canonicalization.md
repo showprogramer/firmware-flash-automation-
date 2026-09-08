@@ -4,7 +4,7 @@
 | --- | --- |
 | 类型 | 默认配置服务与读取逻辑审查 |
 | 状态 | ✅ 已关闭 |
-| 相关 Task | `specs/active/TASK-20260803-context-menu-refinement.md` |
+| 相关 Task | `specs/archive/TASK-20260803-context-menu-refinement.md` |
 | 范围 | 快捷键目录短键、平台 defaults、默认徽章、方案补齐与自动更新共享来源 |
 
 ## Issue 1：目录短键与 catalog 规范键可同时成为默认

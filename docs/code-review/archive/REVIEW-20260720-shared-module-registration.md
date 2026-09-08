@@ -5,12 +5,12 @@
 | 类型 | 新服务 + 双轨 UI |
 | 模块 | `core/services/shared_module_service`、`core/services/shared_migration_service`、`core/firmware_catalog`、`ui/view_models/scheme_workbench_model`、`ui/workbench_panel`、`ui/workbench_helpers`、`ui_qt/workbench_window` |
 | 状态 | ✅ 已闭环归档：Qt 人验 3 场景通过（2026-07-23）；代码已提交；CTk 留待 B3 切默认入口时随带验证 |
-| 相关 TASK | `specs/archive/TASK-20260720-shared-module-registration.md`（裁剪后）、`specs/active/TASK-20260723-firmware-ref-migration.md`（迁移后置） |
+| 相关 TASK | `specs/archive/TASK-20260720-shared-module-registration.md`（裁剪后）、`.ref` 迁移后置 TASK（`TASK-20260723-firmware-ref-migration`，已 NO-GO 关闭，文件未入库） |
 | 审查日期 | 2026-07-20（Issue 1 修复并入本 TASK；2026-07-23 范围裁剪 + 人验 + commit） |
 
 ## 范围调整（2026-07-23）
 
-用户讨论后确认 `TASK-20260720` Phase B2 **裁剪 `.ref` 迁移**：原计划含 `shared_migration_service.py` + `preview_ref_migration` / `apply_ref_migration` view model API + CTk/Qt「从 .ref 导入共享…」UI + 预览对话框 + `catalog_label_for_dir` 的 `.ref` 父目录映射分支 + `filter_chosen_for_conflict` helper 及其三个回归测试 —— **全部移至 `TASK-20260723-firmware-ref-migration.md`**。理由见裁剪后 TASK 的 Goal 章节。
+用户讨论后确认 `TASK-20260720` Phase B2 **裁剪 `.ref` 迁移**：原计划含 `shared_migration_service.py` + `preview_ref_migration` / `apply_ref_migration` view model API + CTk/Qt「从 .ref 导入共享…」UI + 预览对话框 + `catalog_label_for_dir` 的 `.ref` 父目录映射分支 + `filter_chosen_for_conflict` helper 及其三个回归测试 —— **全部移至后置 TASK `TASK-20260723-firmware-ref-migration`**（该 TASK 已 NO-GO 关闭，代码从未合入，文件未入库）。理由见裁剪后 TASK 的 Goal 章节。
 
 对本审查记录的影响：
 
@@ -101,7 +101,7 @@ uv run python -m pytest -m "not ui" -q
 
 **📌 范围调整（2026-07-23）处置**：`filter_chosen_for_conflict` 仅为迁移批量确认服务于跨型号同名冲突场景。B2 裁剪后：
 - 手动「设为共享」的冲突是单条覆盖确认（右键行只对应单一目标型号 + 单一模块），无跨型号批量仓的问题，不需 `filter_chosen_for_conflict`。
-- Issue 1 连同 `filter_chosen_for_conflict` helper、三个 `test_filter_chosen_for_conflict_*` 回归测试，以及原「修复」段落，**整建制移至后置 TASK `TASK-20260723-firmware-ref-migration.md` 的审查记录起点**——重新评估自动化迁移时再开。
+- Issue 1 连同 `filter_chosen_for_conflict` helper、三个 `test_filter_chosen_for_conflict_*` 回归测试，以及原「修复」段落，**整建制移至后置 TASK `TASK-20260723-firmware-ref-migration` 的审查记录起点**（该 TASK 已 NO-GO 关闭，未再评估）。
 - 若回退时确认手动登记路径完全没引用 `filter_chosen_for_conflict`，本审查项可直接删除并归档至 `docs/code-review/archive/`；否则保留 helper、按手动路径补回归测试。
 
 **状态：** 📌 随迁移移走（裁剪后不归 B2 处理）

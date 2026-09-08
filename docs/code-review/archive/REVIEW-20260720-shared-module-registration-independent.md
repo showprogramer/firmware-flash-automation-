@@ -5,13 +5,13 @@
 | 类型 | 独立代码审查：新服务 + 双轨 UI |
 | 模块 | `shared_module_service`、`shared_migration_service`、`firmware_catalog`、`scheme_workbench_model`、`workbench_panel`、`workbench_window` |
 | 状态 | ✅ **已闭环归档**；范围调整后迁移议题移交后置 TASK；Qt 人验 3 场景通过（2026-07-23），CTk 待 B3；见下方「范围调整生效说明」 |
-| 相关 TASK | `specs/archive/TASK-20260720-shared-module-registration.md`（裁剪后）、`specs/active/TASK-20260723-firmware-ref-migration.md`（迁移后置） |
+| 相关 TASK | `specs/archive/TASK-20260720-shared-module-registration.md`（裁剪后）、`.ref` 迁移后置 TASK（`TASK-20260723-firmware-ref-migration`，已 NO-GO 关闭，文件未入库） |
 | 审查日期 | 独立审查 2026-07-20；核对+修复 2026-07-20；范围调整 + 人验 2026-07-23 |
 | 被审记录 | `REVIEW-20260720-shared-module-registration.md`（实现自检，保留不改） |
 
 ## 范围调整生效说明（2026-07-23）
 
-用户讨论后确认 `TASK-20260720` Phase B2 **裁剪 `.ref` 迁移**，迁移代码 + UI 整建制移至 `TASK-20260723-firmware-ref-migration.md`。本独立审查记录的所有议题均针对**迁移服务**或与迁移代码强耦合的边界，处置如下：
+用户讨论后确认 `TASK-20260720` Phase B2 **裁剪 `.ref` 迁移**，迁移代码 + UI 整建制移至后置 TASK `TASK-20260723-firmware-ref-migration`（已 NO-GO 关闭，代码从未合入，文件未入库）。本独立审查记录的所有议题均针对**迁移服务**或与迁移代码强耦合的边界，处置如下：
 
 | 议题 | 处置 |
 | --- | --- |
@@ -23,7 +23,7 @@
 
 > **本独立审查的审查议题主体现已不在 B2 范围内**。主 REVIEW（`REVIEW-20260720-shared-module-registration.md`）保留原审查记录作为 B2 裁剪前的事实存证；裁剪后剩余的手动登记 set/clear service、CTk/Qt 右键、冲突不静默覆盖、B4 隔离已由 Qt 3 场景完成验证，CTk 随 B3 处理。
 >
-> 后置 TASK `TASK-20260723-firmware-ref-migration.md` 若评估结论是 GO（重启自动化迁移），可从 git 历史捞回裁剪前代码，并把本独立审查的 Issue 1/2/3 连同原主 REVIEW 的 Issue 1 一并作为对其再次审查的输入起点。
+> 后置 TASK `TASK-20260723-firmware-ref-migration` 已 NO-GO 关闭，不会重启自动化迁移；若未来重新评估，可从 git 历史捞回裁剪前代码，并把本独立审查的 Issue 1/2/3 连同原主 REVIEW 的 Issue 1 一并作为对其再次审查的输入起点。
 
 ## 核对结论（2026-07-20，原始审查阶段）
 

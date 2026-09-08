@@ -2,7 +2,7 @@
 
 状态：代码审查通过，人工验证通过；已归档
 
-对应任务：[TASK-20260905-managed-paths-and-layout](../../specs/archive/TASK-20260905-managed-paths-and-layout.md)（父规格 D4.3、D4.5、D8.2、D9.0）。
+对应任务：`TASK-20260905-managed-paths-and-layout`（父规格 D4.3、D4.5、D8.2、D9.0；任务文件未入库）。
 
 触发条件：新增 core 公共 API（`managed_paths`）、改动扫描行为与 USB 复制边界。
 

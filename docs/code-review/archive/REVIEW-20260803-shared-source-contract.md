@@ -4,7 +4,7 @@
 | --- | --- |
 | 类型 | 服务契约与 Qt 入口审查 |
 | 状态 | ✅ 已关闭 |
-| 相关 Task | `specs/active/TASK-20260803-shared-source-contract.md` |
+| 相关 Task | `specs/archive/TASK-20260803-shared-source-contract.md` |
 | 范围 | `shared_module_service`、共享来源候选、登记对话框 |
 
 ## 审查目标
