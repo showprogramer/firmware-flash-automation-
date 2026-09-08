@@ -668,12 +668,13 @@ function restore(snap) {
   toast("info", "已撤销上一步操作");
 }
 
-function apply(mutate, message, detail = "") {
-  const snap = snapshot();
+/** 只有删除类操作可撤销（放进回收站可以拿回来）；其它写操作立即生效，靠反向操作纠正。 */
+function apply(mutate, message, detail = "", undoable = false) {
+  const snap = undoable ? snapshot() : null;
   mutate();
   state.renaming = false;
   render();
-  toast("ok", message, detail, () => restore(snap));
+  toast("ok", message, detail, snap ? () => restore(snap) : null);
 }
 
 /* ============================================================
@@ -1200,7 +1201,7 @@ function deleteModelDialog(model) {
         state.type = "all";
         state.selectedId = null;
       }
-    }, `型号「${model.name}」已删除`, count || borrowCount ? "相关程序和使用关系已同步清理" : "");
+    }, `型号「${model.name}」已删除`, count || borrowCount ? "相关程序和使用关系已同步清理" : "", true);
   });
 }
 
@@ -1295,7 +1296,7 @@ function deleteSchemeDialog(scheme) {
       deleteScheme(scheme.id);
       if (state.scope === scheme.id) { state.scope = "all"; state.type = "all"; }
       state.selectedId = null;
-    }, `方案「${scheme.name}」已放进回收站`, count ? `${count} 个程序一起删除` : "");
+    }, `方案「${scheme.name}」已放进回收站`, count ? `${count} 个程序一起删除` : "", true);
   });
 }
 
@@ -1643,7 +1644,7 @@ function backupsDialog(asset) {
     if (deleteId) {
       closeModal();
       const confirm = modal("删除备用副本", `<p>删除后，这份备用副本不能再恢复。</p>`, `<button class="button" data-close type="button">取消</button><button class="button danger" id="confirmDeleteBackup" type="button">删除副本</button>`);
-      confirm.querySelector("#confirmDeleteBackup").addEventListener("click", () => { closeModal(); apply(() => { deleteBackup(asset.id, deleteId); }, "已删除备用副本"); });
+      confirm.querySelector("#confirmDeleteBackup").addEventListener("click", () => { closeModal(); apply(() => { deleteBackup(asset.id, deleteId); }, "已删除备用副本", "", true); });
     }
   });
   renderBackups();
@@ -1664,7 +1665,7 @@ function stopBorrowDialog(b) {
     apply(() => {
       borrows = borrows.filter(x => x.id !== b.id);
       state.selectedId = null;
-    }, `${b.type}不再用 ${modelName(b.fromModel)} 的程序`, "没有删除任何文件");
+    }, `${b.type}不再用 ${modelName(b.fromModel)} 的程序`, "没有删除任何文件", true);
   });
 }
 
@@ -1685,7 +1686,7 @@ function deleteDialog(a) {
     apply(() => {
       assets = assets.filter(x => x.id !== a.id);
       state.selectedId = null;
-    }, `「${a.name}」已放进回收站`, users.length ? `${users.length} 个地方现在找不到它了` : "");
+    }, `「${a.name}」已放进回收站`, users.length ? `${users.length} 个地方现在找不到它了` : "", true);
   });
 }
 

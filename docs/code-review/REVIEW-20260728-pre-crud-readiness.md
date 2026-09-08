@@ -1,16 +1,16 @@
 # REVIEW-20260728: CRUD 准入审查（Pre-CRUD Readiness）
 
-> **2026-09-01 状态更新**：原 4 项基础 gate（R1/R10、R5、R3、R8）已全部完成；
-> 「CRUD 写语义 gate」（改类型/改范围迁移、型号/方案创建删除事务语义、路径身份
-> 不复用预检等）仍阻断真实写入，正式 CRUD TASK 立项时必须先行定稿。
+> **2026-09-03 状态更新**：4 项基础 gate（R1/R10、R5、R3、R8）已全部完成；
+> 「CRUD 写语义 gate」已由 **TASK-20260903-crud-write-semantics** 定稿（D0–D10 共
+> 11 项，codex 七轮审查），实现按该任务的子 TASK 拆分依次推进，从「公共事务基础」起。
 > 历史初稿（2026-07-28）与 `705fe60` 基线分析见 git 历史。
 
 | 项 | 内容 |
 | --- | --- |
 | 类型 | 准入审查 / 架构边界 |
 | 模块 | `core/asset_index.py`、`core/reference_lookup.py`、`core/services/reference_service.py`、`core/path_guard.py`、`core/file_scan.py`、`core/services/*`、`ui_common/workbench_helpers.py`、`ui_qt/workbench_window.py` |
-| 状态 | 🔄 进行中（4 项基础 gate 已关闭；CRUD 写语义 gate 阻断真实写入） |
-| 相关 TASK | ✅ TASK-20260803-r5-path-guard、✅ TASK-20260806-r1-r10-write-gate、✅ TASK-20260806-independent-crud-web-prototype、✅ TASK-20260901-r3-index-write-api、✅ TASK-20260901-r8-reference-integrity（实现审查与人工验证通过）、⏳ 正式 CRUD TASK（待立项） |
+| 状态 | ✅ 准入审查完成（4 项基础 gate 已关闭；CRUD 写语义 gate 已定稿，转入实现子 TASK） |
+| 相关 TASK | ✅ TASK-20260803-r5-path-guard、✅ TASK-20260806-r1-r10-write-gate、✅ TASK-20260806-independent-crud-web-prototype、✅ TASK-20260901-r3-index-write-api、✅ TASK-20260901-r8-reference-integrity、⏳ TASK-20260903-crud-write-semantics（写语义定稿，待开工子 TASK） |
 | 基线 | `feature/pyside6-migration`；`uv run python -m pytest -q` → 574 passed，coverage 94.56%（门禁 80%） |
 
 ## 审查目标
@@ -31,9 +31,9 @@ CRUD 的交互与产品语义由 `specs/design/prototypes/firmware-crud-prototyp
 
 ## 准入结论
 
-### 🟡 Conditional Go（4 项基础 gate 已全部关闭；CRUD 写语义 gate 仍阻断真实写入）
+### 🟢 Go（4 项基础 gate 已全部关闭；CRUD 写语义 gate 已定稿）
 
-**可以立正式 CRUD TASK；但真实目录写入开放前，必须先按原型定稿「CRUD 写语义 gate」各项**（见前置条件清单 #4 备注）。
+**可以按 TASK-20260903-crud-write-semantics 的子 TASK 拆分开始实现**，从「公共事务基础」起。该任务已冻结用户可观察语义与跨模块不变量；事务基础设施的内部设计（候选区生命周期、日志分阶段恢复、`WorkspaceState` 落盘顺序、R8 部分 apply 恢复算法）按其「下放到实现子 TASK 的不变量」一节在对应子 TASK 定稿，且须在写代码前完成审查。
 
 理由摘要：
 
@@ -75,7 +75,7 @@ CRUD 的交互与产品语义由 `specs/design/prototypes/firmware-crud-prototyp
 - **借用语义**：`SharedModuleRef.mode` 扩为 `static` / `follow_default`（兼容读）/ `follow_asset`（跟随来源具体程序）；`migrate_follow_default_refs` 幂等迁移存量数据（详见 `docs/migrations/MIGRATION-20260901-r8-follow-asset.md`）。
 - **级联**：`core/services/reference_service.py` 的 `build_rewrite_plan` / `apply_rewrite_plan`——结构化 `RewriteRequest`、preimage 双 SHA-256、统一配置根 gate、`stale_plan`/`invalid_operation`/`unsupported_semantic_change` 等阻止码、CAS 回滚（恢复到当前物理位置）；删除**零 TOML 改写**（借用条目保留、解析自然 missing、回收站撤销即恢复）。
 - **门闩收口**：`ensure_model_ids` 见上。
-- **仍阻断真实写入（CRUD 写语义 gate）**：改类型/改范围迁移（build 以 `unsupported_semantic_change` 阻止）、型号/方案创建删除事务语义、路径身份不复用预检（`path_identity_conflict`）、`旧版本/` 备用副本作为借用来源。
+- **CRUD 写语义 gate 已定稿**（TASK-20260903）：改类型/改范围不再走 update 级联而是独立复合操作（`unsupported_semantic_change` 保持不变）、型号/方案/程序创建删除事务语义、路径身份不复用预检（`path_identity_conflict`）、`旧版本/` 副本不得作借用来源（`retired_anchor`）。
 
 ---
 
@@ -103,7 +103,7 @@ CRUD 的交互与产品语义由 `specs/design/prototypes/firmware-crud-prototyp
 
 ---
 
-## 前置条件清单（Conditional Go 的「Condition」）
+## 前置条件清单（已全部满足）
 
 在当前范围 CRUD 开放写操作前必须完成下列项。任何真实目录写入先满足 #2；涉及删除或改变被引用路径的操作再叠加 #4：
 
@@ -112,11 +112,11 @@ CRUD 的交互与产品语义由 `specs/design/prototypes/firmware-crud-prototyp
 | 1 | 配置根作为写操作权威 + scan_meta 一致性校验 + 未配置时禁用写入口 | R1、R10 | medium | ✅ 已完成（TASK-20260806-r1-r10-write-gate）；✅ `ensure_model_ids` 覆盖缺口已由 R8 收口（配置根必填门闩） |
 | 2 | 统一路径守卫 `assert_within_workspace` | R5 | medium | ✅ 已完成（TASK-20260803-r5-path-guard，Windows 实机验证通过） |
 | 3 | CRUD 定点写 API + 保留工作区上下文的局部扫描/子树对账 + SQLite 事务 + 文件/索引失败恢复策略（不含 schema 迁移；SQLite 事务不包含文件系统动作） | R3 | high | ✅ 已完成（TASK-20260901-r3-index-write-api：4 行级写 API + `scan_firmware_subtree` + `asset_reconcile.reconcile_subtree`；经 codex 两轮实现审查「实现合格，无阻断问题」；人工验证按无 UI 等效规则以 `scripts/verify_r3_write_api.py` 四类场景通过 + 用户确认；含 `hidden_items` A/AB 前缀缺陷修复） |
-| 4 | TOML 引用反查 + 删除二次确认 + 重命名/更新时级联改写或阻止断链（含原型差异清单 #1、#4 的语义定稿） | R8 | high | ✅ 引用基础能力完成（TASK-20260901-r8-reference-integrity：`reference_lookup` 反查 + `follow_asset` 语义与存量迁移 + `build/apply_rewrite_plan` preimage CAS 回滚级联 + `ensure_model_ids` 门闩收口；Windows 574 passed / 94.56%）。⚠️ **CRUD 写语义 gate 仍阻断真实写入**：改类型/改范围迁移（原型规则 50）、型号/方案创建删除事务语义（差异 #4）、路径身份不复用预检（`path_identity_conflict`）与「备用副本作为可用借用来源」未定稿——正式 CRUD TASK 立项时必须先行定稿 |
+| 4 | TOML 引用反查 + 删除二次确认 + 重命名/更新时级联改写或阻止断链（含原型差异清单 #1、#4 的语义定稿） | R8 | high | ✅ 引用基础能力完成（TASK-20260901-r8-reference-integrity：`reference_lookup` 反查 + `follow_asset` 语义与存量迁移 + `build/apply_rewrite_plan` preimage CAS 回滚级联 + `ensure_model_ids` 门闩收口；Windows 574 passed / 94.56%）。✅ **CRUD 写语义 gate 已定稿**（TASK-20260903-crud-write-semantics）：改类型/改范围拆为独立复合操作、型号/方案/程序创建删除事务语义、路径身份不复用预检、备用副本不得作借用来源 |
 
-**基础 gate 4 项已全部关闭。** 「CRUD 写语义 gate」（规则 7 各项 + 差异清单 #4）仍阻断真实写入；其余差异清单条目在对应 CRUD 子 TASK 中定稿。
+**基础 gate 4 项已全部关闭；「CRUD 写语义 gate」已由 TASK-20260903-crud-write-semantics 定稿**（D0–D10）——含改类型/改范围复合操作、型号/方案/程序创建删除事务、路径身份不复用预检、`旧版本/` 备用副本、机芯类型映射、厂商元数据、导入成形、工作区读写锁、单根布局边界与撤销范围。差异清单 #2/#3 已在该任务定稿；#6（UI 术语映射）留待 UI 子 TASK。
 
-**建议实施顺序**：~~R3 → R8~~（已完成）→ 正式 CRUD TASK（先定稿 CRUD 写语义 gate，再按原型范围实现新增、更新、重命名、删除、型号/方案管理）。
+**实施顺序**：~~R3 → R8~~ → ~~CRUD 写语义定稿~~（已完成）→ 按该任务的子 TASK 拆分依次实现：公共事务基础 → 元数据与 schema → 准入与导入原语 → 型号/方案 CRUD → 程序新增/删除/待补齐 → 默认/元数据/借用编辑 → 布局归一与程序更新 → 存量 platform 归一 → UI 编排。
 
 ---
 
