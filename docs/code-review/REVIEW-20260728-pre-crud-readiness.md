@@ -103,7 +103,7 @@ CRUD 的交互与产品语义由 `specs/design/prototypes/firmware-crud-prototyp
 
 ---
 
-## 前置条件清单（已全部满足）
+## 基础前置条件清单（已满足）
 
 在当前范围 CRUD 开放写操作前必须完成下列项。任何真实目录写入先满足 #2；涉及删除或改变被引用路径的操作再叠加 #4：
 
@@ -114,9 +114,11 @@ CRUD 的交互与产品语义由 `specs/design/prototypes/firmware-crud-prototyp
 | 3 | CRUD 定点写 API + 保留工作区上下文的局部扫描/子树对账 + SQLite 事务 + 文件/索引失败恢复策略（不含 schema 迁移；SQLite 事务不包含文件系统动作） | R3 | high | ✅ 已完成（TASK-20260901-r3-index-write-api：4 行级写 API + `scan_firmware_subtree` + `asset_reconcile.reconcile_subtree`；经 codex 两轮实现审查「实现合格，无阻断问题」；人工验证按无 UI 等效规则以 `scripts/verify_r3_write_api.py` 四类场景通过 + 用户确认；含 `hidden_items` A/AB 前缀缺陷修复） |
 | 4 | TOML 引用反查 + 删除二次确认 + 重命名/更新时级联改写或阻止断链（含原型差异清单 #1、#4 的语义定稿） | R8 | high | ✅ 引用基础能力完成（TASK-20260901-r8-reference-integrity：`reference_lookup` 反查 + `follow_asset` 语义与存量迁移 + `build/apply_rewrite_plan` preimage CAS 回滚级联 + `ensure_model_ids` 门闩收口；Windows 574 passed / 94.56%）。✅ **CRUD 写语义 gate 已定稿**（TASK-20260903-crud-write-semantics）：改类型/改范围拆为独立复合操作、型号/方案/程序创建删除事务语义、路径身份不复用预检、备用副本不得作借用来源 |
 
-**基础 gate 4 项已全部关闭；「CRUD 写语义 gate」已由 TASK-20260903-crud-write-semantics 定稿**（D0–D10）——含改类型/改范围复合操作、型号/方案/程序创建删除事务、路径身份不复用预检、`旧版本/` 备用副本、机芯类型映射、厂商元数据、导入成形、工作区读写锁、单根布局边界与撤销范围。差异清单 #2/#3 已在该任务定稿；#6（UI 术语映射）留待 UI 子 TASK。
+**基础 gate 4 项已全部关闭；「CRUD 写语义 gate」已由 TASK-20260903-crud-write-semantics 定稿**（D0–D10）——含改类型/改范围复合操作、型号/方案/程序创建删除事务、路径身份不复用预检、`旧版本/` 备用副本、机芯类型映射、厂商元数据、导入成形、工作区读写锁、工作区容器与旧布局迁移、空白型号及空工作区行为、撤销范围。差异清单 #2/#3 已在该任务定稿；#6（UI 术语映射）留待 UI 子 TASK。
 
-**实施顺序**：~~R3 → R8~~ → ~~CRUD 写语义定稿~~（已完成）→ 按该任务的子 TASK 拆分依次实现：公共事务基础 → 元数据与 schema → 准入与导入原语 → 型号/方案 CRUD → 程序新增/删除/待补齐 → 默认/元数据/借用编辑 → 布局归一与程序更新 → 存量 platform 归一 → UI 编排。
+**旧布局型号 CRUD 的实现前置**：子 TASK 3a 完成布局迁移后，允许新增、重命名、删除型号；删除最后一个型号保留空工作区，空白型号不因零资产隐藏。规则见 [D9](../../specs/active/TASK-20260903-crud-write-semantics.md#d9-工作区容器型号-crud-与旧布局迁移)。该迁移尚未实现，不影响公共事务基础开工。
+
+**实施顺序**：按父规格的子 TASK 拆分依次实现：公共事务基础 → 元数据与 schema → 准入与导入原语 → 旧工作区布局迁移 → 型号/方案 CRUD → 程序新增/删除/待补齐 → 默认/元数据/借用编辑 → 布局归一与程序更新 → 存量 platform 归一 → UI 编排。
 
 ---
 
